@@ -113,14 +113,6 @@ export const MRHeader = (): React.ReactElement | null => {
     });
   };
 
-  const _handleOpen = (): void => {
-    if (mr.web_url) {
-      window.open(mr.web_url, "_blank", "noopener,noreferrer");
-    } else {
-      toast.error("No URL available for this MR");
-    }
-  };
-
   return (
     <div
       style={{

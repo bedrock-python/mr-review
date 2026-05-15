@@ -30,7 +30,7 @@ const SEV_COLOR: Record<string, string> = {
 function tryParsePartialComments(raw: string): ParsedComment[] {
   const stripped = raw.trim();
   const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(stripped);
-  const candidate = fenceMatch ? fenceMatch[1].trim() : stripped;
+  const candidate = fenceMatch ? (fenceMatch[1] ?? "").trim() : stripped;
 
   // Try full parse first
   try {
@@ -107,20 +107,6 @@ const UploadIcon = (): React.ReactElement => (
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="17 8 12 3 7 8" />
     <line x1="12" y1="3" x2="12" y2="15" />
-  </svg>
-);
-
-const _CheckIcon = (): React.ReactElement => (
-  <svg
-    width="32"
-    height="32"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-    <polyline points="22 4 12 14.01 9 11.01" />
   </svg>
 );
 

@@ -562,7 +562,7 @@ export const HistoryPage = (): React.ReactElement => {
           <FilterChip
             label="All"
             active={stageFilter === null}
-            count={reviews?.length}
+            {...(reviews?.length !== undefined ? { count: reviews.length } : {})}
             onClick={() => {
               setStageFilter(null);
             }}
@@ -575,7 +575,7 @@ export const HistoryPage = (): React.ReactElement => {
                 key={stage}
                 label={STAGE_META[stage].label}
                 active={stageFilter === stage}
-                count={count}
+                {...(count !== undefined ? { count } : {})}
                 onClick={() => {
                   setStageFilter(stageFilter === stage ? null : stage);
                 }}
