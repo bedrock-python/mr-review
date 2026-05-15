@@ -57,13 +57,15 @@ class CachedVCSProvider:
     async def test_connection(self) -> dict[str, str]:
         return await self._provider.test_connection()
 
-    async def list_repos(self) -> list[Repo]:
-        key = "repos"
+    async def list_repos(self, query: str | None = None) -> list[Repo]:
+        key = f"repos:{query or ''}"
         cached = self._repos_cache.get(key)
         if not isinstance(cached, _Miss):
             return cast(list[Repo], cached)
-        result = await self._provider.list_repos()
-        self._repos_cache.set(key, result)
+        result = await self._provider.list_repos(query=query)
+        # Don't cache search results with long TTL — only cache the full listing
+        if query is None:
+            self._repos_cache.set(key, result)
         return result
 
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
