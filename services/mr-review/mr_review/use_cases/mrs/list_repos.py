@@ -13,10 +13,10 @@ class ListReposUseCase:
     def __init__(self, host_repo: FileHostRepository) -> None:
         self._host_repo = host_repo
 
-    async def execute(self, host_id: UUID) -> list[Repo]:
+    async def execute(self, host_id: UUID, query: str | None = None) -> list[Repo]:
         host = await self._host_repo.get_by_id(host_id)
         if host is None:
             raise ValueError(f"Host {host_id} not found")
         async with httpx.AsyncClient(timeout=30) as client:
             provider = create_vcs_provider(host, client)
-            return await provider.list_repos()
+            return await provider.list_repos(query=query)

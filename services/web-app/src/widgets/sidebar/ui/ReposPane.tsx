@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRepos } from "@entities/mr";
 import { useNav } from "@app/navigation";
 import { useHosts } from "@entities/host";
 import { Skeleton } from "@shared/ui";
+import type { Repo } from "@entities/mr";
+
+const MIN_QUERY_LENGTH = 2;
+
+type TreeNode =
+  | { kind: "namespace"; name: string; fullPath: string; children: TreeNode[] }
+  | { kind: "repo"; repo: Repo };
 
 const ReposSkeleton = (): React.ReactElement => (
   <div style={{ padding: "4px 0" }}>
@@ -25,12 +32,6 @@ const SearchIcon = (): React.ReactElement => (
   </svg>
 );
 
-const ChevronDownIcon = (): React.ReactElement => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
 const InboxIcon = (): React.ReactElement => (
   <svg
     width="13"
@@ -45,22 +46,224 @@ const InboxIcon = (): React.ReactElement => (
   </svg>
 );
 
+const RepoIcon = (): React.ReactElement => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    style={{ flexShrink: 0 }}
+  >
+    <path d="M3 3h18v18H3z" />
+    <path d="M9 3v18M9 9h12" />
+  </svg>
+);
+
+function buildTree(repos: Repo[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  const nsMap = new Map<string, TreeNode & { kind: "namespace" }>();
+
+  for (const repo of repos) {
+    const parts = repo.path.split("/");
+    if (parts.length === 1) {
+      root.push({ kind: "repo", repo });
+      continue;
+    }
+    const namespaceParts = parts.slice(0, -1);
+    let siblings = root;
+    let accPath = "";
+    for (const part of namespaceParts) {
+      accPath = accPath ? `${accPath}/${part}` : part;
+      let ns = nsMap.get(accPath);
+      if (!ns) {
+        ns = { kind: "namespace", name: part, fullPath: accPath, children: [] };
+        nsMap.set(accPath, ns);
+        siblings.push(ns);
+      }
+      siblings = ns.children;
+    }
+    siblings.push({ kind: "repo", repo });
+  }
+  return root;
+}
+
+type NamespaceRowProps = {
+  node: TreeNode & { kind: "namespace" };
+  depth: number;
+  selectedRepoPath: string | null;
+  selectedHostId: string | null;
+  onSelect: (hostId: string, repoPath: string) => void;
+};
+
+const NamespaceRow = ({
+  node,
+  depth,
+  selectedRepoPath,
+  selectedHostId,
+  onSelect,
+}: NamespaceRowProps): React.ReactElement => {
+  const [isOpen, setIsOpen] = useState(true);
+  const indent = depth * 12 + 10;
+
+  const handleToggle = useCallback(() => {
+    setIsOpen((prev) => !prev);
+  }, []);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={handleToggle}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          width: "100%",
+          padding: `4px 10px 4px ${String(indent)}px`,
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          color: "var(--fg-2)",
+          fontSize: 11,
+          fontWeight: 600,
+          textAlign: "left",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+        }}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          style={{
+            flexShrink: 0,
+            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+            transition: "transform 0.15s",
+          }}
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {node.name}
+        </span>
+      </button>
+      {isOpen && (
+        <div>
+          {node.children.map((child, idx) =>
+            child.kind === "namespace" ? (
+              <NamespaceRow
+                key={child.fullPath}
+                node={child}
+                depth={depth + 1}
+                selectedRepoPath={selectedRepoPath}
+                selectedHostId={selectedHostId}
+                onSelect={onSelect}
+              />
+            ) : (
+              <RepoRow
+                key={child.repo.id ?? idx}
+                repo={child.repo}
+                depth={depth + 1}
+                isSelected={selectedRepoPath === child.repo.path}
+                selectedHostId={selectedHostId}
+                onSelect={onSelect}
+              />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+type RepoRowProps = {
+  repo: Repo;
+  depth: number;
+  isSelected: boolean;
+  selectedHostId: string | null;
+  onSelect: (hostId: string, repoPath: string) => void;
+};
+
+const RepoRow = ({
+  repo,
+  depth,
+  isSelected,
+  selectedHostId,
+  onSelect,
+}: RepoRowProps): React.ReactElement => {
+  const indent = depth * 12 + 10;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (selectedHostId) onSelect(selectedHostId, repo.path);
+      }}
+      aria-pressed={isSelected}
+      title={repo.path}
+      className={`row-btn${isSelected ? " active" : ""}`}
+      style={{
+        paddingLeft: indent,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        width: "100%",
+      }}
+    >
+      <RepoIcon />
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+          textAlign: "left",
+        }}
+      >
+        {repo.name}
+      </span>
+    </button>
+  );
+};
+
 export const ReposPane = (): React.ReactElement => {
   const [search, setSearch] = useState("");
   const { selectedHostId, selectedRepoPath, setRepo } = useNav();
   const { data: hosts } = useHosts();
-  const { data: repos, isLoading, isError } = useRepos(selectedHostId);
+
+  const activeQuery = search.length >= MIN_QUERY_LENGTH ? search : undefined;
+  const { data: repos, isLoading, isError } = useRepos(selectedHostId, activeQuery);
 
   const selectedHost = hosts?.find((h) => h.id === selectedHostId);
 
-  const filteredRepos =
-    repos?.filter(
-      (repo) =>
-        repo.name.toLowerCase().includes(search.toLowerCase()) ||
-        repo.path.toLowerCase().includes(search.toLowerCase())
-    ) ?? [];
+  const tree = useMemo(() => buildTree(repos ?? []), [repos]);
 
-  const totalOpenMRs = filteredRepos.length;
+  const handleSelect = useCallback(
+    (hostId: string, repoPath: string) => {
+      setRepo(hostId, repoPath);
+    },
+    [setRepo]
+  );
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  }, []);
+
+  const isTyping = search.length > 0 && search.length < MIN_QUERY_LENGTH;
+  const hasNoResults =
+    selectedHostId && !isLoading && !isError && activeQuery !== undefined && (repos ?? []).length === 0;
 
   return (
     <aside
@@ -116,12 +319,10 @@ export const ReposPane = (): React.ReactElement => {
           </span>
           <input
             type="search"
-            placeholder="Filter repos…"
+            placeholder="Search repos…"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-            }}
-            aria-label="Filter repositories"
+            onChange={handleSearchChange}
+            aria-label="Search repositories"
             style={{
               flex: 1,
               background: "transparent",
@@ -132,12 +333,24 @@ export const ReposPane = (): React.ReactElement => {
               minWidth: 0,
             }}
           />
-          <span className="kbd">⌘K</span>
+          {isLoading && activeQuery !== undefined && (
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                border: "1.5px solid var(--fg-3)",
+                borderTopColor: "transparent",
+                animation: "spin 0.6s linear infinite",
+                flexShrink: 0,
+              }}
+            />
+          )}
         </div>
       </div>
 
-      {/* Inbox row */}
-      {selectedHostId && !isLoading && (
+      {/* Inbox row — shown only when not searching */}
+      {selectedHostId && !isLoading && activeQuery === undefined && (
         <div style={{ padding: "8px 10px 4px" }}>
           <button type="button" className="row-btn" style={{ justifyContent: "space-between" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -146,17 +359,12 @@ export const ReposPane = (): React.ReactElement => {
               </span>
               <span style={{ fontSize: 12 }}>Inbox</span>
             </span>
-            {totalOpenMRs > 0 && (
-              <span className="chip" style={{ fontSize: 10, padding: "1px 6px" }}>
-                {totalOpenMRs}
-              </span>
-            )}
           </button>
         </div>
       )}
 
       {/* Repo list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 10px 10px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 0 10px" }}>
         {!selectedHostId && (
           <div
             style={{
@@ -171,6 +379,24 @@ export const ReposPane = (): React.ReactElement => {
             }}
           >
             Select a host to browse repositories
+          </div>
+        )}
+
+        {selectedHostId && isTyping && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 60,
+              color: "var(--fg-3)",
+              fontSize: 12,
+              textAlign: "center",
+              padding: "0 16px",
+            }}
+          >
+            Type {String(MIN_QUERY_LENGTH - search.length)} more character
+            {MIN_QUERY_LENGTH - search.length !== 1 ? "s" : ""} to search
           </div>
         )}
 
@@ -193,7 +419,7 @@ export const ReposPane = (): React.ReactElement => {
           </div>
         )}
 
-        {selectedHostId && !isLoading && filteredRepos.length === 0 && !isError && (
+        {hasNoResults && (
           <div
             style={{
               display: "flex",
@@ -210,69 +436,31 @@ export const ReposPane = (): React.ReactElement => {
           </div>
         )}
 
-        {filteredRepos.length > 0 && (
-          <>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 10px 4px",
-                color: "var(--fg-3)",
-                fontSize: 10,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                cursor: "default",
-              }}
-            >
-              <ChevronDownIcon />
-              Repositories
-            </div>
-
-            {filteredRepos.map((repo) => {
-              const isSelected = selectedRepoPath === repo.path;
-              return (
-                <button
-                  key={repo.id}
-                  type="button"
-                  onClick={() => {
-                    if (selectedHostId) setRepo(selectedHostId, repo.path);
-                  }}
-                  aria-pressed={isSelected}
-                  title={repo.path}
-                  className={`row-btn${isSelected ? "active" : ""}`}
-                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 500,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      width: "100%",
-                    }}
-                  >
-                    {repo.name}
-                  </span>
-                  <span
-                    className="mono"
-                    style={{
-                      fontSize: 10,
-                      color: "var(--fg-3)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      width: "100%",
-                    }}
-                  >
-                    {repo.path}
-                  </span>
-                </button>
-              );
-            })}
-          </>
-        )}
+        {!isTyping &&
+          !isLoading &&
+          !isError &&
+          tree.length > 0 &&
+          tree.map((node, idx) =>
+            node.kind === "namespace" ? (
+              <NamespaceRow
+                key={node.fullPath}
+                node={node}
+                depth={0}
+                selectedRepoPath={selectedRepoPath}
+                selectedHostId={selectedHostId}
+                onSelect={handleSelect}
+              />
+            ) : (
+              <RepoRow
+                key={node.repo.id ?? idx}
+                repo={node.repo}
+                depth={0}
+                isSelected={selectedRepoPath === node.repo.path}
+                selectedHostId={selectedHostId}
+                onSelect={handleSelect}
+              />
+            )
+          )}
       </div>
 
       {/* Footer */}
@@ -306,7 +494,7 @@ export const ReposPane = (): React.ReactElement => {
           {selectedHostId ? "connected" : "disconnected"}
         </span>
         <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-          v0.1
+          v{__APP_VERSION__}
         </span>
       </div>
     </aside>

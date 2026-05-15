@@ -119,13 +119,16 @@ class GitLabProvider:
             "email": str(data.get("email", "")),
         }
 
-    async def list_repos(self) -> list[Repo]:
+    async def list_repos(self, query: str | None = None) -> list[Repo]:
         repos: list[Repo] = []
         page = 1
+        base_params: dict[str, Any] = {"membership": "true", "per_page": 100, "order_by": "last_activity_at"}
+        if query:
+            base_params["search"] = query
         while True:
             data: list[dict[str, Any]] = await self._get(
                 "/projects",
-                params={"membership": "true", "per_page": 100, "page": page, "order_by": "last_activity_at"},
+                params={**base_params, "page": page},
             )
             if not data:
                 break

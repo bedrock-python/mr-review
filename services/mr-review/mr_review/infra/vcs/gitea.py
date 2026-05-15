@@ -109,13 +109,16 @@ class GiteaProvider:
             "email": str(data.get("email", "") or ""),
         }
 
-    async def list_repos(self) -> list[Repo]:
+    async def list_repos(self, query: str | None = None) -> list[Repo]:
         repos: list[Repo] = []
         page = 1
+        base_params: dict[str, Any] = {"limit": 50, "sort": "newest"}
+        if query:
+            base_params["q"] = query
         while True:
             data: list[dict[str, Any]] = await self._get(
                 "/repos/search",
-                params={"limit": 50, "page": page, "sort": "newest"},
+                params={**base_params, "page": page},
             )
             items: list[dict[str, Any]] = data if isinstance(data, list) else data.get("data", [])
             if not items:

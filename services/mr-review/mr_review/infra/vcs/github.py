@@ -108,7 +108,9 @@ class GitHubProvider:
             "email": str(data.get("email", "") or ""),
         }
 
-    async def list_repos(self) -> list[Repo]:
+    async def list_repos(self, query: str | None = None) -> list[Repo]:
+        if query:
+            return await self._search_repos(query)
         repos: list[Repo] = []
         page = 1
         while True:
@@ -128,6 +130,32 @@ class GitHubProvider:
                 for item in data
             )
             if len(data) < 100:
+                break
+            page += 1
+        return repos
+
+    async def _search_repos(self, query: str) -> list[Repo]:
+        repos: list[Repo] = []
+        page = 1
+        while True:
+            data: dict[str, Any] = await self._get(
+                "/search/repositories",
+                params={"q": query, "per_page": 100, "page": page, "sort": "updated"},
+            )
+            items: list[dict[str, Any]] = data.get("items", [])
+            if not items:
+                break
+            repos.extend(
+                Repo(
+                    id=str(item["id"]),
+                    path=str(item["full_name"]),
+                    name=str(item["name"]),
+                    description=item.get("description"),
+                )
+                for item in items
+            )
+            total_count: int = int(data.get("total_count", 0))
+            if len(repos) >= total_count or len(items) < 100:
                 break
             page += 1
         return repos

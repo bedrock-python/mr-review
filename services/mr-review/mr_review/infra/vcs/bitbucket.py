@@ -162,13 +162,15 @@ class BitbucketProvider:
             "email": "",  # Bitbucket requires separate /user/emails call
         }
 
-    async def list_repos(self) -> list[Repo]:
-        # Use workspace from stored username; fall back to /repositories/
+    async def list_repos(self, query: str | None = None) -> list[Repo]:
         workspace = self._username
         if not workspace:
             return []
         url = f"{self._api_url}/repositories/{workspace}"
-        items = await self._get_paginated(url, params={"sort": "-updated_on", "pagelen": 100})
+        params: dict[str, Any] = {"sort": "-updated_on", "pagelen": 100}
+        if query:
+            params["q"] = f'name ~ "{query}"'
+        items = await self._get_paginated(url, params=params)
         return [
             Repo(
                 id=str(item.get("uuid", item.get("slug", ""))),

@@ -4,7 +4,7 @@ import type { GetMRsParams } from "../api/mrApi";
 
 export const mrKeys = {
   all: ["mrs"] as const,
-  repos: (hostId: string) => [...mrKeys.all, "repos", hostId] as const,
+  repos: (hostId: string, query?: string) => [...mrKeys.all, "repos", hostId, query ?? ""] as const,
   lists: (hostId: string, repoPath: string) => [...mrKeys.all, "list", hostId, repoPath] as const,
   list: (hostId: string, repoPath: string, params: GetMRsParams) =>
     [...mrKeys.lists(hostId, repoPath), params] as const,
@@ -17,16 +17,18 @@ export const mrKeys = {
 };
 
 export const useRepos = (
-  hostId: string | null
+  hostId: string | null,
+  query?: string
 ): ReturnType<typeof useQuery<Awaited<ReturnType<typeof mrApi.listRepos>>>> => {
+  const isEnabled = hostId !== null && (query === undefined || query.length >= 2);
   return useQuery({
-    queryKey: mrKeys.repos(hostId ?? ""),
+    queryKey: mrKeys.repos(hostId ?? "", query),
     queryFn: () => {
       if (hostId === null) return Promise.reject(new Error("hostId is null"));
-      return mrApi.listRepos(hostId);
+      return mrApi.listRepos(hostId, query);
     },
-    enabled: hostId !== null,
-    staleTime: 15 * 60 * 1000,
+    enabled: isEnabled,
+    staleTime: 2 * 60 * 1000,
   });
 };
 

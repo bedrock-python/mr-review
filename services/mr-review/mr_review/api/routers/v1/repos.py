@@ -67,9 +67,10 @@ def _diff_file_to_response(df: DiffFile) -> DiffFileResponse:
 async def list_repos(
     host_id: UUID,
     use_case: FromDishka[ListReposUseCase],
+    q: str | None = Query(default=None),
 ) -> list[RepoResponse]:
     try:
-        repos = await use_case.execute(host_id)
+        repos = await use_case.execute(host_id, query=q)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [_repo_to_response(r) for r in repos]

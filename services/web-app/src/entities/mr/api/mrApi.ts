@@ -10,8 +10,10 @@ export type GetMRsParams = {
 };
 
 export const mrApi = {
-  listRepos: async (hostId: string): Promise<Repo[]> => {
-    const res = await httpClient.get<unknown>(`/api/v1/hosts/${hostId}/repos`);
+  listRepos: async (hostId: string, q?: string): Promise<Repo[]> => {
+    const res = await httpClient.get<unknown>(`/api/v1/hosts/${hostId}/repos`, {
+      params: q ? { q } : undefined,
+    });
     return z.array(RepoSchema).parse(res.data);
   },
 
