@@ -123,13 +123,12 @@ export const StageBar = (): React.ReactElement => {
                     position: "absolute",
                     left: 4,
                     top: "50%",
-                    transform: "translateY(-50%)",
                     width: nodeSize,
                     height: nodeSize,
                     borderRadius: "50%",
                     background: "var(--accent)",
                     opacity: 0.3,
-                    animation: "pulse-ring 1.5s ease-out infinite",
+                    animation: "pulse-ring-centered 1.5s ease-out infinite",
                   }}
                 />
               )}

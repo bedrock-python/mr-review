@@ -97,6 +97,20 @@
       opacity: 0;
     }
   }
+  @keyframes pulse-ring-centered {
+    0% {
+      transform: translateY(-50%) scale(1);
+      opacity: 0.8;
+    }
+    70% {
+      transform: translateY(-50%) scale(1.5);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(-50%) scale(1.5);
+      opacity: 0;
+    }
+  }
 }
 
 /* ── INK (dark) — default ──────────────────────────────────── */
