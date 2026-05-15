@@ -36,8 +36,8 @@ export const ReviewSchema = z.object({
   stage: ReviewStageSchema,
   comments: z.array(CommentSchema),
   brief_config: BriefConfigSchema,
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 export type BriefPreset = z.infer<typeof BriefPresetSchema>;

@@ -7,7 +7,7 @@ export const HostSchema = z.object({
   name: z.string(),
   type: HostTypeSchema,
   base_url: z.string().url(),
-  created_at: z.string().datetime(),
+  created_at: z.string().datetime({ offset: true }),
 });
 
 export const CreateHostSchema = z.object({

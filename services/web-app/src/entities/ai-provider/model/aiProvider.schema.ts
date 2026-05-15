@@ -10,7 +10,7 @@ export const AIProviderSchema = z.object({
   models: z.array(z.string()),
   ssl_verify: z.boolean(),
   timeout: z.number().int().positive(),
-  created_at: z.string().datetime(),
+  created_at: z.string().datetime({ offset: true }),
 });
 
 export const CreateAIProviderSchema = z.object({

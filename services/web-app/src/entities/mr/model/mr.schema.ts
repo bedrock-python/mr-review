@@ -24,8 +24,8 @@ export const MRSchema = z.object({
   deletions: z.number(),
   file_count: z.number(),
   web_url: z.string().default(""),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 export const DiffLineSchema = z.object({
