@@ -93,7 +93,12 @@ const formatRelative = (iso: string): string => {
 type StageBadgeProps = { stage: string };
 
 const StageBadge = ({ stage }: StageBadgeProps): React.ReactElement => {
-  const meta = STAGE_META[stage as keyof typeof STAGE_META] ?? { label: stage, color: "var(--fg-2)", bg: "var(--bg-2)" };
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  const meta = STAGE_META[stage as keyof typeof STAGE_META] ?? {
+    label: stage,
+    color: "var(--fg-2)",
+    bg: "var(--bg-2)",
+  };
   return (
     <span
       style={{
