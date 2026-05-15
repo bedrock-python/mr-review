@@ -38,7 +38,8 @@ const CommentIcon = (): React.ReactElement => (
 );
 
 /* ── Constants ──────────────────────────────────────────────────────── */
-const STAGE_META: Record<string, { label: string; color: string; bg: string }> = {
+type StageMeta = { label: string; color: string; bg: string };
+const STAGE_META: Record<"pick" | "brief" | "dispatch" | "polish" | "post", StageMeta> = {
   pick: { label: "Picking", color: "var(--fg-3)", bg: "var(--bg-2)" },
   brief: { label: "Brief", color: "var(--fg-2)", bg: "var(--bg-2)" },
   dispatch: {
@@ -92,7 +93,7 @@ const formatRelative = (iso: string): string => {
 type StageBadgeProps = { stage: string };
 
 const StageBadge = ({ stage }: StageBadgeProps): React.ReactElement => {
-  const meta = STAGE_META[stage] ?? { label: stage, color: "var(--fg-2)", bg: "var(--bg-2)" };
+  const meta = STAGE_META[stage as keyof typeof STAGE_META] ?? { label: stage, color: "var(--fg-2)", bg: "var(--bg-2)" };
   return (
     <span
       style={{

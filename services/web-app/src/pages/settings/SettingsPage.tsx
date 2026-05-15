@@ -17,6 +17,7 @@ import {
   CreateAIProviderSchema,
   UpdateAIProviderSchema,
 } from "@entities/ai-provider";
+import type { z } from "zod";
 import type { AIProvider, CreateAIProvider, UpdateAIProvider } from "@entities/ai-provider";
 import {
   useHosts,
@@ -948,10 +949,9 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
 const AddAIProviderForm = (): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
   const createProvider = useCreateAIProvider();
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const resolver = zodResolver(CreateAIProviderSchema);
-  const form = useForm<CreateAIProvider, unknown, CreateAIProvider>({
-    resolver,
+  type CreateAIProviderInput = z.input<typeof CreateAIProviderSchema>;
+  const form = useForm<CreateAIProviderInput, unknown, CreateAIProvider>({
+    resolver: zodResolver(CreateAIProviderSchema),
     defaultValues: { name: "", type: "claude", api_key: "", base_url: "", models: [] },
   });
 
