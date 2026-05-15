@@ -1,4 +1,4 @@
 {
-  "services/mr-review": "0.0.0",
-  "services/web-app": "0.0.0"
+  "services/mr-review": "0.1.0",
+  "services/web-app": "0.1.0"
 }
