@@ -1,0 +1,150 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "mr-review-v*"
+      - "web-app-v*"
+  workflow_dispatch:
+    inputs:
+      api_version:
+        description: "API version (e.g. 0.1.0)"
+        required: false
+        default: ""
+      web_version:
+        description: "Web-app version (e.g. 0.1.0)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  resolve-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      api-version: ${{ steps.resolve.outputs.api-version }}
+      web-version: ${{ steps.resolve.outputs.web-version }}
+      publish-api: ${{ steps.resolve.outputs.publish-api }}
+      publish-web: ${{ steps.resolve.outputs.publish-web }}
+    steps:
+      - id: resolve
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          API_VERSION="${{ github.event.inputs.api_version }}"
+          WEB_VERSION="${{ github.event.inputs.web_version }}"
+
+          if [[ "$TAG" == mr-review-v* ]]; then
+            API_VERSION="${TAG#mr-review-v}"
+          fi
+          if [[ "$TAG" == web-app-v* ]]; then
+            WEB_VERSION="${TAG#web-app-v}"
+          fi
+
+          echo "api-version=${API_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "web-version=${WEB_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "publish-api=$([[ -n "$API_VERSION" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "publish-web=$([[ -n "$WEB_VERSION" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  publish-api:
+    needs: resolve-versions
+    if: needs.resolve-versions.outputs.publish-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/mr-review
+          file: services/mr-review/Dockerfile.api
+          target: production
+          push: true
+          tags: |
+            ghcr.io/bedrock-python/mr-review/api:${{ needs.resolve-versions.outputs.api-version }}
+            ghcr.io/bedrock-python/mr-review/api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  publish-web:
+    needs: resolve-versions
+    if: needs.resolve-versions.outputs.publish-web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push web-app image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/web-app
+          file: services/web-app/Dockerfile.app
+          target: production
+          push: true
+          tags: |
+            ghcr.io/bedrock-python/mr-review/web-app:${{ needs.resolve-versions.outputs.web-version }}
+            ghcr.io/bedrock-python/mr-review/web-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  publish-all-in-one:
+    needs: resolve-versions
+    if: needs.resolve-versions.outputs.publish-api == 'true' || needs.resolve-versions.outputs.publish-web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve all-in-one version
+        id: aio-version
+        run: |
+          if [ -n "${{ needs.resolve-versions.outputs.api-version }}" ]; then
+            echo "tag=${{ needs.resolve-versions.outputs.api-version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ needs.resolve-versions.outputs.web-version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push all-in-one image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/all-in-one/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ghcr.io/bedrock-python/mr-review/all-in-one:${{ steps.aio-version.outputs.tag }}
+            ghcr.io/bedrock-python/mr-review/all-in-one:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
