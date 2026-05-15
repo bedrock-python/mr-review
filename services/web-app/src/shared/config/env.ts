@@ -18,7 +18,7 @@ const envSchema = z.object({
   VITE_API_BASE_URL: z
     .string()
     .default(
-      typeof window !== "undefined" && window.__APP_CONFIG__?.API_BASE_URL
+      typeof window !== "undefined" && window.__APP_CONFIG__ != null
         ? window.__APP_CONFIG__.API_BASE_URL
         : "http://localhost:8000"
     )
