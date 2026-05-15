@@ -1,6 +1,6 @@
 [project]
 name = "mr-review"
-version = "0.1.0"
+version = "0.2.0"
 description = "MR Review Service (REST API)"
 authors = [{ name = "Alex Shalaev", email = "shalaevad.alexey@gmail.com" }]
 requires-python = ">=3.12"
