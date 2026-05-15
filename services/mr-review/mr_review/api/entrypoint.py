@@ -6,7 +6,7 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from mr_review.api.config import Settings
@@ -76,6 +76,23 @@ def _mount_spa(app: FastAPI, settings: Settings) -> None:
 
     # Serve hashed assets with long-lived cache
     app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    # In all-in-one mode the frontend is served by this same server, so the
+    # API base URL must be relative (empty string) — the browser will resolve
+    # /api/v1/... against the same host:port the user accessed the UI from.
+    api_base_url = os.environ.get("MR_REVIEW__API_BASE_URL", "")
+    config_js_content = (
+        f"window.__APP_CONFIG__ = {{\n"
+        f'  API_BASE_URL: "{api_base_url}",\n'
+        f'  APP_ENV: "production",\n'
+        f"  BUILD_TIME: new Date().toISOString(),\n"
+        f'  VERSION: "{settings.get_app_version()}",\n'
+        f"}};\n"
+    )
+
+    @app.get("/config.js", include_in_schema=False)
+    async def serve_config_js() -> PlainTextResponse:
+        return PlainTextResponse(config_js_content, media_type="application/javascript")
 
     # SPA fallback — all unmatched routes return index.html so the React
     # router can handle navigation on the client side
