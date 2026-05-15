@@ -1,0 +1,12 @@
+[run]
+# Include only source files
+source = mr_review
+omit =
+    tests/*
+    */test_*.py
+
+[report]
+# Omit the tests from coverage
+omit =
+    tests/*
+    */test_*.py

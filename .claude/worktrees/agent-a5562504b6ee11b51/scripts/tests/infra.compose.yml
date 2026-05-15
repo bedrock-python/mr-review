@@ -1,0 +1,6 @@
+# No external infrastructure needed for mr-review tests
+# Tests use tmp directories for YAML file storage
+
+networks:
+  mr-review-test-network:
+    driver: bridge

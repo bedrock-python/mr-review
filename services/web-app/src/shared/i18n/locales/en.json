@@ -1,0 +1,56 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "confirm": "Confirm",
+    "noData": "No data"
+  },
+  "errors": {
+    "unknown": "An unknown error occurred",
+    "boundary": {
+      "title": "Something went wrong",
+      "reset": "Try again"
+    },
+    "notFound": "Page not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Access denied"
+  },
+  "nav": {
+    "home": "Home",
+    "hosts": "Hosts",
+    "repos": "Repositories",
+    "reviews": "Reviews",
+    "settings": "Settings",
+    "profile": "Profile"
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "email": "Email",
+    "password": "Password"
+  },
+  "hosts": {
+    "title": "Hosts",
+    "add": "Add Host",
+    "empty": "No hosts configured"
+  },
+  "repos": {
+    "title": "Repositories",
+    "empty": "No repositories found"
+  },
+  "reviews": {
+    "title": "Reviews",
+    "empty": "No reviews yet"
+  }
+}

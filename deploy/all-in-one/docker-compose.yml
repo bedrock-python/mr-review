@@ -1,0 +1,15 @@
+services:
+  mr-review:
+    image: ghcr.io/bedrock-python/mr-review/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-17240}:8000"
+    environment:
+      MR_REVIEW__SERVER__HOST: "0.0.0.0"
+      MR_REVIEW__SERVER__PORT: "8000"
+      MR_REVIEW__DATA_DIR: "/data"
+      MR_REVIEW__HOST_DATA_DIR: "${DATA_DIR:-./data}"
+      MR_REVIEW__STATIC_DIR: "/app/static"
+      MR_REVIEW__LOGGING__USE_JSON: "true"
+    volumes:
+      - ${DATA_DIR:-./data}:/data

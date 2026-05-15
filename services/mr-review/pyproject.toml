@@ -1,0 +1,226 @@
+[project]
+name = "mr-review"
+version = "0.1.0"
+description = "MR Review Service (REST API)"
+authors = [{ name = "Alex Shalaev", email = "shalaevad.alexey@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+    "httpx>=0.28",
+    "anthropic>=0.40",
+    "openai>=1.60",
+    "dishka>=1.4",
+    "sse-starlette>=2.2",
+    "structlog>=25.0",
+    "orjson>=3.10",
+    "uvloop>=0.22.1; sys_platform != 'win32'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mr_review"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project.optional-dependencies]
+api = [
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+test = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "httpx>=0.28",
+]
+
+dev = [
+    "ruff>=0.14.11",
+    "mypy>=1.19.1",
+    "pre-commit>=4.5.1",
+    "types-PyYAML>=6.0",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["mr_review", "tests"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "C90", # mccabe
+    "F",   # pyflakes
+    "E",   # pycodestyle
+    "I",   # isort
+    "B",   # bugbear
+    "N",   # pep8-naming
+    "S",   # bandit
+    "G",   # logging format
+    "T10",
+    "PL",
+    "C4",  # comprehensions
+    "DTZ", # datetimez
+    "FA",  # future-annotations
+    "ISC", # implicit string concat
+    "PT",  # flake8-pytest-style
+    "SIM", # flake8-simplify
+    "ERA", # flake8-eradicate
+    "TRY", # tryceratops
+    "FIX", # todos
+    "TID", # tidy-imports
+    "PERF", # known performance issues checks
+    "T201", # flake8-print
+    "RUF006", # asyncio-dangling-task
+    "RUF022", # unsorted-all
+    "RUF023", # unsorted-all-items
+]
+ignore = [
+    "G004",    # Logging statement uses f-string — structlog handles this safely
+    "B008",    # Do not perform function call `Depends` in argument defaults — FastAPI pattern
+    "FIX002",  # Line contains todo — we explicitly disallow TODO markers via project rules
+    "C408",    # Unnecessary `dict` call — dict(...) is clearer than {...} for kwargs passthrough
+    "ISC001",  # Implicit string concat — conflicts with the formatter
+    "PT004",   # Fixture does not return anything — convention incompatibility
+    "TID252",  # Prefer absolute imports over relative — domain modules use relative by design
+    "TID251",  # `typing.Optional` is banned — we enforce `| None` via explicit banned-api below
+    "N802",    # Function name should be lowercase — keep FastAPI decorator callables PascalCase-friendly
+    "TRY003",  # Long exception message — acceptable for domain errors
+    "TRY301",  # Raise within try — acceptable in streaming handlers
+    "PLR0913", # Too many arguments — use cases may require several deps
+    "PLR2004", # Magic value used in comparison — acceptable in domain code
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 7
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "ASYNC",
+    "PL",
+    "PERF",
+    "S",
+    "PT005",
+]
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.Set".msg = "Use set[] instead."
+"typing.List".msg = "Use list[] instead."
+"typing.Dict".msg = "Use dict[] instead."
+"typing.Optional".msg = "Use | None instead."
+"typing.Type".msg = "Use type[] instead."
+"typing.Union".msg = "Use | instead."
+
+
+[tool.mypy]
+mypy_path = "services/mr-review"
+files = ["services/mr-review/mr_review"]
+plugins = ["pydantic.mypy"]
+# Strict checks
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+# might be useful if used in the same scope
+allow_untyped_calls = true
+allow_redefinition = true
+disallow_untyped_decorators = false
+implicit_reexport = false
+ignore_missing_imports = true
+show_error_codes = true
+warn_return_any = false
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "mr_review.infra.di.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+testpaths = ["tests"]
+
+markers = [
+    "unit: mark a test as a unit test.",
+    "integration: mark a test as an integration test.",
+    "http: mark a test as an HTTP integration test.",
+]
+
+addopts = """
+    -v
+    --strict-markers
+    --tb=short
+    --cov=mr_review
+    --cov-report=term
+    --cov-report=xml:coverage.xml
+    --junitxml=rspec.xml
+"""
+
+[tool.coverage.run]
+omit = [
+    "tests/*",
+    "*/test_*.py",
+]
+
+[tool.semantic_release]
+assets = []
+commit_message = "release(mr-review): {version}"
+commit_parser = "conventional-monorepo"
+logging_use_named_masks = false
+major_on_zero = true
+allow_zero_version = true
+tag_format = "mr-review-v{version}"
+version_variables = ["mr_review/__init__.py:__version__"]
+version_toml = [
+    "pyproject.toml:project.version",
+]
+
+[tool.semantic_release.remote]
+name = "origin"
+type = "gitlab"
+domain = "https://gitlab.com"
+ignore_token_for_push = true
+insecure = false
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = ['''^\s*release.*$''']
+
+[tool.semantic_release.commit_author]
+env = "GIT_COMMIT_AUTHOR"
+default = "semantic-release <semantic-release>"
+
+[tool.semantic_release.branches.main]
+match = "(master|main)"
+prerelease = false
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "style", "refactor", "test", "MR-REVIEW", "release"]
+minor_tags = ["feat", "MR-REVIEW"]
+patch_tags = ["fix", "perf", "build", "chore", "ci", "docs", "style", "refactor", "test"]
+default_bump_level = 0
+parse_squash_commits = true
+ignore_merge_commits = true
+path_filters = ["."]
+scope_prefix = "mr-review"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

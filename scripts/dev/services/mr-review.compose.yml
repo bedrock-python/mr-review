@@ -1,0 +1,32 @@
+services:
+  mr-review-api:
+    build:
+      context: ../../services/mr-review
+      dockerfile: Dockerfile.api
+      target: production
+    profiles: [mr-review, all]
+    ports:
+      - "8000:8000"
+    environment:
+      MR_REVIEW__HOST: "0.0.0.0"
+      MR_REVIEW__PORT: "8000"
+      MR_REVIEW__DATA_DIR: "/data"
+      MR_REVIEW__CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+    volumes:
+      - mr-review-data:/data
+    networks:
+      - mr-review-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  mr-review-data:
+
+networks:
+  mr-review-network:
+    external: true

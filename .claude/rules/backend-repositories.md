@@ -1,0 +1,325 @@
+# Repository Pattern Standards
+
+Repositories handle data persistence and MUST follow these patterns.
+
+## Core Principles
+
+1. **Repositories MUST return domain entities, NEVER ORM models**
+2. **Repository implementations MUST be prefixed with database type (e.g., `Postgres`)**
+3. **Repository protocols MUST be defined in `core/` layer**
+4. **Repository implementations MUST be in `infra/repositories/`**
+
+## ✅ Correct Repository Implementation
+
+### 1. Domain Entity (core/users/entities.py)
+```python
+from datetime import datetime
+from uuid import UUID
+from pydantic import BaseModel
+
+class User(BaseModel):
+    """User domain entity."""
+    id: UUID
+    email: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+```
+
+### 2. Repository Protocol (core/users/repositories.py)
+```python
+from typing import Protocol
+from uuid import UUID
+from core.users.entities import User
+
+class UserRepository(Protocol):
+    """User repository protocol."""
+
+    async def create(self, email: str, name: str) -> User: ...
+
+    async def get_by_id(self, user_id: UUID) -> User | None: ...
+
+    async def get_by_email(self, email: str) -> User | None: ...
+
+    async def update(self, user: User) -> User: ...
+
+    async def delete(self, user_id: UUID) -> bool: ...
+
+    async def list_all(
+        self,
+        limit: int = 100,
+        offset: int = 0
+    ) -> list[User]: ...
+```
+
+### 3. Repository Implementation (infra/repositories/user.py)
+```python
+from uuid import UUID
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.users.entities import User  # Domain entity
+from infra.db.orm.user import UserDB  # ORM model
+
+class PostgresUserRepository:
+    """PostgreSQL implementation of UserRepository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def _to_entity(self, db_model: UserDB) -> User:
+        """Convert ORM model to domain entity."""
+        return User(
+            id=db_model.id,
+            email=db_model.email,
+            name=db_model.name,
+            created_at=db_model.created_at,
+            updated_at=db_model.updated_at,
+        )
+
+    async def create(self, email: str, name: str) -> User:
+        """Create a new user."""
+        user_db = UserDB(email=email, name=name)
+        self._session.add(user_db)
+        await self._session.flush()
+        return self._to_entity(user_db)
+
+    async def get_by_id(self, user_id: UUID) -> User | None:
+        """Get user by ID."""
+        result = await self._session.execute(
+            select(UserDB).where(UserDB.id == user_id)
+        )
+        db_model = result.scalar_one_or_none()
+        return self._to_entity(db_model) if db_model else None
+
+    async def get_by_email(self, email: str) -> User | None:
+        """Get user by email."""
+        result = await self._session.execute(
+            select(UserDB).where(UserDB.email == email)
+        )
+        db_model = result.scalar_one_or_none()
+        return self._to_entity(db_model) if db_model else None
+
+    async def update(self, user: User) -> User:
+        """Update user."""
+        result = await self._session.execute(
+            select(UserDB).where(UserDB.id == user.id)
+        )
+        db_model = result.scalar_one_or_none()
+        if not db_model:
+            raise UserNotFoundError(user.id)
+
+        db_model.email = user.email
+        db_model.name = user.name
+        await self._session.flush()
+        return self._to_entity(db_model)
+
+    async def delete(self, user_id: UUID) -> bool:
+        """Delete user."""
+        result = await self._session.execute(
+            select(UserDB).where(UserDB.id == user_id)
+        )
+        db_model = result.scalar_one_or_none()
+        if not db_model:
+            return False
+
+        await self._session.delete(db_model)
+        await self._session.flush()
+        return True
+
+    async def list_all(
+        self,
+        limit: int = 100,
+        offset: int = 0
+    ) -> list[User]:
+        """List all users."""
+        stmt = select(UserDB).limit(limit).offset(offset)
+        result = await self._session.execute(stmt)
+        return [self._to_entity(db_model) for db_model in result.scalars().all()]
+```
+
+## ✅ Repository with Complex Queries
+
+```python
+class PostgresSocialAccountRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def _to_entity(self, db_model: SocialAccountDB) -> SocialAccount:
+        return SocialAccount(
+            id=db_model.id,
+            user_id=db_model.user_id,
+            provider=db_model.provider,
+            provider_user_id=db_model.provider_user_id,
+            email=db_model.email,
+            metadata=db_model.metadata,
+            created_at=db_model.created_at,
+            updated_at=db_model.updated_at,
+        )
+
+    async def get_by_provider_user_id(
+        self,
+        provider: str,
+        provider_user_id: str
+    ) -> SocialAccount | None:
+        """Get account by provider and provider user ID."""
+        stmt = select(SocialAccountDB).where(
+            and_(
+                SocialAccountDB.provider == provider,
+                SocialAccountDB.provider_user_id == provider_user_id,
+            )
+        )
+        result = await self._session.execute(stmt)
+        db_model = result.scalar_one_or_none()
+        return self._to_entity(db_model) if db_model else None
+
+    async def list_by_user(
+        self,
+        user_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[SocialAccount]:
+        """List social accounts for a user."""
+        stmt = (
+            select(SocialAccountDB)
+            .where(SocialAccountDB.user_id == user_id)
+            .order_by(SocialAccountDB.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_entity(db_model) for db_model in result.scalars().all()]
+```
+
+## ❌ Incorrect Patterns
+
+### ❌ NEVER return ORM models
+```python
+# ❌ WRONG
+async def create(self, email: str) -> UserDB:  # ❌ Returns ORM
+    user_db = UserDB(email=email)
+    self._session.add(user_db)
+    await self._session.flush()
+    return user_db  # ❌ WRONG
+```
+
+### ❌ NEVER omit _to_entity conversion
+```python
+# ❌ WRONG
+async def get_by_id(self, user_id: UUID) -> User:
+    result = await self._session.execute(...)
+    return result.scalar_one_or_none()  # ❌ Returns ORM, not entity
+```
+
+### ❌ NEVER name implementation as just "Repository"
+```python
+# ❌ WRONG
+class UserRepository:  # ❌ WRONG - conflicts with protocol
+    pass
+
+# ✅ CORRECT
+class PostgresUserRepository:  # ✅ Prefixed with database type
+    pass
+```
+
+### ❌ NEVER call session.commit()
+```python
+# ❌ WRONG
+async def create(self, email: str) -> User:
+    user_db = UserDB(email=email)
+    self._session.add(user_db)
+    await self._session.commit()  # ❌ WRONG - UoW handles this
+    return self._to_entity(user_db)
+```
+
+### ❌ NEVER use refresh() on ORM models returned to caller
+```python
+# ❌ WRONG
+async def create(self, email: str) -> User:
+    user_db = UserDB(email=email)
+    self._session.add(user_db)
+    await self._session.flush()
+    await self._session.refresh(user_db)  # ❌ Unnecessary after flush
+    return self._to_entity(user_db)
+```
+
+## UoW Integration
+
+Repositories are lazy-loaded in the UoW transaction:
+
+```python
+# infra/uow.py
+from core.uow import AsyncUowTransaction as IAsyncUowTransaction
+from core.users.repositories import UserRepository
+from infra.repositories.user import PostgresUserRepository
+
+class AsyncSQLAlchemyUowTransaction(
+    BaseAsyncSQLAlchemyUowTransaction,
+    IAsyncUowTransaction
+):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session)
+        self._users: UserRepository | None = None
+
+    @property
+    def users(self) -> UserRepository:
+        """Lazy-loaded user repository."""
+        if self._users is None:
+            self._users = PostgresUserRepository(self.session)
+        return self._users
+```
+
+## Entity Updates Pattern
+
+### ✅ Option 1: Accept entity and update all fields
+```python
+async def update(self, user: User) -> User:
+    """Update user with all fields from entity."""
+    result = await self._session.execute(
+        select(UserDB).where(UserDB.id == user.id)
+    )
+    db_model = result.scalar_one_or_none()
+    if not db_model:
+        raise UserNotFoundError(user.id)
+
+    # Update all mutable fields
+    db_model.email = user.email
+    db_model.name = user.name
+    await self._session.flush()
+    return self._to_entity(db_model)
+```
+
+### ✅ Option 2: Partial update with kwargs
+```python
+async def update(
+    self,
+    user_id: UUID,
+    **updates: dict
+) -> User:
+    """Update specific fields."""
+    result = await self._session.execute(
+        select(UserDB).where(UserDB.id == user_id)
+    )
+    db_model = result.scalar_one_or_none()
+    if not db_model:
+        raise UserNotFoundError(user_id)
+
+    for key, value in updates.items():
+        if hasattr(db_model, key):
+            setattr(db_model, key, value)
+
+    await self._session.flush()
+    return self._to_entity(db_model)
+```
+
+## Summary Checklist
+
+When creating repositories:
+- [ ] Define protocol in `core/<entity>/repositories.py`
+- [ ] Implement in `infra/repositories/<entity>.py`
+- [ ] Prefix implementation with database type (e.g., `PostgresUserRepository`)
+- [ ] Create `_to_entity()` helper method
+- [ ] ALL public methods return domain entities, NOT ORM models
+- [ ] Use `await session.flush()` after modifications, NOT `commit()`
+- [ ] Register in UoW transaction as lazy-loaded property
+- [ ] Import domain entity from `core/`, NOT ORM model

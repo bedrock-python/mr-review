@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output (will be built in Docker)
+dist/
+build/
+storybook-static/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+.vite/
+.eslintcache
+.tsbuildinfo
+
+# Environment (build args instead)
+.env*
+!.env.example
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# CI/CD
+.gitlab-ci.yml
+.github/
+
+# Development only
+.husky/
+.storybook/
+**/*.stories.tsx
+vitest.config.ts

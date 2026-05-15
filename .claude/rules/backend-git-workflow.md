@@ -1,0 +1,54 @@
+# Git Workflow
+
+We follow a strict Trunk-Based Development (TBD) workflow.
+
+## Branch Naming
+Branches must follow this pattern:
+`<type>/<SLUG>-<ID>__<short_description>`
+
+Types:
+- `feat/`: New features
+- `fix/`: Bug fixes
+- `refactor/`: Code refactoring
+- `chore/`: Maintenance, dependency updates
+- `docs/`: Documentation updates
+- `test/`: Test updates
+
+Examples:
+- `feat/CREDENTIAL-39__initial_creds_srv`
+- `fix/IDENTITY-12__null_pointer_bug`
+- `chore/DEPS__bump_sqlalchemy`
+
+## Commits
+We use **Conventional Commits**. Commits must be **single-line** only.
+
+Format:
+`<type>(scope): <message>`
+
+Types:
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect the meaning of the code (white-space, formatting, etc)
+- `refactor`: A code change that neither fixes a bug nor adds a feature
+- `perf`: A code change that improves performance
+- `test`: Adding missing tests or correcting existing tests
+- `build`: Changes that affect the build system or external dependencies
+- `ci`: Changes to our CI configuration files and scripts
+- `chore`: Other changes that don't modify src or test files
+- `revert`: Reverts a previous commit
+
+Examples:
+- `feat(identity): add user creation use case`
+- `fix(uow): handle transaction rollback on error`
+- `refactor(core): extract domain service for validation`
+- `test(credential): add unit tests for PasswordDB`
+
+## Pre-commit Hooks
+Hooks are mandatory and run:
+1. `check-ast`, `trailing-whitespace`, etc.
+2. `conventional-pre-commit` (checks commit message).
+3. `ruff-check`, `ruff-format`.
+4. `mypy`.
+
+Install with `pre-commit install`.

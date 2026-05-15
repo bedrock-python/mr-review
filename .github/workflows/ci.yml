@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  # ── Backend ──────────────────────────────────────────────────────────────
+
+  backend-lint:
+    name: Backend · Lint & type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mr-review
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy mr_review
+
+  backend-test-unit:
+    name: Backend · Unit tests
+    needs: backend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mr-review
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras
+      - run: uv run pytest -m unit --no-cov
+
+  backend-test-integration:
+    name: Backend · Integration tests
+    needs: backend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mr-review
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras
+      - run: uv run pytest -m integration --cov=mr_review --cov-report=xml --cov-fail-under=80
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/mr-review/coverage.xml
+          flags: backend
+        continue-on-error: true
+
+  # ── Frontend ─────────────────────────────────────────────────────────────
+
+  frontend-lint:
+    name: Frontend · Lint & type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/web-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  frontend-test:
+    name: Frontend · Tests
+    needs: frontend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/web-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:coverage
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/web-app/coverage/lcov.info
+          flags: frontend
+        continue-on-error: true
+
+  # ── Sentinel ──────────────────────────────────────────────────────────────
+
+  all-checks-passed:
+    name: All checks passed
+    if: always()
+    needs:
+      - backend-lint
+      - backend-test-unit
+      - backend-test-integration
+      - frontend-lint
+      - frontend-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required checks failed."
+            exit 1
+          fi
+          echo "All checks passed."

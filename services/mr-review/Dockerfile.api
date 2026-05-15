@@ -1,0 +1,71 @@
+############################
+# Builder (deps build stage)
+############################
+FROM python:3.14-slim-bookworm AS builder
+WORKDIR /app
+
+# Install uv for dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/uv
+
+# Build deps
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    libffi-dev \
+    libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Export/install service dependencies (with API extras)
+COPY pyproject.toml uv.lock* ./
+RUN /uv/bin/uv export --frozen --no-hashes --extra api | grep -v "^-e \.$" > requirements.txt
+
+# Install dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    /uv/bin/uv pip install --system -r requirements.txt
+
+# Copy app code
+COPY mr_review /app/mr_review
+
+
+############################
+# Production runtime
+############################
+FROM python:3.14-slim-bookworm AS production
+WORKDIR /app
+
+# Runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+  && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN addgroup --system app && adduser --system --ingroup app \
+    --no-create-home --disabled-password --shell /usr/sbin/nologin app
+
+# Copy installed python packages + app
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    PYTHONPATH=/app
+
+USER app
+EXPOSE 8000
+
+CMD ["python", "-m", "mr_review.api.entrypoint"]
+
+
+############################
+# Test image
+############################
+FROM builder AS test
+RUN /uv/bin/uv export --frozen --no-hashes --all-extras | grep -v "^-e \.$" > requirements-test.txt \
+ && /uv/bin/uv pip install --system --no-cache -r requirements-test.txt
+COPY tests /app/tests
+COPY .coveragerc /app/.coveragerc
+CMD ["pytest", "/app/tests", "--cov=/app/mr_review"]

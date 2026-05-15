@@ -1,0 +1,441 @@
+---
+description: Testing Strategy with Vitest and Testing Library
+globs: src/**/*.{test.ts,test.tsx,spec.ts,spec.tsx}
+---
+
+# Testing Strategy
+
+Comprehensive testing approach using Vitest, Testing Library, and Storybook.
+
+## Test Structure
+
+```
+src/
+├── shared/
+│   └── ui/
+│       └── Button/
+│           ├── Button.tsx
+│           ├── Button.test.tsx        # Unit tests
+│           └── Button.stories.tsx     # Storybook stories
+```
+
+## Testing Philosophy
+
+### Test Behavior, Not Implementation
+
+```typescript
+// ✅ CORRECT - Test user behavior
+test("submits form when button clicked", async () => {
+  const onSubmit = vi.fn();
+  render(<Form onSubmit={onSubmit} />);
+
+  await userEvent.type(screen.getByLabelText("Name"), "John");
+  await userEvent.click(screen.getByRole("button", { name: /submit/i }));
+
+  expect(onSubmit).toHaveBeenCalledWith({ name: "John" });
+});
+
+// ❌ WRONG - Test implementation details
+test("updates state when typing", () => {
+  const { result } = renderHook(() => useForm());
+
+  act(() => {
+    result.current.setValue("name", "John");
+  });
+
+  expect(result.current.values.name).toBe("John");
+});
+```
+
+## Unit Tests (Vitest + Testing Library)
+
+### Component Testing
+
+```typescript
+// shared/ui/Button/Button.test.tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi } from "vitest";
+import { Button } from "./Button";
+
+describe("Button", () => {
+  it("renders with text", () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByRole("button", { name: /click me/i })).toBeInTheDocument();
+  });
+
+  it("calls onClick when clicked", async () => {
+    const handleClick = vi.fn();
+    const user = userEvent.setup();
+
+    render(<Button onClick={handleClick}>Click me</Button>);
+
+    await user.click(screen.getByRole("button"));
+
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("is disabled when disabled prop is true", () => {
+    render(<Button disabled>Click me</Button>);
+    expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("applies variant class", () => {
+    render(<Button variant="primary">Click me</Button>);
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("bg-primary");
+  });
+});
+```
+
+### Hook Testing
+
+```typescript
+// shared/lib/hooks/useDebounce.test.ts
+import { renderHook, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { useDebounce } from "./useDebounce";
+
+describe("useDebounce", () => {
+  it("debounces value changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ value, delay }) => useDebounce(value, delay),
+      { initialProps: { value: "initial", delay: 500 } }
+    );
+
+    expect(result.current).toBe("initial");
+
+    rerender({ value: "updated", delay: 500 });
+
+    // Value should not update immediately
+    expect(result.current).toBe("initial");
+
+    // Wait for debounce
+    await waitFor(() => {
+      expect(result.current).toBe("updated");
+    }, { timeout: 600 });
+  });
+});
+```
+
+### API Testing with Mock
+
+```typescript
+// entities/user/api/userApi.test.ts
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import MockAdapter from "axios-mock-adapter";
+import { httpClient } from "@shared/api/http-client";
+import { userApi } from "./userApi";
+
+describe("userApi", () => {
+  let mock: MockAdapter;
+
+  beforeEach(() => {
+    mock = new MockAdapter(httpClient);
+  });
+
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it("fetches user successfully", async () => {
+    const userData = {
+      id: "1",
+      name: "John Doe",
+      email: "john@example.com",
+      role: "user",
+      createdAt: "2024-01-01T00:00:00Z",
+    };
+
+    mock.onGet("/users/1").reply(200, userData);
+
+    const user = await userApi.getUser("1");
+
+    expect(user).toEqual(userData);
+  });
+
+  it("handles 404 error", async () => {
+    mock.onGet("/users/999").reply(404, {
+      message: "User not found",
+      code: "NOT_FOUND",
+    });
+
+    await expect(userApi.getUser("999")).rejects.toThrow();
+  });
+
+  it("validates response with Zod", async () => {
+    mock.onGet("/users/1").reply(200, {
+      id: "1",
+      name: "John",
+      // Missing required fields
+    });
+
+    await expect(userApi.getUser("1")).rejects.toThrow();
+  });
+});
+```
+
+### TanStack Query Testing
+
+```typescript
+// entities/user/api/userQueries.test.tsx
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, it, expect, vi } from "vitest";
+import { useUser } from "./userQueries";
+import * as userApi from "./userApi";
+
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+};
+
+describe("useUser", () => {
+  it("fetches user data", async () => {
+    const mockUser = { id: "1", name: "John", email: "john@example.com", role: "user", createdAt: "2024-01-01" };
+    vi.spyOn(userApi, "getUser").mockResolvedValue(mockUser);
+
+    const { result } = renderHook(() => useUser("1"), {
+      wrapper: createWrapper(),
+    });
+
+    expect(result.current.isLoading).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(mockUser);
+  });
+});
+```
+
+## Integration Tests
+
+### Page Testing
+
+```typescript
+// pages/users/UsersPage.test.tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect } from "vitest";
+import { UsersPage } from "./UsersPage";
+import { createTestProviders } from "@shared/lib/test-utils";
+
+describe("UsersPage", () => {
+  it("displays users list", async () => {
+    render(<UsersPage />, { wrapper: createTestProviders() });
+
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("John Doe")).toBeInTheDocument();
+    });
+  });
+
+  it("filters users by search", async () => {
+    const user = userEvent.setup();
+    render(<UsersPage />, { wrapper: createTestProviders() });
+
+    await waitFor(() => {
+      expect(screen.getByText("John Doe")).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByPlaceholderText(/search/i), "Jane");
+
+    await waitFor(() => {
+      expect(screen.queryByText("John Doe")).not.toBeInTheDocument();
+      expect(screen.getByText("Jane Smith")).toBeInTheDocument();
+    });
+  });
+});
+```
+
+## Storybook (Visual Testing)
+
+### Story Examples
+
+```typescript
+// shared/ui/Button/Button.stories.tsx
+import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "@storybook/test";
+import { Button } from "./Button";
+
+const meta = {
+  title: "UI/Button",
+  component: Button,
+  parameters: {
+    layout: "centered",
+  },
+  tags: ["autodocs"],
+  args: {
+    onClick: fn(),
+  },
+} satisfies Meta<typeof Button>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Primary: Story = {
+  args: {
+    variant: "primary",
+    children: "Primary Button",
+  },
+};
+
+export const Secondary: Story = {
+  args: {
+    variant: "secondary",
+    children: "Secondary Button",
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    variant: "primary",
+    children: "Disabled Button",
+    disabled: true,
+  },
+};
+
+export const Loading: Story = {
+  args: {
+    variant: "primary",
+    children: "Loading",
+    isLoading: true,
+  },
+};
+```
+
+## Test Utilities
+
+### Test Providers
+
+```typescript
+// shared/lib/test-utils/providers.tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
+
+export const createTestProviders = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        cacheTime: 0,
+      },
+    },
+  });
+
+  return ({ children }: { children: React.ReactNode }) => (
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class">
+          {children}
+        </ThemeProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
+  );
+};
+
+// Custom render with providers
+export const renderWithProviders = (ui: React.ReactElement) => {
+  return render(ui, { wrapper: createTestProviders() });
+};
+```
+
+### Mock Data
+
+```typescript
+// shared/lib/test-utils/mocks.ts
+import type { User } from "@entities/user";
+
+export const mockUser = (overrides?: Partial<User>): User => ({
+  id: "1",
+  name: "John Doe",
+  email: "john@example.com",
+  role: "user",
+  createdAt: "2024-01-01T00:00:00Z",
+  ...overrides,
+});
+
+export const mockUsers = (count: number): User[] => {
+  return Array.from({ length: count }, (_, i) =>
+    mockUser({ id: String(i + 1), name: `User ${i + 1}` })
+  );
+};
+```
+
+## Coverage Requirements
+
+### Targets
+
+- **Lines**: 80%+
+- **Functions**: 80%+
+- **Branches**: 80%+
+- **Statements**: 80%+
+
+### What to Test
+
+✅ **Must test:**
+- All shared UI components
+- All hooks
+- All API functions
+- All utility functions
+- Critical business logic
+
+⚠️ **Optional testing:**
+- Simple presentational components
+- Type definitions
+- Constants
+
+❌ **Don't test:**
+- Third-party libraries
+- Generated code
+- Configuration files
+
+## Best Practices
+
+1. ✅ **Test user behavior**, not implementation
+2. ✅ **Use semantic queries** (getByRole, getByLabelText)
+3. ✅ **Mock external dependencies**
+4. ✅ **Test edge cases** (empty state, errors, loading)
+5. ✅ **Keep tests isolated**
+6. ✅ **Use descriptive test names**
+7. ✅ **Arrange-Act-Assert pattern**
+8. ✅ **Clean up after tests**
+
+## Anti-Patterns (Avoid)
+
+### ❌ WRONG: Testing implementation details
+
+```typescript
+// ❌ WRONG
+expect(component.state.count).toBe(1);
+expect(wrapper.find(".class-name")).toHaveLength(1);
+```
+
+### ❌ WRONG: Snapshot testing everything
+
+```typescript
+// ❌ WRONG - brittle, no value
+expect(container).toMatchSnapshot();
+```
+
+### ❌ WRONG: Not cleaning up
+
+```typescript
+// ❌ WRONG
+afterEach(() => {
+  // Missing cleanup!
+});
+```

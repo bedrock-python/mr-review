@@ -1,0 +1,45 @@
+# Testing Strategy
+
+We maintain high test coverage with a clear separation between Unit and Integration tests.
+
+## Test Structure
+Every service and library must have a `tests/` directory:
+```
+tests/
+├── conftest.py          # Shared fixtures
+├── unit/                # Unit tests (Mock external deps)
+└── integration/         # Integration tests (Use real deps via Docker)
+```
+
+## Markers
+- **`@pytest.mark.unit`**: For tests that run without external infrastructure.
+- **`@pytest.mark.integration`**: For tests that require DB, Redis, or Kafka.
+
+## Naming Conventions
+- **Files**: `test_*.py`
+- **Functions**: `test_*`
+- **Classes**: `Test*`
+
+## Best Practices
+- **Isolation**: Use `db_transaction` fixture to rollback changes after each test.
+- **Factories**: Use `polyfactory`, `factory-boy`, or `faker` for data generation.
+- **Async**: Use `@pytest.mark.asyncio` and `pytest-asyncio` for async code.
+- **Migrations**: Every service must have migration tests (stairway tests) in `tests/migrations/` using `alembic-testkit`.
+
+## Example Unit Test
+```python
+@pytest.mark.unit
+async def test_create_user_success(user_repo_mock, uow_mock):
+    use_case = CreateUserUseCase(uow_mock)
+    dto = CreateUserDTO(username="testuser")
+
+    result = await use_case.execute(dto)
+
+    assert result.username == "testuser"
+    user_repo_mock.create.assert_called_once()
+```
+
+## Running Tests
+- **All python libs**: `make test-python-libs`
+- **Single service (Docker)**: `make run-tests TESTS=identity-service`
+- **Single service (Local)**: `uv run pytest tests`

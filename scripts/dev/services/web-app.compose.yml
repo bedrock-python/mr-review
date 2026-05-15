@@ -1,0 +1,22 @@
+services:
+  mr-review-web:
+    build:
+      context: ../../services/web-app
+      dockerfile: Dockerfile.app
+      target: production
+    profiles: [web-app, all]
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      API_BASE_URL: "http://mr-review-api:8000"
+    networks:
+      - mr-review-network
+    restart: unless-stopped
+    depends_on:
+      mr-review-api:
+        condition: service_healthy
+
+networks:
+  mr-review-network:
+    external: true

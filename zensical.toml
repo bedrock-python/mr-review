@@ -1,0 +1,59 @@
+[project]
+site_name = "mr-review"
+site_description = "AI-powered Merge Request review tool"
+site_author = "Alex Shalaev"
+repo_name = "bedrock-python/mr-review"
+repo_url = "https://github.com/bedrock-python/mr-review"
+edit_uri = "edit/master/docs/"
+copyright = "Copyright &copy; 2026 Alex Shalaev"
+docs_dir = "docs"
+site_dir = "site"
+
+nav = [
+    { "Home" = "index.md" },
+    { "Getting started" = [
+        { "Installation" = "getting-started/installation.md" },
+        { "Quick start" = "getting-started/quickstart.md" },
+        { "Configuration" = "getting-started/configuration.md" },
+    ] },
+    { "Features" = [
+        { "Review pipeline" = "features/pipeline.md" },
+        { "VCS hosts" = "features/hosts.md" },
+        { "AI providers" = "features/ai-providers.md" },
+    ] },
+    { "Changelog" = "changelog.md" },
+]
+
+[project.theme]
+features = [
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+    "search.share",
+    "search.suggest",
+    "toc.follow",
+    "toc.integrate",
+]
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"

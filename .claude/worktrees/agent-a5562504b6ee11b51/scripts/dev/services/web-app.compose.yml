@@ -1,0 +1,39 @@
+x-web-app-base: &web-app-base
+  networks:
+    - mr-review-network
+  restart: on-failure:5
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: "1.0"
+
+services:
+  web-app:
+    <<: *web-app-base
+    image: mr-review-web-app:local
+    build:
+      context: ../../services/web-app
+      dockerfile: Dockerfile.app
+      target: production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: mr-review-web-app
+    profiles: ["web-app", "all"]
+    ports:
+      - "3000:8080"
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://mr-review-api:8000}
+    depends_on:
+      mr-review-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  mr-review-network:
+    external: true
+    name: mr-review-network

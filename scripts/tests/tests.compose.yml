@@ -1,0 +1,13 @@
+services:
+  mr-review-tests:
+    build:
+      context: ../../services/mr-review
+      dockerfile: Dockerfile.api
+      target: test
+    profiles: [mr-review-tests]
+    networks:
+      - mr-review-test-network
+
+networks:
+  mr-review-test-network:
+    external: true

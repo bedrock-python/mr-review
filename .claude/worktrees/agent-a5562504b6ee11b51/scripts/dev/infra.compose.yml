@@ -1,0 +1,6 @@
+# No external infrastructure needed for mr-review
+# All state is stored in YAML files (MR_REVIEW_DATA_DIR)
+
+networks:
+  mr-review-network:
+    driver: bridge

@@ -1,0 +1,41 @@
+services:
+  api:
+    image: ghcr.io/bedrock-python/mr-review/api:latest
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-17241}:8000"
+    environment:
+      MR_REVIEW__SERVER__HOST: "0.0.0.0"
+      MR_REVIEW__SERVER__PORT: "8000"
+      MR_REVIEW__DATA_DIR: "/data"
+      MR_REVIEW__HOST_DATA_DIR: "${DATA_DIR:-./data}"
+      MR_REVIEW__CORS__ALLOW_ORIGINS: '["http://localhost:${WEB_PORT:-17242}"]'
+      MR_REVIEW__LOGGING__USE_JSON: "true"
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+    networks:
+      - mr-review
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/system/health/livez"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  web:
+    image: ghcr.io/bedrock-python/mr-review/web-app:latest
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-17242}:8080"
+    environment:
+      API_BASE_URL: "http://localhost:${API_PORT:-17241}"
+      APP_ENV: "production"
+    networks:
+      - mr-review
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  mr-review:
+    driver: bridge

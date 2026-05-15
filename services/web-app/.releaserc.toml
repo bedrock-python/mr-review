@@ -1,0 +1,34 @@
+[semantic_release]
+assets = []
+commit_message = "release(web-app): {version}"
+commit_parser = "conventional-monorepo"
+logging_use_named_masks = false
+major_on_zero = true
+allow_zero_version = true
+tag_format = "web-app-v{version}"
+version_variables = ["package.json:version"]
+
+[semantic_release.remote]
+name = "origin"
+type = "gitlab"
+ignore_token_for_push = true
+
+[semantic_release.changelog]
+exclude_commit_patterns = ['''^\s*release.*$''']
+
+[semantic_release.commit_author]
+env = "GIT_COMMIT_AUTHOR"
+default = "semantic-release <semantic-release>"
+
+[semantic_release.branches.main]
+match = "(master|main)"
+
+[semantic_release.commit_parser_options]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "style", "refactor", "test", "WEB-APP", "release"]
+minor_tags = ["feat", "WEB-APP"]
+patch_tags = ["fix", "perf", "build", "chore", "ci", "docs", "style", "refactor", "test"]
+default_bump_level = 0
+parse_squash_commits = true
+ignore_merge_commits = true
+path_filters = ["."]
+scope_prefix = "web-app"

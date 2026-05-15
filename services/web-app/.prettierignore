@@ -1,0 +1,12 @@
+dist
+build
+coverage
+node_modules
+storybook-static
+.storybook
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# MSW-generated; formatting is toolchain-owned (pnpm msw init)
+public/mockServiceWorker.js

@@ -1,0 +1,416 @@
+---
+description: State Management Patterns (TanStack Query, Zustand, Forms)
+globs: src/**/*.{ts,tsx}
+---
+
+# State Management
+
+State management strategy using TanStack Query, Zustand, and React Hook Form.
+
+## State Categories
+
+```mermaid
+graph LR
+    ServerState[Server State<br/>TanStack Query]
+    ClientState[Client State<br/>Zustand]
+    URLState[URL State<br/>nuqs]
+    FormState[Form State<br/>React Hook Form]
+
+    ServerState -.->|cache| ClientState
+    URLState -.->|sync| ServerState
+```
+
+## 1. Server State (TanStack Query)
+
+**For ALL data from API**
+
+### Queries (GET requests)
+
+```typescript
+// entities/user/api/userApi.ts
+export const userApi = {
+  getUser: (id: string) =>
+    httpClient.get<User>(`/users/${id}`).then((res) => UserSchema.parse(res.data)),
+
+  getUsers: (params: GetUsersParams) =>
+    httpClient.get<User[]>("/users", { params }).then((res) => z.array(UserSchema).parse(res.data)),
+};
+
+// entities/user/api/userQueries.ts
+export const userKeys = {
+  all: ["users"] as const,
+  lists: () => [...userKeys.all, "list"] as const,
+  list: (filters: GetUsersParams) => [...userKeys.lists(), filters] as const,
+  details: () => [...userKeys.all, "detail"] as const,
+  detail: (id: string) => [...userKeys.details(), id] as const,
+};
+
+export const useUser = (id: string) => {
+  return useQuery({
+    queryKey: userKeys.detail(id),
+    queryFn: () => userApi.getUser(id),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+export const useUsers = (params: GetUsersParams) => {
+  return useQuery({
+    queryKey: userKeys.list(params),
+    queryFn: () => userApi.getUsers(params),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+};
+```
+
+### Mutations (POST/PUT/PATCH/DELETE)
+
+```typescript
+// entities/user/api/userMutations.ts
+export const useCreateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateUserInput) => userApi.createUser(data),
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+};
+
+export const useUpdateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateUserInput }) =>
+      userApi.updateUser(id, data),
+    onSuccess: (_, variables) => {
+      // Invalidate specific user
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(variables.id) });
+      // Invalidate lists
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+};
+```
+
+### Optimistic Updates
+
+```typescript
+// ✅ CORRECT - Optimistic update
+export const useToggleUserStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      userApi.updateUser(id, { enabled }),
+
+    onMutate: async ({ id, enabled }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: userKeys.detail(id) });
+
+      // Snapshot previous value
+      const previousUser = queryClient.getQueryData<User>(userKeys.detail(id));
+
+      // Optimistically update
+      queryClient.setQueryData<User>(userKeys.detail(id), (old) =>
+        old ? { ...old, enabled } : old
+      );
+
+      return { previousUser };
+    },
+
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousUser) {
+        queryClient.setQueryData(userKeys.detail(variables.id), context.previousUser);
+      }
+    },
+
+    onSettled: (_, __, variables) => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(variables.id) });
+    },
+  });
+};
+```
+
+### Infinite Queries (Pagination)
+
+```typescript
+// ✅ CORRECT - Infinite scroll
+export const useInfiniteUsers = (filters: UserFilters) => {
+  return useInfiniteQuery({
+    queryKey: [...userKeys.lists(), "infinite", filters],
+    queryFn: ({ pageParam = 1 }) =>
+      userApi.getUsers({ ...filters, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.hasMore ? allPages.length + 1 : undefined;
+    },
+  });
+};
+
+// Usage
+const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteUsers(filters);
+```
+
+## 2. Client State (Zustand)
+
+**For UI state that doesn't come from server**
+
+### Store Structure
+
+```typescript
+// features/auth/model/authStore.ts
+import { create } from "zustand";
+import { devtools, persist } from "zustand/middleware";
+
+type AuthState = {
+  isAuthenticated: boolean;
+  user: User | null;
+};
+
+type AuthActions = {
+  setAuth: (user: User) => void;
+  clearAuth: () => void;
+};
+
+export const useAuthStore = create<AuthState & AuthActions>()(
+  devtools(
+    persist(
+      (set) => ({
+        isAuthenticated: false,
+        user: null,
+
+        setAuth: (user) => set({ isAuthenticated: true, user }),
+        clearAuth: () => set({ isAuthenticated: false, user: null }),
+      }),
+      {
+        name: "auth-storage",
+        partialize: (state) => ({ user: state.user }), // Only persist user
+      }
+    )
+  )
+);
+
+// Usage - subscribe to specific state
+export const useAuth = () => useAuthStore((state) => ({
+  isAuthenticated: state.isAuthenticated,
+  user: state.user,
+}));
+
+// Usage - subscribe to actions only (no re-renders)
+export const useAuthActions = () => useAuthStore((state) => ({
+  setAuth: state.setAuth,
+  clearAuth: state.clearAuth,
+}));
+```
+
+### Slices Pattern
+
+```typescript
+// shared/lib/store/createStore.ts
+export const createStore = <T extends object>(
+  initialState: T,
+  actions: (set: any, get: any) => object
+) => {
+  return create<T & ReturnType<typeof actions>>()(
+    devtools((set, get) => ({
+      ...initialState,
+      ...actions(set, get),
+    }))
+  );
+};
+
+// widgets/sidebar/model/sidebarStore.ts
+export const useSidebarStore = createStore(
+  { isOpen: true, isPinned: false },
+  (set, get) => ({
+    toggle: () => set({ isOpen: !get().isOpen }),
+    pin: () => set({ isPinned: true }),
+    unpin: () => set({ isPinned: false }),
+  })
+);
+```
+
+## 3. URL State (nuqs)
+
+**For shareable state (filters, pagination, search)**
+
+```typescript
+// features/user-list/lib/useUserFilters.ts
+import { parseAsString, parseAsInteger, useQueryStates } from "nuqs";
+
+export const useUserFilters = () => {
+  return useQueryStates({
+    search: parseAsString.withDefault(""),
+    page: parseAsInteger.withDefault(1),
+    status: parseAsString.withDefault("all"),
+    sort: parseAsString.withDefault("name"),
+  });
+};
+
+// Usage
+export const UserList = () => {
+  const [filters, setFilters] = useUserFilters();
+  const { data } = useUsers(filters);
+
+  return (
+    <div>
+      <input
+        value={filters.search}
+        onChange={(e) => setFilters({ search: e.target.value })}
+      />
+      {/* URL updates automatically: ?search=john&page=1 */}
+    </div>
+  );
+};
+```
+
+### URL State Best Practices
+
+```typescript
+// ✅ CORRECT - Typed parsers
+import { parseAsStringEnum, parseAsBoolean } from "nuqs";
+
+type SortOrder = "asc" | "desc";
+
+export const useTableState = () => {
+  return useQueryStates({
+    sort: parseAsString.withDefault("name"),
+    order: parseAsStringEnum<SortOrder>(["asc", "desc"]).withDefault("asc"),
+    showArchived: parseAsBoolean.withDefault(false),
+  });
+};
+
+// ❌ WRONG - Manual URL parsing
+const searchParams = new URLSearchParams(window.location.search);
+const sort = searchParams.get("sort") || "name";
+```
+
+## 4. Form State (React Hook Form)
+
+**For form handling with validation**
+
+### Basic Form
+
+```typescript
+// features/create-user/ui/CreateUserForm.tsx
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+const createUserSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  age: z.number().min(18, "Must be 18 or older"),
+});
+
+type CreateUserForm = z.infer<typeof createUserSchema>;
+
+export const CreateUserForm = () => {
+  const createUser = useCreateUser();
+
+  const form = useForm<CreateUserForm>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      age: 18,
+    },
+  });
+
+  const onSubmit = (data: CreateUserForm) => {
+    createUser.mutate(data);
+  };
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      <input {...form.register("name")} />
+      {form.formState.errors.name && <span>{form.formState.errors.name.message}</span>}
+
+      <input type="email" {...form.register("email")} />
+      {form.formState.errors.email && <span>{form.formState.errors.email.message}</span>}
+
+      <input type="number" {...form.register("age", { valueAsNumber: true })} />
+      {form.formState.errors.age && <span>{form.formState.errors.age.message}</span>}
+
+      <button type="submit" disabled={form.formState.isSubmitting}>
+        Create User
+      </button>
+    </form>
+  );
+};
+```
+
+### Controlled Components
+
+```typescript
+// ✅ CORRECT - Controller for custom components
+import { Controller } from "react-hook-form";
+import { Select } from "@shared/ui";
+
+<Controller
+  name="role"
+  control={form.control}
+  render={({ field }) => (
+    <Select
+      value={field.value}
+      onValueChange={field.onChange}
+      options={roleOptions}
+    />
+  )}
+/>
+```
+
+## Anti-Patterns (Avoid)
+
+### ❌ WRONG: Server data in Zustand
+
+```typescript
+// ❌ WRONG - Don't store server data in Zustand
+const useUserStore = create((set) => ({
+  users: [],
+  fetchUsers: async () => {
+    const users = await api.getUsers();
+    set({ users });
+  },
+}));
+
+// ✅ CORRECT - Use TanStack Query
+const { data: users } = useUsers();
+```
+
+### ❌ WRONG: Prop drilling
+
+```typescript
+// ❌ WRONG
+<GrandParent user={user}>
+  <Parent user={user}>
+    <Child user={user} />
+  </Parent>
+</GrandParent>
+
+// ✅ CORRECT - Zustand or Context
+const user = useAuthStore((state) => state.user);
+```
+
+### ❌ WRONG: Duplicating state
+
+```typescript
+// ❌ WRONG - Duplicating server state
+const { data: user } = useUser(id);
+const [localUser, setLocalUser] = useState(user);
+
+// ✅ CORRECT - Use server state directly
+const { data: user } = useUser(id);
+```
+
+## Summary
+
+| State Type | Tool | Use Case | Example |
+|------------|------|----------|---------|
+| **Server State** | TanStack Query | API data | Users, Orders, Products |
+| **Client State** | Zustand | UI state | Sidebar open/closed, Theme, Auth |
+| **URL State** | nuqs | Shareable state | Filters, Pagination, Search |
+| **Form State** | React Hook Form | Form handling | Create/Edit forms |

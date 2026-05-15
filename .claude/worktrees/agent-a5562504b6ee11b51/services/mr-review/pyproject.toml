@@ -1,0 +1,134 @@
+[project]
+name = "mr-review-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    "httpx>=0.28",
+    "anthropic>=0.40",
+    "openai>=1.60",
+    "dishka>=1.4",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "sse-starlette>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "pre-commit>=4.5",
+]
+
+# ── Ruff ─────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 120
+src = ["mr_review", "api", "tests"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "C90",  # mccabe
+    "F",    # pyflakes
+    "E",    # pycodestyle
+    "I",    # isort
+    "B",    # bugbear
+    "N",    # pep8-naming
+    "S",    # bandit
+    "G",    # logging format
+    "T10",  # debugger
+    "C4",   # comprehensions
+    "ISC",  # implicit string concat
+    "PT",   # flake8-pytest-style
+    "SIM",  # flake8-simplify
+    "TID",  # tidy-imports
+    "PERF", # performance
+    "T201", # print statements
+    "RUF006",  # asyncio-dangling-task
+    "RUF022",  # unsorted-all
+]
+ignore = [
+    "S101",    # assert used
+    "B008",    # function call in default arg (Depends)
+    "N815",    # mixed-case var in class scope
+    "G004",    # logging uses f-string
+    "ISC001",  # implicit string concat (formatter conflict)
+    "C408",    # unnecessary dict() call
+    "SIM108",  # ternary instead of if-else
+    "TID252",  # relative imports from parent
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "PT", "PERF"]
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.Set".msg = "Use set[] instead."
+"typing.List".msg = "Use list[] instead."
+"typing.Dict".msg = "Use dict[] instead."
+"typing.Optional".msg = "Use | None instead."
+"typing.Tuple".msg = "Use tuple[] instead."
+"typing.Type".msg = "Use type[] instead."
+"typing.Union".msg = "Use | instead."
+
+# ── Mypy ─────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+allow_untyped_calls = true
+allow_redefinition = true
+disallow_untyped_decorators = false
+implicit_reexport = false
+ignore_missing_imports = true
+show_error_codes = true
+warn_return_any = false
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "migrations.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "unit: Unit tests (no I/O)",
+    "integration: Integration tests with real DB",
+]
+addopts = "-v --tb=short"
+
+# ── Coverage ─────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+omit = [
+    "tests/*",
+    "migrations/*",
+    "*/test_*.py",
+]

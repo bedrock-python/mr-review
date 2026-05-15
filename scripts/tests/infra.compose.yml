@@ -1,0 +1,4 @@
+networks:
+  mr-review-test-network:
+    name: mr-review-test-network
+    driver: bridge

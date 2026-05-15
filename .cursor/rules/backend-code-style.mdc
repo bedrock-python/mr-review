@@ -1,0 +1,43 @@
+---
+description: Python Code Style, Ruff, Mypy, and Type Hints
+globs: **/*.py
+---
+
+# Code Style and Standards
+
+We enforce high-quality, production-ready Python code.
+
+## Language Standards
+- **Python version**: 3.11+
+- **Line Length**: 120 characters
+- **Quotes**: Double quotes for strings where possible.
+
+## Type Hints
+- **Mandatory**: All function signatures and class members MUST have type hints.
+- **Future Annotations**: Use `from __future__ import annotations` only where strictly necessary (e.g., self-referencing types, cyclic dependencies, or large annotations). For simple files and basic type hints, it is not required.
+- **Modern Types**: Use built-in types instead of `typing` aliases:
+  - `list[int]` instead of `List[int]`
+  - `dict[str, str]` instead of `Dict[str, str]`
+  - `str | None` instead of `Optional[str]`
+- **Protocols**: Use `typing.Protocol` for duck typing and dependency inversion.
+
+## Linting and Formatting
+- **Ruff**: Primary linter and formatter.
+  - Run `make fmt` or `ruff check --fix . && ruff format .`
+- **Mypy**: Static type checking.
+  - Services: Strict mode (`check_untyped_defs = true`, `disallow_untyped_defs = true`).
+  - Libraries: Standard mode.
+
+## Import Organization
+- **Order**:
+  1. `from __future__ import annotations`
+  2. Standard library imports
+  3. Third-party library imports
+  4. First-party (project) imports
+  5. Local folder imports
+- Use Ruff's `isort` for automatic sorting.
+
+## Prohibited Practices
+- **No `datetime.utcnow()`**: Use `utc_datetime.clock.now()` or timezone-aware `datetime.now(UTC)`.
+- **No `Any`**: Avoid `Any` unless absolutely necessary.
+- **No TODO/FIXME**: Code must be finished before merge.

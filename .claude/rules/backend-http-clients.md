@@ -1,0 +1,188 @@
+# HTTP Client Standards
+
+All HTTP clients MUST use `rest-client-kit` for consistent observability, retries, circuit breakers, and header propagation.
+
+## ✅ Correct Pattern: Using rest-client-kit
+
+### 1. Configuration (api/config.py)
+```python
+from pydantic import Field
+from pydantic_settings_kit import BaseHttpServiceSettings, BaseRestClientSettings
+
+class GoogleOAuthSettings(BaseModel):
+    client: BaseRestClientSettings = Field(
+        default_factory=lambda: BaseRestClientSettings(
+            base_url="https://oauth2.googleapis.com"
+        )
+    )
+    client_id: str
+    client_secret: str
+
+class Settings(BaseHttpServiceSettings):
+    oauth: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)
+```
+
+### 2. DI Provider (infra/di/providers/rest.py)
+```python
+from dishka import Provider, Scope, provide
+from dishka_providers.metrics import RestClientMetricsProtocol
+from rest_client_kit import RestClientProvider
+
+class RestClientsProvider(RestClientProvider):
+    scope = Scope.REQUEST
+
+    @provide
+    async def get_google_oauth_client(
+        self,
+        settings: Settings,
+        metrics: RestClientMetricsProtocol | None = None,
+    ) -> httpx.AsyncClient:
+        return await self.create_rest_client(
+            settings=settings.oauth.client,
+            service_name="google-oauth",
+            metrics=metrics,
+        )
+```
+
+### 3. Client Class (infra/clients/ or infra/oauth/providers/)
+```python
+import httpx
+
+class GoogleOAuthClient:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,  # Injected from DI
+        client_id: str,
+        client_secret: str,
+    ) -> None:
+        self._client = client
+        self._client_id = client_id
+        self._client_secret = client_secret
+
+    async def exchange_code_for_token(self, code: str) -> dict:
+        response = await self._client.post(
+            "/token",
+            data={
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+```
+
+### 4. Container Registration (infra/di/containers/api.py)
+```python
+from dishka_providers.metrics import PrometheusRestMetricsProvider
+
+def create_api_container(settings: Settings) -> AsyncContainer:
+    return make_async_container(
+        DatabaseProvider(),
+        RestClientsProvider(),  # ✅ Add this
+        PrometheusRestMetricsProvider(),  # ✅ Add metrics
+        UseCaseProvider(),
+    )
+```
+
+## ❌ Incorrect Patterns
+
+### ❌ NEVER use httpx.AsyncClient() directly
+```python
+# ❌ WRONG: Direct httpx usage without rest-client-kit
+async def exchange_code_for_token(self, code: str) -> dict:
+    async with httpx.AsyncClient() as client:  # ❌ WRONG
+        response = await client.post(...)
+```
+
+### ❌ NEVER create custom httpx.AsyncClient subclasses
+```python
+# ❌ WRONG: Custom client instead of rest-client-kit
+class CustomHttpClient(httpx.AsyncClient):  # ❌ WRONG
+    def __init__(self):
+        super().__init__(timeout=30.0)
+```
+
+### ❌ NEVER instantiate clients manually in use cases
+```python
+# ❌ WRONG: Manual instantiation
+class SomeUseCase:
+    async def execute(self):
+        client = httpx.AsyncClient()  # ❌ WRONG
+        response = await client.get("...")
+```
+
+## Benefits of rest-client-kit
+
+1. **Observability**: Automatic metrics, tracing, and logging
+2. **Resilience**: Built-in retries and circuit breakers
+3. **Context Propagation**: Automatic header forwarding (trace-id, etc.)
+4. **Timeouts**: Consistent timeout configuration
+5. **Testing**: Easy to mock via DI
+
+## Multiple Base URLs Pattern
+
+Some services (like GitHub, LinkedIn) require multiple base URLs:
+
+```python
+# Configuration
+class GitHubOAuthSettings(BaseModel):
+    login_client: BaseRestClientSettings = Field(
+        default_factory=lambda: BaseRestClientSettings(
+            base_url="https://github.com"
+        )
+    )
+    api_client: BaseRestClientSettings = Field(
+        default_factory=lambda: BaseRestClientSettings(
+            base_url="https://api.github.com"
+        )
+    )
+
+# Provider
+@provide
+async def get_github_oauth_client(
+    self,
+    settings: Settings,
+    metrics: RestClientMetricsProtocol | None = None,
+) -> GitHubOAuthClient:
+    login_client = await self.create_rest_client(
+        settings=settings.oauth.github.login_client,
+        service_name="github-login",
+        metrics=metrics,
+    )
+    api_client = await self.create_rest_client(
+        settings=settings.oauth.github.api_client,
+        service_name="github-api",
+        metrics=metrics,
+    )
+    return GitHubOAuthClient(
+        login_client=login_client,
+        api_client=api_client,
+        client_id=settings.oauth.github.client_id,
+        client_secret=settings.oauth.github.client_secret,
+    )
+
+# Client
+class GitHubOAuthClient:
+    def __init__(
+        self,
+        login_client: httpx.AsyncClient,
+        api_client: httpx.AsyncClient,
+        client_id: str,
+        client_secret: str,
+    ) -> None:
+        self._login_client = login_client
+        self._api_client = api_client
+```
+
+## Summary Checklist
+
+When creating HTTP clients:
+- [ ] Use `BaseRestClientSettings` in config
+- [ ] Create `RestClientsProvider` inheriting from `RestClientProvider`
+- [ ] Use `self.create_rest_client()` in provider
+- [ ] Inject `httpx.AsyncClient` into client classes
+- [ ] Register `RestClientsProvider()` and `PrometheusRestMetricsProvider()` in container
+- [ ] NEVER use `httpx.AsyncClient()` directly
+- [ ] NEVER create custom `httpx.AsyncClient` subclasses

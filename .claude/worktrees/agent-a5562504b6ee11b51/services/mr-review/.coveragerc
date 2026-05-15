@@ -1,0 +1,7 @@
+[run]
+source = mr_review
+
+[report]
+omit =
+    */tests/*
+    */migrations/*
