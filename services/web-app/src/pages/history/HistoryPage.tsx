@@ -575,7 +575,7 @@ export const HistoryPage = (): React.ReactElement => {
                 key={stage}
                 label={STAGE_META[stage].label}
                 active={stageFilter === stage}
-                {...(count !== undefined ? { count } : {})}
+                count={count}
                 onClick={() => {
                   setStageFilter(stageFilter === stage ? null : stage);
                 }}
