@@ -3,18 +3,17 @@ from __future__ import annotations
 from uuid import UUID
 
 from mr_review.core.hosts.repositories import HostRepository
-from mr_review.core.mrs.entities import Repo
 from mr_review.core.vcs.protocols import VCSProviderFactory
 
 
-class ListReposUseCase:
+class CheckConnectionUseCase:
     def __init__(self, host_repo: HostRepository, vcs_factory: VCSProviderFactory) -> None:
         self._host_repo = host_repo
         self._vcs_factory = vcs_factory
 
-    async def execute(self, host_id: UUID, query: str | None = None) -> list[Repo]:
+    async def execute(self, host_id: UUID) -> dict[str, str]:
         host = await self._host_repo.get_by_id(host_id)
         if host is None:
             raise ValueError(f"Host {host_id} not found")
         provider = self._vcs_factory(host)
-        return await provider.list_repos(query=query)
+        return await provider.test_connection()

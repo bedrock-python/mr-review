@@ -1,11 +1,10 @@
-from uuid import UUID
+from __future__ import annotations
 
-import httpx
+from uuid import UUID
 
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.repositories import ReviewRepository
-from mr_review.infra.vcs.cache import VCSCache
-from mr_review.infra.vcs.factory import get_cached_provider
+from mr_review.core.vcs.protocols import VCSProviderFactory
 from mr_review.use_cases.reviews.context_files import CONTEXT_EMBED_CHARS, collect_context_files, merge_context
 
 
@@ -14,13 +13,11 @@ class GetReviewContextUseCase:
         self,
         review_repo: ReviewRepository,
         host_repo: HostRepository,
-        vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
+        vcs_factory: VCSProviderFactory,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
-        self._vcs_cache = vcs_cache
-        self._vcs_client = vcs_client
+        self._vcs_factory = vcs_factory
 
     async def execute(self, review_id: UUID) -> tuple[str, bool]:
         """Return (merged_context_md, is_large).
@@ -35,7 +32,7 @@ class GetReviewContextUseCase:
         if host is None:
             raise ValueError(f"Host {review.host_id} not found")
 
-        provider = get_cached_provider(host, self._vcs_client, self._vcs_cache)
+        provider = self._vcs_factory(host)
         mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
         context_contents = await collect_context_files(
             provider=provider,

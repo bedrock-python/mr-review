@@ -3,36 +3,31 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
-import httpx
-
+from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.entities import BriefConfig, Review
-from mr_review.infra.repositories.host import FileHostRepository
-from mr_review.infra.repositories.review import FileReviewRepository
-from mr_review.infra.vcs.cache import VCSCache
-from mr_review.infra.vcs.factory import get_cached_provider
+from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.core.vcs.protocols import VCSProviderFactory
 from mr_review.use_cases.reviews.context_files import (
-    _CONCURRENCY,
+    CONCURRENCY,
     collect_commit_history,
     collect_context_files,
     collect_full_files,
     collect_related_code,
     collect_test_files,
 )
-from mr_review.use_cases.reviews.dispatch_review import _build_prompt, _format_diff
+from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
 
 
 class GetReviewPromptUseCase:
     def __init__(
         self,
-        review_repo: FileReviewRepository,
-        host_repo: FileHostRepository,
-        vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
+        review_repo: ReviewRepository,
+        host_repo: HostRepository,
+        vcs_factory: VCSProviderFactory,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
-        self._vcs_cache = vcs_cache
-        self._vcs_client = vcs_client
+        self._vcs_factory = vcs_factory
 
     async def execute(
         self,
@@ -51,13 +46,13 @@ class GetReviewPromptUseCase:
 
         brief_config = brief_config or self._resolve_brief_config(review, review_id, iteration_id)
 
-        provider = get_cached_provider(host, self._vcs_client, self._vcs_cache)
+        provider = self._vcs_factory(host)
         mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
         diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
         cfg = brief_config
         ref = mr.source_branch
 
-        semaphore = asyncio.Semaphore(_CONCURRENCY)
+        semaphore = asyncio.Semaphore(CONCURRENCY)
 
         async def _noop_dict() -> dict[str, str]:
             return {}
@@ -89,9 +84,9 @@ class GetReviewPromptUseCase:
             else _noop_commit_history(),
         )
 
-        return _build_prompt(
+        return build_prompt(
             brief_config,
-            _format_diff(diff_files),
+            format_diff(diff_files),
             mr.title,
             mr.description,
             context_contents if context_contents else None,

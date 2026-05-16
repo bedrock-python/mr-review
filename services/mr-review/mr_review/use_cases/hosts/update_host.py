@@ -3,11 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from mr_review.core.hosts.entities import Host
-from mr_review.infra.repositories.host import FileHostRepository
+from mr_review.core.hosts.repositories import HostRepository
 
 
 class UpdateHostUseCase:
-    def __init__(self, repo: FileHostRepository) -> None:
+    def __init__(self, repo: HostRepository) -> None:
         self._repo = repo
 
     async def execute(

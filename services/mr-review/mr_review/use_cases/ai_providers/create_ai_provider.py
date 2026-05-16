@@ -1,9 +1,9 @@
 from mr_review.core.ai_providers.entities import AIProvider, AIProviderType
-from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
+from mr_review.core.ai_providers.repositories import AIProviderRepository
 
 
 class CreateAIProviderUseCase:
-    def __init__(self, repo: FileAIProviderRepository) -> None:
+    def __init__(self, repo: AIProviderRepository) -> None:
         self._repo = repo
 
     async def execute(

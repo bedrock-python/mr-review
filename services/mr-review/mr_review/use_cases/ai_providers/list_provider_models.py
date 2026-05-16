@@ -1,31 +1,19 @@
+from __future__ import annotations
+
 from uuid import UUID
 
-from mr_review.infra.ai.claude import ClaudeProvider
-from mr_review.infra.ai.openai_compat import OpenAICompatProvider
-from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
+from mr_review.core.ai.protocols import ModelLister
+from mr_review.core.ai_providers.repositories import AIProviderRepository
 
 
 class ListProviderModelsUseCase:
-    def __init__(self, repo: FileAIProviderRepository) -> None:
+    def __init__(self, repo: AIProviderRepository, model_lister: ModelLister) -> None:
         self._repo = repo
+        self._model_lister = model_lister
 
     async def execute(self, provider_id: UUID) -> list[str]:
         provider = await self._repo.get_by_id(provider_id)
         if provider is None:
             raise ValueError(f"AI provider {provider_id} not found")
 
-        if provider.type == "claude":
-            ai: ClaudeProvider | OpenAICompatProvider = ClaudeProvider(
-                api_key=provider.api_key,
-                ssl_verify=provider.ssl_verify,
-                timeout=provider.timeout,
-            )
-        else:
-            ai = OpenAICompatProvider(
-                api_key=provider.api_key,
-                base_url=provider.base_url or None,
-                ssl_verify=provider.ssl_verify,
-                timeout=provider.timeout,
-            )
-
-        return await ai.list_models()
+        return await self._model_lister(provider)

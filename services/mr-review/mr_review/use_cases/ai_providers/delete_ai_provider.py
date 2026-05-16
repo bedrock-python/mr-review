@@ -1,10 +1,10 @@
 from uuid import UUID
 
-from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
+from mr_review.core.ai_providers.repositories import AIProviderRepository
 
 
 class DeleteAIProviderUseCase:
-    def __init__(self, repo: FileAIProviderRepository) -> None:
+    def __init__(self, repo: AIProviderRepository) -> None:
         self._repo = repo
 
     async def execute(self, provider_id: UUID) -> bool:

@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from mr_review.core.reviews.entities import BriefConfig, Comment, Iteration, IterationStage, Review
-from mr_review.infra.repositories.review import FileReviewRepository
+from mr_review.core.reviews.repositories import ReviewRepository
 
 
 class UpdateReviewUseCase:
-    def __init__(self, repo: FileReviewRepository) -> None:
+    def __init__(self, repo: ReviewRepository) -> None:
         self._repo = repo
 
     async def execute(

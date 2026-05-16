@@ -10,7 +10,7 @@ from mr_review.core.hosts.entities import Host
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
 from mr_review.use_cases.hosts.list_hosts import ListHostsUseCase
-from mr_review.use_cases.hosts.test_connection import TestConnectionUseCase
+from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
 from mr_review.use_cases.hosts.update_host import UpdateHostUseCase
 
@@ -97,7 +97,7 @@ async def toggle_favourite_repo(
 @router.get("/{host_id}/test", response_model=TestConnectionResponse)
 async def test_host_connection(
     host_id: UUID,
-    use_case: FromDishka[TestConnectionUseCase],
+    use_case: FromDishka[CheckConnectionUseCase],
 ) -> TestConnectionResponse:
     try:
         result = await use_case.execute(host_id)

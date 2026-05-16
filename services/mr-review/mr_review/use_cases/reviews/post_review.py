@@ -6,18 +6,16 @@ from uuid import UUID
 
 import httpx
 
+from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.entities import Comment, IterationStage, Review
-from mr_review.core.vcs.protocols import VCSProvider
-from mr_review.infra.repositories.host import FileHostRepository
-from mr_review.infra.repositories.review import FileReviewRepository
-from mr_review.infra.vcs.cache import VCSCache
-from mr_review.infra.vcs.factory import get_cached_provider
+from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.core.vcs.protocols import VCSProvider, VCSProviderFactory
 
 logger = logging.getLogger(__name__)
 
 
 async def _post_one_comment(
-    provider: "VCSProvider",
+    provider: VCSProvider,
     comment: Comment,
     repo_path: str,
     mr_iid: int,
@@ -64,15 +62,13 @@ async def _post_one_comment(
 class PostReviewUseCase:
     def __init__(
         self,
-        review_repo: FileReviewRepository,
-        host_repo: FileHostRepository,
-        vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
+        review_repo: ReviewRepository,
+        host_repo: HostRepository,
+        vcs_factory: VCSProviderFactory,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
-        self._vcs_cache = vcs_cache
-        self._vcs_client = vcs_client
+        self._vcs_factory = vcs_factory
 
     async def execute(
         self,
@@ -99,7 +95,7 @@ class PostReviewUseCase:
         if not kept_comments:
             return 0
 
-        provider = get_cached_provider(host, self._vcs_client, self._vcs_cache)
+        provider = self._vcs_factory(host)
 
         refs: dict[str, str] = diff_refs or {}
         if not refs:
@@ -113,7 +109,7 @@ class PostReviewUseCase:
 
     async def _post_comments(
         self,
-        provider: "VCSProvider",
+        provider: VCSProvider,
         comments: list[Comment],
         repo_path: str,
         mr_iid: int,

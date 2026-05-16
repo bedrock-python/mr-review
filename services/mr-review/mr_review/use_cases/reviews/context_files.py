@@ -28,7 +28,7 @@ _MAX_FILES = 20
 CONTEXT_EMBED_CHARS = 40_000 * 4  # ~40k tokens, same scale as diff warn threshold
 
 # Rate-limit guard: max concurrent GitLab API requests and inter-batch delay.
-_CONCURRENCY = 5
+CONCURRENCY = 5
 _BATCH_DELAY_S = 0.15  # seconds between batches
 _JITTER_S = 0.05  # ±50 ms jitter to avoid thundering herd
 
@@ -37,7 +37,7 @@ async def _rate_limited_gather(
     coros: list[Any],
     semaphore: asyncio.Semaphore,
 ) -> list[Any]:
-    """Run coroutines with a shared semaphore, draining in _CONCURRENCY-sized batches
+    """Run coroutines with a shared semaphore, draining in CONCURRENCY-sized batches
     with a small sleep between batches to respect GitLab rate limits."""
 
     async def _guarded(coro: Any) -> Any:
@@ -45,11 +45,11 @@ async def _rate_limited_gather(
             return await coro
 
     results: list[Any] = []
-    for i in range(0, len(coros), _CONCURRENCY):
-        batch = coros[i : i + _CONCURRENCY]
+    for i in range(0, len(coros), CONCURRENCY):
+        batch = coros[i : i + CONCURRENCY]
         batch_results = await asyncio.gather(*[_guarded(c) for c in batch], return_exceptions=True)
         results.extend(batch_results)
-        if i + _CONCURRENCY < len(coros):
+        if i + CONCURRENCY < len(coros):
             jitter = random.uniform(-_JITTER_S, _JITTER_S)  # noqa: S311
             await asyncio.sleep(_BATCH_DELAY_S + jitter)
     return results
@@ -133,7 +133,7 @@ async def collect_context_files(
     Enforces a cap of _MAX_FILES files.
     """
     paths_to_resolve = requested_paths if requested_paths else _DEFAULT_CONTEXT_PATHS
-    semaphore = semaphore or asyncio.Semaphore(_CONCURRENCY)
+    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
     resolved: list[str] = []
     for path in paths_to_resolve:
@@ -172,7 +172,7 @@ async def collect_full_files(
 ) -> dict[str, str]:
     """Fetch full content of every changed file (not deleted) in parallel."""
     targets = [df.path for df in diff_files[:_MAX_FULL_FILES]]
-    semaphore = semaphore or asyncio.Semaphore(_CONCURRENCY)
+    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
     async def _fetch(path: str) -> tuple[str, str | None]:
         content = await provider.get_file(repo_path, path, ref)
@@ -234,7 +234,7 @@ async def collect_test_files(
     semaphore: asyncio.Semaphore | None = None,
 ) -> dict[str, str]:
     """Find and fetch test files adjacent to each changed file."""
-    semaphore = semaphore or asyncio.Semaphore(_CONCURRENCY)
+    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
     candidate_dirs = _candidate_test_dirs(diff_files)
 
@@ -315,7 +315,7 @@ async def collect_related_code(
 ) -> dict[str, str]:
     """Fetch files that are imported by any changed file."""
     already_changed = {df.path for df in diff_files}
-    semaphore = semaphore or asyncio.Semaphore(_CONCURRENCY)
+    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
     async def _fetch_source(path: str) -> tuple[str, str | None]:
         content = await provider.get_file(repo_path, path, ref)
@@ -341,7 +341,7 @@ async def collect_commit_history(
 
     Capped at _MAX_COMMIT_HISTORY_FILES files to avoid excessive API calls on large MRs.
     """
-    semaphore = semaphore or asyncio.Semaphore(_CONCURRENCY)
+    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
     capped_files = diff_files[:_MAX_COMMIT_HISTORY_FILES]
 
     async def _fetch(df: DiffFile) -> tuple[str, list[dict[str, str]]]:

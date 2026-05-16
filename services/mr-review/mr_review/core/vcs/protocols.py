@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Protocol
 
 from mr_review.core.mrs.entities import MR, DiffFile, Repo
+
+if TYPE_CHECKING:
+    from mr_review.core.hosts.entities import Host
 
 
 class VCSProvider(Protocol):
@@ -37,3 +41,7 @@ class VCSProvider(Protocol):
     ) -> None: ...
 
     async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None: ...
+
+
+# Factory that produces a VCSProvider for a given Host.
+VCSProviderFactory = Callable[["Host"], "VCSProvider"]

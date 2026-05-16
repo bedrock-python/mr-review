@@ -4,13 +4,11 @@ import asyncio
 import logging
 from uuid import UUID
 
-import httpx
 from pydantic import BaseModel
 
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.mrs.entities import MR, Repo
-from mr_review.infra.vcs.cache import VCSCache
-from mr_review.infra.vcs.factory import get_cached_provider
+from mr_review.core.vcs.protocols import VCSProviderFactory
 
 logger = logging.getLogger(__name__)
 
@@ -25,17 +23,16 @@ class InboxMR(BaseModel):
 
 
 class ListInboxMRsUseCase:
-    def __init__(self, host_repo: HostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient) -> None:
+    def __init__(self, host_repo: HostRepository, vcs_factory: VCSProviderFactory) -> None:
         self._host_repo = host_repo
-        self._vcs_cache = vcs_cache
-        self._vcs_client = vcs_client
+        self._vcs_factory = vcs_factory
 
     async def execute(self, host_id: UUID) -> list[InboxMR]:
         host = await self._host_repo.get_by_id(host_id)
         if host is None:
             raise ValueError(f"Host {host_id} not found")
 
-        provider = get_cached_provider(host, self._vcs_client, self._vcs_cache)
+        provider = self._vcs_factory(host)
         repos: list[Repo] = await provider.list_repos()
         top_repos = repos[:INBOX_REPO_LIMIT]
 

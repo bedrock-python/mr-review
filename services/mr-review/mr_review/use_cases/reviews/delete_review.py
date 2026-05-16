@@ -1,10 +1,10 @@
 from uuid import UUID
 
-from mr_review.infra.repositories.review import FileReviewRepository
+from mr_review.core.reviews.repositories import ReviewRepository
 
 
 class DeleteReviewUseCase:
-    def __init__(self, repo: FileReviewRepository) -> None:
+    def __init__(self, repo: ReviewRepository) -> None:
         self._repo = repo
 
     async def execute(self, review_id: UUID) -> None:

@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage
-from mr_review.infra.repositories.review import FileReviewRepository
-from mr_review.use_cases.reviews.dispatch_review import ParseResult, parse_ai_response
+from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.use_cases.reviews.ai_response_parser import ParseResult, parse_ai_response
 
 
 class ImportResponseUseCase:
-    def __init__(self, review_repo: FileReviewRepository) -> None:
+    def __init__(self, review_repo: ReviewRepository) -> None:
         self._review_repo = review_repo
 
     async def execute(self, review_id: UUID, raw: str, iteration_id: UUID | None = None) -> ParseResult:

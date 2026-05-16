@@ -10,7 +10,7 @@ from dishka import Provider, Scope, provide
 from mr_review.infra.vcs.cache import VCSCache
 
 
-class VCSProvider(Provider):
+class VCSInfraProvider(Provider):
     """Provides VCS infrastructure components."""
 
     @provide(scope=Scope.APP)

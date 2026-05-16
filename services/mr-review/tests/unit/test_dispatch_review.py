@@ -9,11 +9,9 @@ from uuid import uuid4
 import pytest
 from mr_review.core.mrs.entities import DiffFile, DiffHunk, DiffLine
 from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationStage, Review
-from mr_review.use_cases.reviews.dispatch_review import (
-    DispatchReviewUseCase,
-    _build_prompt,
-    _format_diff,
-)
+from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.prompt_builder import build_prompt as _build_prompt
+from mr_review.use_cases.reviews.prompt_builder import format_diff as _format_diff
 
 from tests.factories.entities import make_iteration, make_review
 
