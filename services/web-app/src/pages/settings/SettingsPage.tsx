@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { z } from "zod";
+import { useTheme } from "next-themes";
 
 import { systemApi } from "@shared/api";
 import { copyFolderPath } from "@shared/lib";
@@ -17,7 +19,6 @@ import {
   CreateAIProviderSchema,
   UpdateAIProviderSchema,
 } from "@entities/ai-provider";
-import type { z } from "zod";
 import type { AIProvider, CreateAIProvider, UpdateAIProvider } from "@entities/ai-provider";
 import {
   useHosts,
@@ -26,8 +27,20 @@ import {
   useDeleteHost,
   CreateHostSchema,
   UpdateHostSchema,
+  HOST_COLORS,
+  getHostColor,
+  ColorPicker,
 } from "@entities/host";
-import type { CreateHost, Host, UpdateHost } from "@entities/host";
+import type { Host, UpdateHost, HostColorId } from "@entities/host";
+
+const UpdateHostFormSchema = UpdateHostSchema.extend({ colorId: z.string() });
+type UpdateHostFormValues = z.infer<typeof UpdateHostFormSchema>;
+
+const CreateHostFormSchema = CreateHostSchema.extend({
+  colorId: z.string(),
+  timeout: z.number().int().min(1, "Must be at least 1").max(600, "Max 600s"),
+});
+type CreateHostFormValues = z.infer<typeof CreateHostFormSchema>;
 
 /* ── Icons ──────────────────────────────────────────────────────────── */
 const BackIcon = (): React.ReactElement => (
@@ -67,6 +80,14 @@ const GitHubIcon = (): React.ReactElement => (
 const KeyIcon = (): React.ReactElement => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+  </svg>
+);
+
+const ExternalLinkIcon = (): React.ReactElement => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
   </svg>
 );
 
@@ -195,6 +216,30 @@ const Section = ({ title, description, children }: SectionProps): React.ReactEle
   </div>
 );
 
+/* ── Token creation URL helper ──────────────────────────────────────── */
+const getTokenCreationUrl = (type: string, baseUrl: string): string | null => {
+  if (type === "github") {
+    return `https://github.com/settings/tokens/new?description=mr-review&scopes=repo,read:user`;
+  }
+  if (type === "bitbucket") {
+    return `https://bitbucket.org/account/settings/app-passwords/new`;
+  }
+  const base = baseUrl.replace(/\/$/, "");
+  if (!base) return null;
+  try {
+    new URL(base);
+  } catch {
+    return null;
+  }
+  if (type === "gitlab") {
+    return `${base}/-/user_settings/personal_access_tokens?name=mr-review&scopes=api,read_user`;
+  }
+  if (type === "gitea" || type === "forgejo") {
+    return `${base}/user/settings/applications`;
+  }
+  return null;
+};
+
 /* ── HostRow ─────────────────────────────────────────────────────────── */
 type HostRowProps = { host: Host };
 
@@ -204,11 +249,6 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const form = useForm<UpdateHost>({
-    resolver: zodResolver(UpdateHostSchema),
-    defaultValues: { name: host.name, base_url: host.base_url, token: "" },
-  });
-
   const providerIconMap: Record<string, () => React.ReactElement> = {
     gitlab: GitLabIcon,
     github: GitHubIcon,
@@ -216,15 +256,23 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
     forgejo: GitHubIcon,
     bitbucket: GitHubIcon,
   };
-  const providerColorMap: Record<string, string> = {
-    gitlab: "#fc6d26",
-    github: "var(--fg-2)",
-    gitea: "#609926",
-    forgejo: "#fb923c",
-    bitbucket: "#0052cc",
-  };
   const ProviderIcon = providerIconMap[host.type] ?? GitHubIcon;
-  const providerColor = providerColorMap[host.type] ?? "var(--fg-2)";
+  const hostColorId = (host.color ?? HOST_COLORS[0].id) as HostColorId;
+  const hostColor = getHostColor(hostColorId);
+
+  const form = useForm<UpdateHostFormValues>({
+    resolver: zodResolver(UpdateHostFormSchema),
+    defaultValues: {
+      name: host.name,
+      base_url: host.base_url,
+      token: "",
+      colorId: hostColorId,
+      timeout: host.timeout,
+    },
+  });
+
+  const editBaseUrl = useWatch({ control: form.control, name: "base_url" });
+  const editTokenUrl = getTokenCreationUrl(host.type, editBaseUrl ?? host.base_url);
 
   const handleDelete = (): void => {
     if (!confirming) {
@@ -235,15 +283,23 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
   };
 
   const handleEdit = (): void => {
-    form.reset({ name: host.name, base_url: host.base_url, token: "" });
+    form.reset({
+      name: host.name,
+      base_url: host.base_url,
+      token: "",
+      colorId: hostColorId,
+      timeout: host.timeout,
+    });
     setEditing(true);
   };
 
-  const handleSave = (data: UpdateHost): void => {
+  const handleSave = ({ colorId, ...data }: UpdateHostFormValues): void => {
     const payload: UpdateHost = {};
     if (data.name !== host.name) payload.name = data.name;
     if (data.base_url !== host.base_url) payload.base_url = data.base_url;
     if (data.token) payload.token = data.token;
+    payload.color = colorId;
+    if (data.timeout !== undefined && data.timeout !== host.timeout) payload.timeout = data.timeout;
 
     updateHost.mutate(
       { id: host.id, data: payload },
@@ -272,7 +328,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: providerColor }}>
+          <span style={{ color: hostColor }}>
             <ProviderIcon />
           </span>
           <span
@@ -290,8 +346,8 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
             className="chip"
             style={{
               fontSize: 10,
-              color: providerColor,
-              borderColor: `color-mix(in oklch, ${providerColor} 30%, transparent)`,
+              color: hostColor,
+              borderColor: `color-mix(in oklch, ${hostColor} 30%, transparent)`,
               marginLeft: "auto",
             }}
           >
@@ -323,7 +379,69 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
             placeholder="New token (optional)"
             style={inputCss}
           />
+          {editTokenUrl && (
+            <a
+              href={editTokenUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                alignSelf: "flex-start",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--accent)",
+                textDecoration: "none",
+                background: "color-mix(in oklch, var(--accent) 12%, transparent)",
+                border: "1px solid color-mix(in oklch, var(--accent) 30%, transparent)",
+                borderRadius: 6,
+                padding: "4px 9px",
+                marginTop: 4,
+                transition: "background 0.1s, border-color 0.1s",
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "color-mix(in oklch, var(--accent) 20%, transparent)";
+                el.style.borderColor = "color-mix(in oklch, var(--accent) 50%, transparent)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget;
+                el.style.background = "color-mix(in oklch, var(--accent) 12%, transparent)";
+                el.style.borderColor = "color-mix(in oklch, var(--accent) 30%, transparent)";
+              }}
+            >
+              <ExternalLinkIcon />
+              Create token on{" "}
+              {host.type === "github"
+                ? "GitHub"
+                : host.type === "bitbucket"
+                  ? "Bitbucket"
+                  : (editBaseUrl ?? host.base_url)}
+            </a>
+          )}
         </Field>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <Field label="Timeout (s)" error={form.formState.errors.timeout?.message}>
+            <input
+              type="number"
+              {...form.register("timeout", { valueAsNumber: true })}
+              min={1}
+              max={600}
+              style={inputCss}
+            />
+          </Field>
+          <Field label="Color">
+            <Controller
+              name="colorId"
+              control={form.control}
+              render={({ field }) => (
+                <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
+              )}
+            />
+          </Field>
+        </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button
@@ -360,7 +478,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
         borderBottom: "1px solid var(--border)",
       }}
     >
-      <span style={{ color: providerColor, flexShrink: 0 }}>
+      <span style={{ color: hostColor, flexShrink: 0 }}>
         <ProviderIcon />
       </span>
 
@@ -386,8 +504,8 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
         className="chip"
         style={{
           fontSize: 10,
-          color: providerColor,
-          borderColor: `color-mix(in oklch, ${providerColor} 30%, transparent)`,
+          color: hostColor,
+          borderColor: `color-mix(in oklch, ${hostColor} 30%, transparent)`,
         }}
       >
         {host.type}
@@ -431,21 +549,45 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
 };
 
 /* ── AddHostForm ─────────────────────────────────────────────────────── */
+
 const AddHostForm = (): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
   const createHost = useCreateHost();
-  const form = useForm<CreateHost>({
-    resolver: zodResolver(CreateHostSchema),
-    defaultValues: { name: "", type: "gitlab", base_url: "", token: "" },
+  const defaultColorId = HOST_COLORS[0].id;
+
+  const form = useForm<CreateHostFormValues>({
+    resolver: zodResolver(CreateHostFormSchema),
+    defaultValues: {
+      name: "",
+      type: "gitlab",
+      base_url: "",
+      token: "",
+      colorId: defaultColorId,
+      timeout: 30,
+    },
   });
 
-  const handleSubmit = (data: CreateHost): void => {
-    createHost.mutate(data, {
-      onSuccess: () => {
-        form.reset();
-        setIsOpen(false);
-      },
-    });
+  const addHostType = useWatch({ control: form.control, name: "type" });
+  const addBaseUrl = useWatch({ control: form.control, name: "base_url" });
+  const addTokenUrl = getTokenCreationUrl(addHostType, addBaseUrl);
+
+  const handleSubmit = ({ colorId, ...data }: CreateHostFormValues): void => {
+    createHost.mutate(
+      { ...data, color: colorId },
+      {
+        onSuccess: () => {
+          form.reset({
+            name: "",
+            type: "gitlab",
+            base_url: "",
+            token: "",
+            colorId: defaultColorId,
+            timeout: 30,
+          });
+          setIsOpen(false);
+        },
+      }
+    );
   };
 
   if (!isOpen) {
@@ -532,7 +674,68 @@ const AddHostForm = (): React.ReactElement => {
           placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
           style={inputCss}
         />
+        {addTokenUrl && (
+          <a
+            href={addTokenUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              alignSelf: "flex-start",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--accent)",
+              textDecoration: "none",
+              background: "color-mix(in oklch, var(--accent) 12%, transparent)",
+              border: "1px solid color-mix(in oklch, var(--accent) 30%, transparent)",
+              borderRadius: 6,
+              padding: "4px 9px",
+              marginTop: 4,
+              transition: "background 0.1s, border-color 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "color-mix(in oklch, var(--accent) 20%, transparent)";
+              el.style.borderColor = "color-mix(in oklch, var(--accent) 50%, transparent)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.background = "color-mix(in oklch, var(--accent) 12%, transparent)";
+              el.style.borderColor = "color-mix(in oklch, var(--accent) 30%, transparent)";
+            }}
+          >
+            <ExternalLinkIcon />
+            {addHostType === "github"
+              ? "Create token on GitHub"
+              : addHostType === "bitbucket"
+                ? "Create App Password on Bitbucket"
+                : `Create token on ${addBaseUrl}`}
+          </a>
+        )}
       </Field>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label="Timeout (s)" error={form.formState.errors.timeout?.message}>
+          <input
+            type="number"
+            {...form.register("timeout", { valueAsNumber: true })}
+            min={1}
+            max={600}
+            style={inputCss}
+          />
+        </Field>
+        <Field label="Color">
+          <Controller
+            name="colorId"
+            control={form.control}
+            render={({ field }) => (
+              <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
+            )}
+          />
+        </Field>
+      </div>
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button
@@ -561,6 +764,91 @@ const AddHostForm = (): React.ReactElement => {
 
 /* ── AIProviderRow ────────────────────────────────────────────────────── */
 type FetchModelsState = "idle" | "loading" | "error";
+
+const MODEL_PREVIEW_LIMIT = 5;
+
+type ModelChipsProps = { models: string[] };
+
+const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (models.length === 0) {
+    return (
+      <span style={{ fontSize: 11, color: "var(--fg-3)", fontStyle: "italic" }}>
+        No models configured
+      </span>
+    );
+  }
+
+  const visibleModels = isExpanded ? models : models.slice(0, MODEL_PREVIEW_LIMIT);
+  const hiddenCount = models.length - MODEL_PREVIEW_LIMIT;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+      {visibleModels.map((m) => (
+        <span
+          key={m}
+          className="mono"
+          style={{
+            fontSize: 10,
+            padding: "2px 6px",
+            borderRadius: 4,
+            background: "var(--bg-1)",
+            border: "1px solid var(--border)",
+            color: "var(--fg-2)",
+            whiteSpace: "nowrap",
+            maxWidth: 200,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={m}
+        >
+          {m}
+        </span>
+      ))}
+      {!isExpanded && hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsExpanded(true);
+          }}
+          style={{
+            background: "none",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            padding: "2px 6px",
+            fontSize: 10,
+            color: "var(--fg-3)",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          +{hiddenCount} more
+        </button>
+      )}
+      {isExpanded && models.length > MODEL_PREVIEW_LIMIT && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsExpanded(false);
+          }}
+          style={{
+            background: "none",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            padding: "2px 6px",
+            fontSize: 10,
+            color: "var(--fg-3)",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Show less
+        </button>
+      )}
+    </div>
+  );
+};
 
 type AIProviderRowProps = { provider: AIProvider };
 
@@ -609,6 +897,8 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
       api_key: "",
       base_url: provider.base_url,
       models: [...provider.models],
+      ssl_verify: provider.ssl_verify,
+      timeout: provider.timeout,
     });
     setEditing(true);
   };
@@ -761,8 +1051,26 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
           </Field>
         </div>
 
-        <Field label="Models" icon={<CpuIcon />}>
+        <Field
+          label={`Models${watchedModels.length > 0 ? ` (${String(watchedModels.length)})` : ""}`}
+          icon={<CpuIcon />}
+        >
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+            {watchedModels.length === 0 && (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  border: "1px dashed var(--border)",
+                  fontSize: 11,
+                  color: "var(--fg-3)",
+                  fontStyle: "italic",
+                  textAlign: "center",
+                }}
+              >
+                No models added yet
+              </div>
+            )}
             {watchedModels.map((m) => (
               <div
                 key={m}
@@ -889,58 +1197,77 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
     <div
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 12,
         padding: "11px 16px",
         borderBottom: "1px solid var(--border)",
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-0)", marginBottom: 2 }}>
-          {provider.name}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 6,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-0)" }}>
+            {provider.name}
+          </span>
+          <span className="chip" style={{ fontSize: 10 }}>
+            {typeLabel[provider.type]}
+          </span>
+          {provider.models.length > 0 && (
+            <span
+              style={{
+                fontSize: 10,
+                color: "var(--fg-3)",
+                marginLeft: 2,
+              }}
+            >
+              {provider.models.length} model{provider.models.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
-        <div className="mono" style={{ fontSize: 11, color: "var(--fg-3)" }}>
-          {provider.models.length > 0 ? provider.models.join(", ") : "No models configured"}
-        </div>
+        <ModelChips models={provider.models} />
       </div>
 
-      <span className="chip" style={{ fontSize: 10 }}>
-        {typeLabel[provider.type]}
-      </span>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
+          onClick={handleEdit}
+          title="Edit provider"
+        >
+          <PencilIcon />
+          Edit
+        </button>
 
-      <button
-        type="button"
-        className="btn ghost"
-        style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
-        onClick={handleEdit}
-        title="Edit provider"
-      >
-        <PencilIcon />
-        Edit
-      </button>
-
-      <button
-        type="button"
-        className="btn ghost"
-        style={{
-          padding: "4px 10px",
-          gap: 5,
-          fontSize: 11,
-          color: confirming ? "var(--c-critical)" : "var(--fg-3)",
-          border: confirming
-            ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
-            : "1px solid transparent",
-          borderRadius: 6,
-        }}
-        onClick={handleDelete}
-        onBlur={() => {
-          setConfirming(false);
-        }}
-        disabled={deleteProvider.isPending}
-      >
-        <TrashIcon />
-        {confirming ? "Confirm" : "Remove"}
-      </button>
+        <button
+          type="button"
+          className="btn ghost"
+          style={{
+            padding: "4px 10px",
+            gap: 5,
+            fontSize: 11,
+            color: confirming ? "var(--c-critical)" : "var(--fg-3)",
+            border: confirming
+              ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
+              : "1px solid transparent",
+            borderRadius: 6,
+          }}
+          onClick={handleDelete}
+          onBlur={() => {
+            setConfirming(false);
+          }}
+          disabled={deleteProvider.isPending}
+        >
+          <TrashIcon />
+          {confirming ? "Confirm" : "Remove"}
+        </button>
+      </div>
     </div>
   );
 };
@@ -952,7 +1279,15 @@ const AddAIProviderForm = (): React.ReactElement => {
   type CreateAIProviderInput = z.input<typeof CreateAIProviderSchema>;
   const form = useForm<CreateAIProviderInput, unknown, CreateAIProvider>({
     resolver: zodResolver(CreateAIProviderSchema),
-    defaultValues: { name: "", type: "claude", api_key: "", base_url: "", models: [] },
+    defaultValues: {
+      name: "",
+      type: "claude",
+      api_key: "",
+      base_url: "",
+      models: [],
+      timeout: 60,
+      ssl_verify: true,
+    },
   });
 
   const providerType = useWatch({ control: form.control, name: "type" });
@@ -1099,6 +1434,213 @@ const AddAIProviderForm = (): React.ReactElement => {
         </button>
       </div>
     </form>
+  );
+};
+
+/* ── AppearanceSection ───────────────────────────────────────────────── */
+type ThemeOptionProps = {
+  value: string;
+  label: string;
+  description: string;
+  isActive: boolean;
+  onSelect: () => void;
+  preview: React.ReactElement;
+};
+
+const ThemeOption = ({
+  value: _value,
+  label,
+  description,
+  isActive,
+  onSelect,
+  preview,
+}: ThemeOptionProps): React.ReactElement => (
+  <button
+    type="button"
+    onClick={onSelect}
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      padding: 12,
+      borderRadius: 8,
+      border: isActive ? "2px solid var(--accent)" : "2px solid var(--border)",
+      background: isActive ? "color-mix(in oklch, var(--accent) 8%, var(--bg-1))" : "var(--bg-1)",
+      cursor: "pointer",
+      textAlign: "left",
+      transition: "border-color 0.1s, background 0.1s",
+      flex: 1,
+      minWidth: 0,
+    }}
+    aria-pressed={isActive}
+    aria-label={`Select ${label} theme`}
+  >
+    {preview}
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)", marginBottom: 2 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{description}</div>
+    </div>
+  </button>
+);
+
+const InkPreview = (): React.ReactElement => (
+  <div
+    style={{
+      borderRadius: 6,
+      overflow: "hidden",
+      border: "1px solid #2a2e36",
+      background: "#0c0d10",
+      height: 64,
+      padding: 8,
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }}
+  >
+    <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#2a2e36" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#14161b" }} />
+    </div>
+    <div style={{ height: 4, width: "70%", borderRadius: 3, background: "#23272e" }} />
+    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#1b1e24" }} />
+    <div style={{ height: 4, width: "80%", borderRadius: 3, background: "#23272e" }} />
+    <div
+      style={{
+        marginTop: "auto",
+        height: 4,
+        width: 32,
+        borderRadius: 3,
+        background: "oklch(86% 0.22 120)",
+        opacity: 0.8,
+      }}
+    />
+  </div>
+);
+
+const PaperPreview = (): React.ReactElement => (
+  <div
+    style={{
+      borderRadius: 6,
+      overflow: "hidden",
+      border: "1px solid #e4e4dc",
+      background: "#fafaf7",
+      height: 64,
+      padding: 8,
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }}
+  >
+    <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e4e4dc" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#ffffff" }} />
+    </div>
+    <div style={{ height: 4, width: "70%", borderRadius: 3, background: "#e9e9e3" }} />
+    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#f3f3ef" }} />
+    <div style={{ height: 4, width: "80%", borderRadius: 3, background: "#e9e9e3" }} />
+    <div
+      style={{
+        marginTop: "auto",
+        height: 4,
+        width: 32,
+        borderRadius: 3,
+        background: "oklch(72% 0.2 130)",
+        opacity: 0.8,
+      }}
+    />
+  </div>
+);
+
+const PhosphorPreview = (): React.ReactElement => (
+  <div
+    style={{
+      borderRadius: 6,
+      overflow: "hidden",
+      border: "1px solid #0f3a1f",
+      background: "#04140a",
+      height: 64,
+      padding: 8,
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }}
+  >
+    <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#0f3a1f" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#061a0e" }} />
+    </div>
+    <div
+      style={{
+        height: 4,
+        width: "70%",
+        borderRadius: 3,
+        background: "#0b2c18",
+        boxShadow: "0 0 4px rgba(116,224,147,0.3)",
+      }}
+    />
+    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#082212" }} />
+    <div
+      style={{
+        height: 4,
+        width: "80%",
+        borderRadius: 3,
+        background: "#0b2c18",
+        boxShadow: "0 0 4px rgba(116,224,147,0.3)",
+      }}
+    />
+    <div
+      style={{
+        marginTop: "auto",
+        height: 4,
+        width: 32,
+        borderRadius: 3,
+        background: "oklch(88% 0.24 145)",
+        opacity: 0.8,
+      }}
+    />
+  </div>
+);
+
+const AppearanceSection = (): React.ReactElement => {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Section title="Appearance" description="Choose a colour theme for the interface.">
+      <div style={{ padding: 16, display: "flex", gap: 10 }}>
+        <ThemeOption
+          value="ink"
+          label="Ink"
+          description="Dark — easy on the eyes"
+          isActive={(theme ?? "ink") === "ink"}
+          onSelect={() => {
+            setTheme("ink");
+          }}
+          preview={<InkPreview />}
+        />
+        <ThemeOption
+          value="paper"
+          label="Paper"
+          description="Light — clean and bright"
+          isActive={theme === "paper"}
+          onSelect={() => {
+            setTheme("paper");
+          }}
+          preview={<PaperPreview />}
+        />
+        <ThemeOption
+          value="phosphor"
+          label="Phosphor"
+          description="Terminal — retro green"
+          isActive={theme === "phosphor"}
+          onSelect={() => {
+            setTheme("phosphor");
+          }}
+          preview={<PhosphorPreview />}
+        />
+      </div>
+    </Section>
   );
 };
 
@@ -1307,6 +1849,9 @@ export const SettingsPage = (): React.ReactElement => {
             ))}
             <AddAIProviderForm />
           </Section>
+
+          {/* Appearance section */}
+          <AppearanceSection />
 
           {/* Storage section */}
           <StorageSection />

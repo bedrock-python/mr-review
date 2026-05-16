@@ -2,6 +2,7 @@ import { User as UserIcon, LogOut, Settings as SettingsIcon } from "lucide-react
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@features/auth";
+import { ThemeToggle } from "@widgets/theme-toggle/ThemeToggle";
 
 export const Header = () => {
   const { t } = useTranslation();
@@ -22,6 +23,7 @@ export const Header = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         <button
           onClick={() => void navigate("/settings")}
           className="text-muted-foreground hover:text-foreground rounded-md p-2 transition-colors"

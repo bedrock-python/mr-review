@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class BriefPreset(str, Enum):
@@ -19,11 +19,13 @@ class BriefConfig(BaseModel):
     preset: BriefPreset = BriefPreset.thorough
     include_diff: bool = True
     include_description: bool = True
+    include_context: bool = True
     include_full_files: bool = False
     include_test_context: bool = False
     include_related_code: bool = False
     include_commit_history: bool = False
     custom_instructions: str = ""
+    context_files: list[str] = Field(default_factory=list)
 
 
 class Comment(BaseModel):
@@ -33,14 +35,26 @@ class Comment(BaseModel):
     severity: Literal["critical", "major", "minor", "suggestion"]
     body: str
     status: Literal["kept", "dismissed"] = "kept"
+    resolved: bool = False
 
 
-class ReviewStage(str, Enum):
-    pick = "pick"
+class IterationStage(str, Enum):
     brief = "brief"
     dispatch = "dispatch"
     polish = "polish"
     post = "post"
+
+
+class Iteration(BaseModel):
+    id: UUID
+    number: int
+    stage: IterationStage = IterationStage.brief
+    comments: list[Comment] = Field(default_factory=list)
+    ai_provider_id: UUID | None = None
+    model: str | None = None
+    brief_config: BriefConfig = Field(default_factory=BriefConfig)
+    created_at: datetime
+    completed_at: datetime | None = None
 
 
 class Review(BaseModel):
@@ -48,8 +62,13 @@ class Review(BaseModel):
     host_id: UUID
     repo_path: str
     mr_iid: int
-    stage: ReviewStage = ReviewStage.pick
-    comments: list[Comment] = Field(default_factory=list)
-    brief_config: BriefConfig = Field(default_factory=BriefConfig)
+    iterations: list[Iteration] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def brief_config(self) -> BriefConfig:
+        if self.iterations:
+            return self.iterations[-1].brief_config
+        return BriefConfig()

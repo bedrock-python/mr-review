@@ -2,17 +2,42 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import httpx
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, HTTPException, Query, status
 
-from mr_review.api.schemas.mrs import DiffFileResponse, DiffHunkResponse, DiffLineResponse, MRResponse, RepoResponse
+from mr_review.api.schemas.mrs import (
+    DiffFileResponse,
+    DiffHunkResponse,
+    DiffLineResponse,
+    InboxMRResponse,
+    MRResponse,
+    RepoResponse,
+)
 from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
 from mr_review.use_cases.mrs.get_mr import GetMRUseCase
 from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
+from mr_review.use_cases.mrs.list_inbox_mrs import InboxMR, ListInboxMRsUseCase
 from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
 
 router = APIRouter(prefix="/api/v1/hosts/{host_id}", tags=["repos"], route_class=DishkaRoute)
+
+
+def _handle_vcs_error(exc: httpx.HTTPStatusError) -> None:
+    code = exc.response.status_code
+    if code == 401:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="VCS authentication failed — check your token"
+        ) from exc
+    if code == 403:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="VCS access denied — insufficient permissions"
+        ) from exc
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"VCS returned {code}",
+    ) from exc
 
 
 def _repo_to_response(repo: Repo) -> RepoResponse:
@@ -21,6 +46,28 @@ def _repo_to_response(repo: Repo) -> RepoResponse:
 
 def _mr_to_response(mr: MR) -> MRResponse:
     return MRResponse(
+        iid=mr.iid,
+        title=mr.title,
+        description=mr.description,
+        author=mr.author,
+        source_branch=mr.source_branch,
+        target_branch=mr.target_branch,
+        status=mr.status,
+        draft=mr.draft,
+        pipeline=mr.pipeline,
+        additions=mr.additions,
+        deletions=mr.deletions,
+        file_count=mr.file_count,
+        web_url=mr.web_url,
+        created_at=mr.created_at,
+        updated_at=mr.updated_at,
+    )
+
+
+def _inbox_mr_to_response(item: InboxMR) -> InboxMRResponse:
+    mr = item.mr
+    return InboxMRResponse(
+        repo_path=item.repo_path,
         iid=mr.iid,
         title=mr.title,
         description=mr.description,
@@ -73,6 +120,8 @@ async def list_repos(
         repos = await use_case.execute(host_id, query=q)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        _handle_vcs_error(exc)
     return [_repo_to_response(r) for r in repos]
 
 
@@ -87,6 +136,8 @@ async def list_mrs(
         mrs = await use_case.execute(host_id=host_id, repo_path=repo_path, state=state)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        _handle_vcs_error(exc)
     return [_mr_to_response(m) for m in mrs]
 
 
@@ -101,6 +152,8 @@ async def get_mr(
         mr = await use_case.execute(host_id=host_id, repo_path=repo_path, mr_iid=mr_iid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        _handle_vcs_error(exc)
     return _mr_to_response(mr)
 
 
@@ -115,4 +168,20 @@ async def get_mr_diff(
         diff = await use_case.execute(host_id=host_id, repo_path=repo_path, mr_iid=mr_iid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        _handle_vcs_error(exc)
     return [_diff_file_to_response(f) for f in diff]
+
+
+@router.get("/inbox", response_model=list[InboxMRResponse])
+async def list_inbox_mrs(
+    host_id: UUID,
+    use_case: FromDishka[ListInboxMRsUseCase],
+) -> list[InboxMRResponse]:
+    try:
+        items = await use_case.execute(host_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        _handle_vcs_error(exc)
+    return [_inbox_mr_to_response(item) for item in items]

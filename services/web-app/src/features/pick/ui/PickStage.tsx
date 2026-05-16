@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useMR, useDiff } from "@entities/mr";
-import { useCreateReview, useReviews } from "@entities/review";
+import { useCreateReview, useReviews, reviewApi } from "@entities/review";
+import { Markdown } from "@shared/ui";
 import { DiffViewer } from "./DiffViewer";
 import { FileList } from "./FileList";
 import type { MR, PipelineStatus } from "@entities/mr";
-import type { Review, ReviewStage } from "@entities/review";
+import type { Review, ReviewStage, Iteration } from "@entities/review";
 
 const STAGE_LABEL: Record<ReviewStage, string> = {
   pick: "Pick",
@@ -22,6 +23,14 @@ const STAGE_COLOR: Record<ReviewStage, string> = {
   dispatch: "oklch(78% 0.18 260)",
   polish: "oklch(78% 0.18 300)",
   post: "oklch(72% 0.18 145)",
+};
+
+const getLatestIteration = (review: Review): Iteration | null =>
+  review.iterations.length > 0 ? (review.iterations[review.iterations.length - 1] ?? null) : null;
+
+const getReviewStage = (review: Review): ReviewStage => {
+  const it = getLatestIteration(review);
+  return it ? it.stage : "pick";
 };
 
 type ExistingReviewsModalProps = {
@@ -116,8 +125,11 @@ const ExistingReviewsModal = ({
         {/* List */}
         <div style={{ overflowY: "auto", flex: 1 }}>
           {reviews.map((r) => {
-            const kept = r.comments.filter((c) => c.status === "kept").length;
-            const total = r.comments.length;
+            const latestIt = getLatestIteration(r);
+            const stage = getReviewStage(r);
+            const kept = latestIt ? latestIt.comments.filter((c) => c.status === "kept").length : 0;
+            const total = latestIt ? latestIt.comments.length : 0;
+            const iterCount = r.iterations.length;
             return (
               <button
                 key={r.id}
@@ -157,12 +169,12 @@ const ExistingReviewsModal = ({
                     fontFamily: "var(--font-mono)",
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
-                    color: STAGE_COLOR[r.stage],
-                    border: `1px solid color-mix(in oklch, ${STAGE_COLOR[r.stage]} 40%, transparent)`,
-                    background: `color-mix(in oklch, ${STAGE_COLOR[r.stage]} 10%, transparent)`,
+                    color: STAGE_COLOR[stage],
+                    border: `1px solid color-mix(in oklch, ${STAGE_COLOR[stage]} 40%, transparent)`,
+                    background: `color-mix(in oklch, ${STAGE_COLOR[stage]} 10%, transparent)`,
                   }}
                 >
-                  {STAGE_LABEL[r.stage]}
+                  {STAGE_LABEL[stage]}
                 </span>
 
                 {/* Meta */}
@@ -172,11 +184,11 @@ const ExistingReviewsModal = ({
                   >
                     {formatRelativeTime(r.updated_at)}
                   </div>
-                  {total > 0 && (
-                    <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 2 }}>
-                      {kept}/{total} comments kept
-                    </div>
-                  )}
+                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 2 }}>
+                    {iterCount > 0
+                      ? `${String(iterCount)} iteration${iterCount > 1 ? "s" : ""}${total > 0 ? ` · ${String(kept)}/${String(total)} comments kept` : ""}`
+                      : "No iterations yet"}
+                  </div>
                 </div>
 
                 {/* Arrow */}
@@ -255,17 +267,7 @@ const Sidebar = ({ mr, onCompose, isCreating }: SidebarProps): React.ReactElemen
             >
               Description
             </div>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--fg-1)",
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {mr.description.length > 600 ? `${mr.description.slice(0, 600)}…` : mr.description}
-            </p>
+            <Markdown>{mr.description}</Markdown>
           </section>
         )}
 
@@ -408,7 +410,7 @@ const Sidebar = ({ mr, onCompose, isCreating }: SidebarProps): React.ReactElemen
 
 export const PickStage = (): React.ReactElement => {
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId, setReview } = useNav();
-  const setStage = useStageBarStore((s) => s.setStage);
+  const { setStage, setIterationId } = useStageBarStore();
   const createReview = useCreateReview();
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [showExisting, setShowExisting] = useState(false);
@@ -438,15 +440,20 @@ export const PickStage = (): React.ReactElement => {
         r.mr_iid === selectedMRIid
     ) ?? [];
 
-  const doCreateNew = (): void => {
+  const doStartReview = (): void => {
     if (!selectedHostId || !selectedRepoPath || selectedMRIid === null) return;
     setShowExisting(false);
+    // upsert review, then create a new iteration on it
     createReview.mutate(
       { host_id: selectedHostId, repo_path: selectedRepoPath, mr_iid: selectedMRIid },
       {
         onSuccess: (review) => {
           setReview(review.id);
-          setStage("brief");
+          void reviewApi.createIteration(review.id).then((updated) => {
+            const newIt = updated.iterations[updated.iterations.length - 1];
+            if (newIt) setIterationId(newIt.id);
+            setStage("brief");
+          });
         },
       }
     );
@@ -457,18 +464,19 @@ export const PickStage = (): React.ReactElement => {
       setStage("brief");
       return;
     }
-    if (!selectedHostId || !selectedRepoPath || selectedMRIid === null) return;
-    if (mrReviews.length > 0) {
-      setShowExisting(true);
-      return;
-    }
-    doCreateNew();
+    doStartReview();
   };
 
   const handleSelectExisting = (review: Review): void => {
     setShowExisting(false);
     setReview(review.id);
-    setStage(review.stage);
+    const latestIt = getLatestIteration(review);
+    if (latestIt) {
+      setIterationId(latestIt.id);
+      setStage(latestIt.stage);
+    } else {
+      setStage("brief");
+    }
   };
 
   if (isLoading) {
@@ -562,7 +570,7 @@ export const PickStage = (): React.ReactElement => {
         <ExistingReviewsModal
           reviews={mrReviews}
           onSelect={handleSelectExisting}
-          onCreateNew={doCreateNew}
+          onCreateNew={doStartReview}
           onClose={() => {
             setShowExisting(false);
           }}

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNav } from "@app/navigation";
-import { useCreateReview } from "@entities/review";
+import { useCreateReview, useReview, reviewApi, reviewKeys } from "@entities/review";
 import type { ReviewStage } from "@entities/review";
 import { useStageBarStore } from "../model/stageBarStore";
 
@@ -21,25 +22,73 @@ const STAGE_ORDER: Record<ReviewStage, number> = {
 };
 
 export const StageBar = (): React.ReactElement => {
-  const { activeStage, setStage } = useStageBarStore();
+  const { activeStage, activeIterationId, setStage, setIterationId, reset } = useStageBarStore();
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId, setReview } = useNav();
   const createReview = useCreateReview();
+  const qc = useQueryClient();
   const activeIndex = STAGE_ORDER[activeStage];
 
+  const { data: review } = useReview(activeReviewId);
+
+  // Compute the furthest stage reached in the current iteration (backend authoritative)
+  const currentIteration =
+    review?.iterations.find((it) => it.id === activeIterationId) ??
+    review?.iterations[review.iterations.length - 1] ??
+    null;
+  const maxAllowedStage: ReviewStage = currentIteration?.stage ?? "pick";
+  const maxAllowedIndex = STAGE_ORDER[maxAllowedStage];
+
+  // Auto-navigate to the stage stored in the backend when a review is loaded
   useEffect(() => {
-    setStage("pick");
-  }, [selectedMRIid, setStage]);
+    if (!activeReviewId || !review) return;
+    const lastIteration = review.iterations[review.iterations.length - 1];
+    if (!lastIteration) return;
+    // Only jump automatically if the store is still at "pick" (fresh load / reset)
+    if (activeStage === "pick") {
+      setIterationId(lastIteration.id);
+      setStage(lastIteration.stage);
+    }
+  }, [activeReviewId, review, activeStage, setStage, setIterationId]);
+
+  useEffect(() => {
+    reset();
+  }, [selectedMRIid, reset]);
 
   const handleStageClick = async (stageId: ReviewStage): Promise<void> => {
-    if (stageId !== "pick" && activeReviewId === null) {
+    if (stageId === "pick") {
+      setStage("pick");
+      return;
+    }
+
+    // Block navigation to stages beyond the furthest reached
+    if (STAGE_ORDER[stageId] > maxAllowedIndex) return;
+
+    // Need a review first (upsert)
+    let reviewId = activeReviewId;
+    if (reviewId === null) {
       if (!selectedHostId || !selectedRepoPath || selectedMRIid === null) return;
-      const review = await createReview.mutateAsync({
+      const newReview = await createReview.mutateAsync({
         host_id: selectedHostId,
         repo_path: selectedRepoPath,
         mr_iid: selectedMRIid,
       });
-      setReview(review.id);
+      reviewId = newReview.id;
+      setReview(newReview.id);
     }
+
+    // Need an iteration for non-pick stages
+    let iterationId = activeIterationId;
+    if (iterationId === null && stageId === "brief") {
+      // Create a new iteration when entering brief from pick
+      const updated = await reviewApi.createIteration(reviewId);
+      qc.setQueryData(reviewKeys.detail(reviewId), updated);
+      const newIteration = updated.iterations[updated.iterations.length - 1];
+      if (newIteration) {
+        iterationId = newIteration.id;
+        setIterationId(iterationId);
+      }
+    }
+
     setStage(stageId);
   };
 
@@ -61,8 +110,12 @@ export const StageBar = (): React.ReactElement => {
     >
       {STAGES.map((stage, index) => {
         const isActive = activeStage === stage.id;
+        // Reached in backend — can navigate back to these freely
+        const isReached = index <= maxAllowedIndex;
+        // Visually "completed" = passed in the current UI view (shows checkmark)
         const isCompleted = index < activeIndex;
-        const isFuture = index > activeIndex;
+        // Beyond the furthest stage the backend has recorded — locked
+        const isBeyondReach = index > maxAllowedIndex;
 
         const nodeSize = 26;
 
@@ -74,7 +127,7 @@ export const StageBar = (): React.ReactElement => {
           nodeBg = "var(--accent)";
           nodeColor = "var(--accent-ink)";
           nodeBorder = "none";
-        } else if (isCompleted) {
+        } else if (isReached) {
           nodeBg = "color-mix(in oklch, var(--accent) 20%, var(--bg-2))";
           nodeColor = "var(--accent)";
           nodeBorder = "none";
@@ -92,8 +145,8 @@ export const StageBar = (): React.ReactElement => {
                 style={{
                   width: 28,
                   height: 1,
-                  background: isCompleted ? "var(--accent)" : "var(--border)",
-                  opacity: isCompleted ? 0.5 : 1,
+                  background: isReached ? "var(--accent)" : "var(--border)",
+                  opacity: isReached ? 0.5 : 1,
                 }}
               />
             )}
@@ -102,6 +155,7 @@ export const StageBar = (): React.ReactElement => {
               type="button"
               role="tab"
               aria-selected={isActive}
+              aria-disabled={isBeyondReach}
               onClick={() => {
                 void handleStageClick(stage.id);
               }}
@@ -113,7 +167,8 @@ export const StageBar = (): React.ReactElement => {
                 background: "none",
                 border: "none",
                 padding: "0 4px",
-                cursor: isFuture ? "default" : "pointer",
+                cursor: isBeyondReach ? "not-allowed" : isReached ? "pointer" : "default",
+                opacity: isBeyondReach ? 0.4 : 1,
               }}
             >
               {/* Pulse ring on active */}
@@ -123,6 +178,7 @@ export const StageBar = (): React.ReactElement => {
                     position: "absolute",
                     left: 4,
                     top: "50%",
+                    transform: "translateY(-50%)",
                     width: nodeSize,
                     height: nodeSize,
                     borderRadius: "50%",
@@ -154,7 +210,7 @@ export const StageBar = (): React.ReactElement => {
                   transition: "background 0.15s",
                 }}
               >
-                {isCompleted ? (
+                {isCompleted || (isReached && !isActive) ? (
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                     <polyline
                       points="2,6 5,9 10,3"
@@ -173,7 +229,7 @@ export const StageBar = (): React.ReactElement => {
                 style={{
                   fontSize: 12,
                   fontWeight: isActive ? 600 : 400,
-                  color: isActive ? "var(--fg-0)" : isCompleted ? "var(--fg-2)" : "var(--fg-3)",
+                  color: isActive ? "var(--fg-0)" : isReached ? "var(--fg-2)" : "var(--fg-3)",
                   letterSpacing: "0.02em",
                   whiteSpace: "nowrap",
                 }}

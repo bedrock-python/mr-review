@@ -8,6 +8,9 @@ export const SystemInfoSchema = z.object({
   os_version: z.string(),
   python_version: z.string(),
   can_open_explorer: z.boolean(),
+  backend_version: z.string(),
+  frontend_version: z.string().nullable(),
+  deployment_mode: z.enum(["all-in-one", "standard"]),
 });
 
 export type SystemInfo = z.infer<typeof SystemInfoSchema>;

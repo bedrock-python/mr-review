@@ -1,26 +1,18 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
+import { Markdown } from "@shared/ui";
 import {
   useReview,
   useUpdateReview,
   useDiffSize,
   formatDiffSize,
+  COMMIT_HISTORY_FILE_LIMIT,
   reviewApi,
 } from "@entities/review";
 import type { BriefConfig, BriefPreset } from "@entities/review";
-
-const DEFAULT_CONFIG: BriefConfig = {
-  preset: "thorough",
-  include_diff: true,
-  include_description: true,
-  include_full_files: false,
-  include_test_context: false,
-  include_related_code: false,
-  include_commit_history: false,
-  custom_instructions: "",
-};
+import { DEFAULT_BRIEF_CONFIG, getReviewBriefConfig } from "@entities/review";
 
 const PRESETS: { id: BriefPreset; label: string; description: string }[] = [
   { id: "thorough", label: "THOROUGH", description: "Complete review, bugs, logic, naming" },
@@ -29,12 +21,24 @@ const PRESETS: { id: BriefPreset; label: string; description: string }[] = [
   { id: "performance", label: "PERFORMANCE", description: "Complexity, queries, allocations" },
 ];
 
-const CONTEXT_TOGGLES: { key: keyof BriefConfig; label: string }[] = [
+const CONTEXT_TOGGLES: { key: keyof BriefConfig; label: string; hint?: string }[] = [
   { key: "include_diff", label: "Full diff" },
   { key: "include_description", label: "MR description" },
-  { key: "include_full_files", label: "Full file contents" },
-  { key: "include_test_context", label: "Test context" },
-  { key: "include_related_code", label: "Related code" },
+  {
+    key: "include_full_files",
+    label: "Full file contents",
+    hint: "Fetches up to 15 changed files in full (up to 50 KB each, ~750 KB total). Useful for deeper analysis but significantly increases prompt size.",
+  },
+  {
+    key: "include_test_context",
+    label: "Test context",
+    hint: "Fetches up to 20 test files adjacent to changed files (up to 50 KB each, ~1 MB total). May slow down prompt generation on large repos.",
+  },
+  {
+    key: "include_related_code",
+    label: "Related code",
+    hint: "Fetches files imported by changed files (up to 20, up to 50 KB each, ~1 MB total). Requires downloading all changed files first to parse imports.",
+  },
   { key: "include_commit_history", label: "Commit history" },
 ];
 
@@ -59,27 +63,29 @@ export const BriefStage = (): React.ReactElement => {
   const setStage = useStageBarStore((s) => s.setStage);
   const { data: review, isLoading } = useReview(activeReviewId);
   const updateReview = useUpdateReview(activeReviewId ?? "");
-  const qc = useQueryClient();
 
-  const [config, setConfig] = useState<BriefConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<BriefConfig>(DEFAULT_BRIEF_CONFIG);
   const [copied, setCopied] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
     if (review && !initializedRef.current) {
-      setConfig(review.brief_config);
+      setConfig(getReviewBriefConfig(review));
       initializedRef.current = true;
     }
   }, [review]);
 
   const diffSize = useDiffSize(activeReviewId);
 
+  const [previewRequested, setPreviewRequested] = useState(false);
+  const [previewConfig, setPreviewConfig] = useState<BriefConfig>(DEFAULT_BRIEF_CONFIG);
+
   const { data: promptText, isFetching: isPromptFetching } = useQuery({
-    queryKey: ["review-prompt", activeReviewId, false],
-    queryFn: () => reviewApi.getPrompt(activeReviewId ?? ""),
-    enabled: activeReviewId !== null,
-    staleTime: 0,
+    queryKey: ["review-prompt", activeReviewId, previewConfig],
+    queryFn: () => reviewApi.getPrompt(activeReviewId ?? "", previewConfig),
+    enabled: activeReviewId !== null && previewRequested,
+    staleTime: Infinity,
   });
 
   const handleConfigChange = useCallback(
@@ -89,19 +95,31 @@ export const BriefStage = (): React.ReactElement => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         if (activeReviewId) {
-          updateReview.mutate(
-            { brief_config: next },
-            {
-              onSuccess: () => {
-                void qc.invalidateQueries({ queryKey: ["review-prompt", activeReviewId, false] });
-              },
-            }
-          );
+          updateReview.mutate({ brief_config: next });
         }
       }, DEBOUNCE_MS);
     },
-    [config, activeReviewId, updateReview, qc]
+    [config, activeReviewId, updateReview]
   );
+
+  const handleRefreshPreview = useCallback((): void => {
+    if (!activeReviewId) return;
+    setPreviewConfig({ ...config });
+    setPreviewRequested(true);
+  }, [activeReviewId, config]);
+
+  const handleDispatch = useCallback((): void => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    const save = activeReviewId
+      ? updateReview.mutateAsync({ brief_config: config })
+      : Promise.resolve();
+    void save.finally(() => {
+      setStage("dispatch");
+    });
+  }, [activeReviewId, config, updateReview, setStage]);
 
   const tokenEstimate = promptText ? Math.ceil(promptText.length / 4) : 0;
 
@@ -262,8 +280,15 @@ export const BriefStage = (): React.ReactElement => {
             {CONTEXT_TOGGLES.map((toggle) => {
               const checked = Boolean(config[toggle.key]);
               const isDiff = toggle.key === "include_diff";
+              const isCommitHistory = toggle.key === "include_commit_history";
+              const hasHint = Boolean(toggle.hint);
               const diffLevel = isDiff ? diffSize.level : "ok";
-              const warnColor = diffLevel === "large" ? "var(--c-critical)" : "var(--c-major)";
+              const diffWarnColor = diffLevel === "large" ? "var(--c-critical)" : "var(--c-major)";
+              const commitFilesOverLimit =
+                isCommitHistory &&
+                !diffSize.isLoading &&
+                diffSize.fileCount > COMMIT_HISTORY_FILE_LIMIT;
+              const commitWarnColor = "var(--c-major)";
 
               return (
                 <div key={toggle.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -297,18 +322,35 @@ export const BriefStage = (): React.ReactElement => {
                         className="mono"
                         style={{
                           fontSize: 10,
-                          color: diffLevel === "ok" ? "var(--fg-3)" : warnColor,
+                          color: diffLevel === "ok" ? "var(--fg-3)" : diffWarnColor,
                           background:
                             diffLevel === "ok"
                               ? "var(--bg-3)"
-                              : `color-mix(in oklch, ${warnColor} 12%, var(--bg-2))`,
-                          border: `1px solid ${diffLevel === "ok" ? "var(--border)" : `color-mix(in oklch, ${warnColor} 35%, transparent)`}`,
+                              : `color-mix(in oklch, ${diffWarnColor} 12%, var(--bg-2))`,
+                          border: `1px solid ${diffLevel === "ok" ? "var(--border)" : `color-mix(in oklch, ${diffWarnColor} 35%, transparent)`}`,
                           borderRadius: 4,
                           padding: "1px 5px",
                         }}
                       >
                         {formatDiffSize(diffSize.chars)} · ~{diffSize.tokens.toLocaleString()}{" "}
                         tokens
+                      </span>
+                    )}
+                    {isCommitHistory && !diffSize.isLoading && diffSize.fileCount > 0 && (
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10,
+                          color: commitFilesOverLimit ? commitWarnColor : "var(--fg-3)",
+                          background: commitFilesOverLimit
+                            ? `color-mix(in oklch, ${commitWarnColor} 12%, var(--bg-2))`
+                            : "var(--bg-3)",
+                          border: `1px solid ${commitFilesOverLimit ? `color-mix(in oklch, ${commitWarnColor} 35%, transparent)` : "var(--border)"}`,
+                          borderRadius: 4,
+                          padding: "1px 5px",
+                        }}
+                      >
+                        {diffSize.fileCount} files
                       </span>
                     )}
                   </label>
@@ -318,16 +360,44 @@ export const BriefStage = (): React.ReactElement => {
                         marginLeft: 23,
                         padding: "6px 10px",
                         borderRadius: 5,
-                        border: `1px solid color-mix(in oklch, ${warnColor} 35%, transparent)`,
-                        background: `color-mix(in oklch, ${warnColor} 8%, var(--bg-2))`,
+                        border: `1px solid color-mix(in oklch, ${diffWarnColor} 35%, transparent)`,
+                        background: `color-mix(in oklch, ${diffWarnColor} 8%, var(--bg-2))`,
                         fontSize: 11,
-                        color: warnColor,
+                        color: diffWarnColor,
                         lineHeight: 1.5,
                       }}
                     >
                       {diffLevel === "large"
                         ? "Diff exceeds ~100k tokens — most models will struggle or reject this. Consider disabling and attaching the diff separately."
                         : "Diff is large (~40k+ tokens). Some models may have limited context for the rest of the prompt. Consider attaching the diff as a separate file."}
+                    </div>
+                  )}
+                  {isCommitHistory && checked && commitFilesOverLimit && (
+                    <div
+                      style={{
+                        marginLeft: 23,
+                        padding: "6px 10px",
+                        borderRadius: 5,
+                        border: `1px solid color-mix(in oklch, ${commitWarnColor} 35%, transparent)`,
+                        background: `color-mix(in oklch, ${commitWarnColor} 8%, var(--bg-2))`,
+                        fontSize: 11,
+                        color: commitWarnColor,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {`MR has ${String(diffSize.fileCount)} changed files — commit history will be fetched for the first ${String(COMMIT_HISTORY_FILE_LIMIT)} only.`}
+                    </div>
+                  )}
+                  {hasHint && checked && (
+                    <div
+                      style={{
+                        marginLeft: 23,
+                        fontSize: 11,
+                        color: "var(--fg-3)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {toggle.hint}
                     </div>
                   )}
                 </div>
@@ -337,7 +407,7 @@ export const BriefStage = (): React.ReactElement => {
         </section>
 
         {/* Custom instructions */}
-        <section>
+        <section style={{ marginBottom: 24 }}>
           <div
             className="mono"
             style={{
@@ -370,6 +440,93 @@ export const BriefStage = (): React.ReactElement => {
               fontFamily: "var(--font-sans)",
             }}
           />
+        </section>
+
+        {/* Context files */}
+        <section>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 6,
+            }}
+          >
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                color: "var(--fg-3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Context Files
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                handleConfigChange({ include_context: !config.include_context });
+              }}
+              style={{
+                fontSize: 11,
+                padding: "2px 10px",
+                borderRadius: 999,
+                border: `1px solid ${config.include_context ? "var(--accent)" : "var(--border)"}`,
+                background: config.include_context
+                  ? "color-mix(in oklch, var(--accent) 12%, var(--bg-2))"
+                  : "var(--bg-2)",
+                color: config.include_context ? "var(--accent)" : "var(--fg-3)",
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              {config.include_context ? "On" : "Off"}
+            </button>
+          </div>
+          {config.include_context && (
+            <>
+              <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, lineHeight: 1.5 }}>
+                Paths to include as project context (one per line). Leave empty to auto-detect{" "}
+                <span className="mono" style={{ fontSize: 10 }}>
+                  .claude/CLAUDE.md
+                </span>
+                ,{" "}
+                <span className="mono" style={{ fontSize: 10 }}>
+                  CONTRIBUTING.md
+                </span>
+                ,{" "}
+                <span className="mono" style={{ fontSize: 10 }}>
+                  README.md
+                </span>{" "}
+                and more.
+              </div>
+              <textarea
+                value={config.context_files.join("\n")}
+                onChange={(e) => {
+                  const lines = e.target.value
+                    .split("\n")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
+                  handleConfigChange({ context_files: lines });
+                }}
+                placeholder={".claude/rules\nCONTRIBUTING.md\ndocs/"}
+                rows={3}
+                style={{
+                  width: "100%",
+                  background: "var(--bg-2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  color: "var(--fg-0)",
+                  resize: "vertical",
+                  outline: "none",
+                  fontFamily: "var(--font-mono)",
+                }}
+              />
+            </>
+          )}
         </section>
       </div>
 
@@ -420,6 +577,15 @@ export const BriefStage = (): React.ReactElement => {
               type="button"
               className="btn ghost"
               style={{ padding: "4px 8px", gap: 5 }}
+              onClick={handleRefreshPreview}
+              disabled={isPromptFetching}
+            >
+              {previewRequested ? "Refresh" : "Preview"}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ padding: "4px 8px", gap: 5 }}
               onClick={handleCopy}
               disabled={!promptText}
             >
@@ -430,35 +596,50 @@ export const BriefStage = (): React.ReactElement => {
         </div>
 
         {/* Preview content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16, position: "relative" }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: 16,
+            position: "relative",
+            opacity: isPromptFetching ? 0.5 : 1,
+            transition: "opacity 0.15s",
+          }}
+        >
           {!promptText && !isPromptFetching ? (
             <div
               style={{
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 height: "100%",
+                gap: 16,
                 color: "var(--fg-3)",
                 fontSize: 12,
+                textAlign: "center",
               }}
             >
-              Prompt will appear here
+              {previewRequested ? (
+                "No prompt content returned"
+              ) : (
+                <>
+                  <span style={{ lineHeight: 1.5, maxWidth: 220 }}>
+                    Configure settings on the left, then preview the generated prompt
+                  </span>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    style={{ gap: 6 }}
+                    onClick={handleRefreshPreview}
+                  >
+                    Preview prompt
+                  </button>
+                </>
+              )}
             </div>
           ) : (
-            <pre
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                color: isPromptFetching ? "var(--fg-3)" : "var(--fg-1)",
-                lineHeight: 1.7,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                margin: 0,
-                transition: "color 0.15s",
-              }}
-            >
-              {promptText ?? ""}
-            </pre>
+            <Markdown>{promptText ?? ""}</Markdown>
           )}
         </div>
 
@@ -472,14 +653,7 @@ export const BriefStage = (): React.ReactElement => {
             flexShrink: 0,
           }}
         >
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              setStage("dispatch");
-            }}
-            style={{ gap: 8 }}
-          >
+          <button type="button" className="btn primary" onClick={handleDispatch} style={{ gap: 8 }}>
             Dispatch
             <span style={{ fontSize: 11, opacity: 0.7 }}>→</span>
           </button>

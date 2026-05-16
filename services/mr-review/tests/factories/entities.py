@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.hosts.entities import Host
-from mr_review.core.reviews.entities import BriefConfig, BriefPreset, Comment, Review, ReviewStage
+from mr_review.core.reviews.entities import BriefConfig, BriefPreset, Comment, Iteration, IterationStage, Review
 
 
 def make_host(**kwargs: object) -> Host:
@@ -35,19 +35,47 @@ def make_comment(**kwargs: object) -> Comment:
     )
 
 
-def make_review(**kwargs: object) -> Review:
-    """Build a Review domain entity with sensible defaults."""
+def make_iteration(**kwargs: object) -> Iteration:
+    """Build an Iteration domain entity with sensible defaults."""
     now = datetime.now(timezone.utc)
     raw_comments = kwargs.get("comments", [])
     comments: list[Comment] = list(raw_comments) if isinstance(raw_comments, list) else []
+    return Iteration(
+        id=kwargs.get("id", uuid4()),
+        number=int(str(kwargs.get("number", 1))),
+        stage=kwargs.get("stage", IterationStage.dispatch),
+        comments=comments,
+        ai_provider_id=kwargs.get("ai_provider_id"),
+        model=kwargs.get("model"),
+        brief_config=kwargs.get("brief_config", BriefConfig()),
+        created_at=kwargs.get("created_at", now),
+        completed_at=kwargs.get("completed_at"),
+    )
+
+
+def make_review(**kwargs: object) -> Review:
+    """Build a Review domain entity with sensible defaults.
+
+    When no ``iterations`` are provided but a ``brief_config`` is given, a
+    single default iteration carrying that config is created automatically so
+    that ``review.brief_config`` (a computed field derived from the last
+    iteration) reflects the supplied config.
+    """
+    now = datetime.now(timezone.utc)
+    raw_iterations = kwargs.get("iterations")
+    if raw_iterations is not None:
+        iterations: list[Iteration] = list(raw_iterations) if isinstance(raw_iterations, list) else []
+    else:
+        brief_config = kwargs.get("brief_config", BriefConfig())
+        if not isinstance(brief_config, BriefConfig):
+            brief_config = BriefConfig()
+        iterations = [make_iteration(brief_config=brief_config)]
     return Review(
         id=kwargs.get("id", uuid4()),
         host_id=kwargs.get("host_id", uuid4()),
         repo_path=str(kwargs.get("repo_path", "team/service")),
         mr_iid=int(str(kwargs.get("mr_iid", 1))),
-        stage=kwargs.get("stage", ReviewStage.pick),
-        comments=comments,
-        brief_config=kwargs.get("brief_config", BriefConfig()),
+        iterations=iterations,
         created_at=kwargs.get("created_at", now),
         updated_at=kwargs.get("updated_at", now),
     )

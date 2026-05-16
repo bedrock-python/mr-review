@@ -4,6 +4,7 @@ import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
 import { useMR, useRepos, mrKeys } from "@entities/mr";
 import { useHosts } from "@entities/host";
+import { useReview } from "@entities/review";
 
 const ExternalLinkIcon = (): React.ReactElement => (
   <svg
@@ -61,6 +62,20 @@ const formatAge = (dateStr: string): string => {
   return `${String(Math.floor(diffDays / 30))}mo ago`;
 };
 
+const HistoryIcon = (): React.ReactElement => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
 const PanelsIcon = (): React.ReactElement => (
   <svg
     width="14"
@@ -76,12 +91,13 @@ const PanelsIcon = (): React.ReactElement => (
 );
 
 export const MRHeader = (): React.ReactElement | null => {
-  const { navCollapsed, toggleNav } = useAppStore();
-  const { selectedHostId, selectedRepoPath, selectedMRIid } = useNav();
+  const { navCollapsed, toggleNav, toggleIterationHistory } = useAppStore();
+  const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId } = useNav();
   const queryClient = useQueryClient();
   const { data: hosts } = useHosts();
   const { data: repos } = useRepos(selectedHostId);
   const { data: mr } = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
+  const { data: review } = useReview(activeReviewId);
 
   if (!mr || !selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
@@ -177,6 +193,32 @@ export const MRHeader = (): React.ReactElement | null => {
           {mr.title}
         </h1>
         <div style={{ display: "flex", gap: 6, flexShrink: 0, paddingTop: 4 }}>
+          {review && review.iterations.length > 0 && (
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ padding: "5px 10px", gap: 6 }}
+              onClick={toggleIterationHistory}
+              title="View iteration history"
+            >
+              <HistoryIcon />
+              History
+              <span
+                style={{
+                  fontSize: 10,
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--fg-3)",
+                  background: "var(--bg-2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 999,
+                  padding: "0 5px",
+                  lineHeight: "1.6",
+                }}
+              >
+                {review.iterations.length}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className="btn ghost"

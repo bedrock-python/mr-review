@@ -37,6 +37,8 @@ async def test__create_host__valid_params__delegates_to_repo_and_returns_entity(
         type_="gitlab",
         base_url="https://gitlab.com",
         token=_TOKEN,  # noqa: S106
+        color=None,
+        timeout=30,
     )
     assert result == expected
 

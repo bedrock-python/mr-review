@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class CreateHostRequest(BaseModel):
@@ -12,6 +12,8 @@ class CreateHostRequest(BaseModel):
     type: Literal["gitlab", "github", "gitea", "forgejo", "bitbucket"]
     base_url: str
     token: str
+    color: str | None = None
+    timeout: int = 30
 
     @field_validator("base_url")
     @classmethod
@@ -24,6 +26,9 @@ class HostResponse(BaseModel):
     name: str
     type: Literal["gitlab", "github", "gitea", "forgejo", "bitbucket"]
     base_url: str
+    color: str | None = None
+    favourite_repos: list[str] = Field(default_factory=list)
+    timeout: int = 30
     created_at: datetime
 
 
@@ -31,6 +36,8 @@ class UpdateHostRequest(BaseModel):
     name: str | None = None
     base_url: str | None = None
     token: str | None = None
+    color: str | None = None
+    timeout: int | None = None
 
     @field_validator("base_url")
     @classmethod

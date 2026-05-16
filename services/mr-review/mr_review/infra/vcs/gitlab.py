@@ -229,6 +229,16 @@ class GitLabProvider:
             )
         return diff_files
 
+    async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
+        encoded = _encode_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/projects/{encoded}/merge_requests/{mr_iid}/changes")
+        dr: dict[str, Any] = data.get("diff_refs") or {}
+        return {
+            "base_sha": str(dr.get("base_sha", "")),
+            "start_sha": str(dr.get("start_sha", "")),
+            "head_sha": str(dr.get("head_sha", "")),
+        }
+
     async def post_inline_comment(
         self,
         repo_path: str,
@@ -258,6 +268,57 @@ class GitLabProvider:
             f"/projects/{encoded}/merge_requests/{mr_iid}/notes",
             {"body": body},
         )
+
+    async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
+        encoded = _encode_path(repo_path)
+        encoded_file = quote(file_path, safe="")
+        url = f"{self._base_url}/api/v4/projects/{encoded}/repository/files/{encoded_file}/raw"
+        response = await self._client.get(url, headers=self._headers, params={"ref": ref})
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.text
+
+    async def get_commits(
+        self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
+    ) -> list[dict[str, str]]:
+        encoded = _encode_path(repo_path)
+        data: list[dict[str, Any]] = await self._get(
+            f"/projects/{encoded}/repository/commits",
+            params={"path": file_path, "ref_name": ref, "per_page": limit},
+        )
+        return [
+            {
+                "id": str(item.get("short_id", "")),
+                "title": str(item.get("title", "")),
+                "author": str(item.get("author_name", "")),
+                "date": str(item.get("created_at", "")),
+            }
+            for item in data
+        ]
+
+    async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        encoded = _encode_path(repo_path)
+        page = 1
+        paths: list[str] = []
+        while True:
+            url = f"{self._base_url}/api/v4/projects/{encoded}/repository/tree"
+            response = await self._client.get(
+                url,
+                headers=self._headers,
+                params={"path": dir_path, "recursive": "true", "ref": ref, "per_page": 100, "page": page},
+            )
+            if response.status_code == 404:
+                return []
+            response.raise_for_status()
+            items: list[dict[str, Any]] = response.json()
+            if not items:
+                break
+            paths.extend(item["path"] for item in items if item.get("type") == "blob")
+            if len(items) < 100:
+                break
+            page += 1
+        return paths
 
 
 def _map_mr_state(state: str) -> str:

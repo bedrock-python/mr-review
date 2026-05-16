@@ -1,12 +1,13 @@
 export { reviewApi } from "./api";
-export type { ImportResponseResult, CommentParseError } from "./api";
+export type { ImportResponseResult, CommentParseError, UpdateCommentInput } from "./api";
 export {
   BriefPresetSchema,
   BriefConfigSchema,
   SeveritySchema,
   CommentStatusSchema,
   CommentSchema,
-  ReviewStageSchema,
+  IterationStageSchema,
+  IterationSchema,
   ReviewSchema,
   useReviews,
   useReview,
@@ -17,7 +18,13 @@ export {
   formatDiffSize,
   DIFF_WARN_CHARS,
   DIFF_HARD_CHARS,
+  COMMIT_HISTORY_FILE_LIMIT,
+  useContextSize,
+  formatContextSize,
+  CONTEXT_LARGE_CHARS,
   reviewKeys,
+  DEFAULT_BRIEF_CONFIG,
+  getReviewBriefConfig,
 } from "./model";
 export type {
   BriefPreset,
@@ -25,8 +32,13 @@ export type {
   CommentSeverity,
   CommentStatus,
   Comment,
+  IterationStage,
+  Iteration,
   ReviewStage,
   Review,
   DiffSizeLevel,
   DiffSizeInfo,
+  ContextSizeLevel,
+  ContextSizeInfo,
+  UpdateReviewInput,
 } from "./model";

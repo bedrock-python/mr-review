@@ -7,7 +7,11 @@ type ThemeProviderProps = {
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   return (
-    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
+    <NextThemesProvider
+      attribute="data-theme"
+      defaultTheme="ink"
+      themes={["ink", "paper", "phosphor"]}
+    >
       {children}
     </NextThemesProvider>
   );

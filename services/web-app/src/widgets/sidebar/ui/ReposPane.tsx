@@ -1,8 +1,11 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRepos } from "@entities/mr";
 import { useNav } from "@app/navigation";
-import { useHosts } from "@entities/host";
+import { useHosts, useToggleFavouriteRepo } from "@entities/host";
 import { Skeleton } from "@shared/ui";
+import { getVcsErrorMessage } from "@shared/lib";
+import { useCheckUpdate, updateKeys } from "@features/check-update";
 import type { Repo } from "@entities/mr";
 
 const MIN_QUERY_LENGTH = 2;
@@ -24,6 +27,153 @@ const ReposSkeleton = (): React.ReactElement => (
     ))}
   </div>
 );
+
+const VersionBadge = (): React.ReactElement => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const { data: updateInfo, isFetching } = useCheckUpdate();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleForceCheck = (): void => {
+    void queryClient.invalidateQueries({ queryKey: updateKeys.all });
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen((v) => !v);
+        }}
+        title="Version info"
+        className="mono"
+        style={{
+          fontSize: 10,
+          color: "var(--fg-3)",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: "2px 4px",
+          borderRadius: 3,
+          transition: "color 0.15s",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "var(--fg-1)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "var(--fg-3)";
+        }}
+      >
+        v{__APP_VERSION__}
+        {updateInfo?.isAnyUpdateAvailable && (
+          <span
+            style={{
+              display: "inline-block",
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              marginLeft: 4,
+              verticalAlign: "middle",
+            }}
+          />
+        )}
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            right: 0,
+            width: 220,
+            background: "var(--bg-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "12px 14px",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+            zIndex: 100,
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 10 }}>Version info</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+              <span style={{ color: "var(--fg-3)" }}>Backend</span>
+              <span
+                className="mono"
+                style={{
+                  color: updateInfo?.backend.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                }}
+              >
+                v{updateInfo?.backend.current ?? __APP_VERSION__}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+              <span style={{ color: "var(--fg-3)" }}>Frontend</span>
+              <span
+                className="mono"
+                style={{
+                  color: updateInfo?.frontend?.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                }}
+              >
+                v{updateInfo?.frontend?.current ?? __APP_VERSION__}
+              </span>
+            </div>
+
+            {updateInfo?.isAnyUpdateAvailable && (
+              <div
+                style={{
+                  fontSize: 11,
+                  borderTop: "1px solid var(--border)",
+                  paddingTop: 6,
+                  marginTop: 2,
+                  color: "var(--fg-3)",
+                }}
+              >
+                Update available — see banner above
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleForceCheck}
+            disabled={isFetching}
+            style={{
+              width: "100%",
+              background: "var(--bg-3)",
+              border: "1px solid var(--border)",
+              borderRadius: 5,
+              cursor: isFetching ? "default" : "pointer",
+              color: isFetching ? "var(--fg-3)" : "var(--fg-0)",
+              fontSize: 11,
+              fontWeight: 500,
+              padding: "5px 0",
+              transition: "color 0.15s",
+            }}
+          >
+            {isFetching ? "Checking…" : "Check for updates"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SearchIcon = (): React.ReactElement => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -94,7 +244,9 @@ type NamespaceRowProps = {
   depth: number;
   selectedRepoPath: string | null;
   selectedHostId: string | null;
+  favouriteRepos: Set<string>;
   onSelect: (hostId: string, repoPath: string) => void;
+  onToggleFavourite: (hostId: string, repoPath: string) => void;
 };
 
 const NamespaceRow = ({
@@ -102,7 +254,9 @@ const NamespaceRow = ({
   depth,
   selectedRepoPath,
   selectedHostId,
+  favouriteRepos,
   onSelect,
+  onToggleFavourite,
 }: NamespaceRowProps): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(true);
   const indent = depth * 12 + 10;
@@ -160,7 +314,7 @@ const NamespaceRow = ({
       </button>
       {isOpen && (
         <div>
-          {node.children.map((child, idx) =>
+          {node.children.map((child) =>
             child.kind === "namespace" ? (
               <NamespaceRow
                 key={child.fullPath}
@@ -168,16 +322,20 @@ const NamespaceRow = ({
                 depth={depth + 1}
                 selectedRepoPath={selectedRepoPath}
                 selectedHostId={selectedHostId}
+                favouriteRepos={favouriteRepos}
                 onSelect={onSelect}
+                onToggleFavourite={onToggleFavourite}
               />
             ) : (
               <RepoRow
-                key={child.repo.id ?? idx}
+                key={child.repo.id}
                 repo={child.repo}
                 depth={depth + 1}
                 isSelected={selectedRepoPath === child.repo.path}
+                isFavourite={favouriteRepos.has(child.repo.path)}
                 selectedHostId={selectedHostId}
                 onSelect={onSelect}
+                onToggleFavourite={onToggleFavourite}
               />
             )
           )}
@@ -187,66 +345,138 @@ const NamespaceRow = ({
   );
 };
 
+const StarIcon = ({ filled }: { filled: boolean }): React.ReactElement => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill={filled ? "currentColor" : "none"}
+    stroke="currentColor"
+    strokeWidth="1.5"
+    style={{ flexShrink: 0 }}
+  >
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 type RepoRowProps = {
   repo: Repo;
   depth: number;
   isSelected: boolean;
+  isFavourite: boolean;
   selectedHostId: string | null;
   onSelect: (hostId: string, repoPath: string) => void;
+  onToggleFavourite: (hostId: string, repoPath: string) => void;
 };
 
 const RepoRow = ({
   repo,
   depth,
   isSelected,
+  isFavourite,
   selectedHostId,
   onSelect,
+  onToggleFavourite,
 }: RepoRowProps): React.ReactElement => {
   const indent = depth * 12 + 10;
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (selectedHostId) onSelect(selectedHostId, repo.path);
-      }}
-      aria-pressed={isSelected}
-      title={repo.path}
-      className={`row-btn${isSelected ? " active" : ""}`}
+    <div
+      className={`row-btn${isSelected ? "active" : ""}`}
       style={{
         paddingLeft: indent,
         display: "flex",
         alignItems: "center",
         gap: 6,
         width: "100%",
+        paddingRight: 4,
       }}
     >
-      <RepoIcon />
-      <span
+      <button
+        type="button"
+        onClick={() => {
+          if (selectedHostId) onSelect(selectedHostId, repo.path);
+        }}
+        aria-pressed={isSelected}
+        title={repo.path}
         style={{
-          fontSize: 12,
-          fontWeight: 500,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
           flex: 1,
-          textAlign: "left",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          minWidth: 0,
+          padding: 0,
+          color: "inherit",
         }}
       >
-        {repo.name}
-      </span>
-    </button>
+        <RepoIcon />
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+            textAlign: "left",
+          }}
+        >
+          {repo.name}
+        </span>
+      </button>
+      <button
+        type="button"
+        title={isFavourite ? "Remove from favourites" : "Add to favourites"}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (selectedHostId) onToggleFavourite(selectedHostId, repo.path);
+        }}
+        data-active={isFavourite ? "true" : undefined}
+        style={{
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: "2px 4px",
+          color: isFavourite ? "var(--c-warn, #e6a817)" : "var(--fg-3)",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+        }}
+        className="fav-star"
+      >
+        <StarIcon filled={isFavourite} />
+      </button>
+    </div>
   );
 };
 
 export const ReposPane = (): React.ReactElement => {
   const [search, setSearch] = useState("");
-  const { selectedHostId, selectedRepoPath, setRepo } = useNav();
+  const { selectedHostId, selectedRepoPath, isInbox, setRepo, setInbox } = useNav();
   const { data: hosts } = useHosts();
+  const { mutate: toggleFavourite } = useToggleFavouriteRepo();
 
   const activeQuery = search.length >= MIN_QUERY_LENGTH ? search : undefined;
-  const { data: repos, isLoading, isError } = useRepos(selectedHostId, activeQuery);
+  const {
+    data: repos,
+    isLoading,
+    isError,
+    error: reposError,
+  } = useRepos(selectedHostId, activeQuery);
 
   const selectedHost = hosts?.find((h) => h.id === selectedHostId);
+
+  const favouriteRepos = useMemo(
+    () => new Set(selectedHost?.favourite_repos ?? []),
+    [selectedHost?.favourite_repos]
+  );
+
+  const favouriteRepoObjects = useMemo(
+    () => (repos ?? []).filter((r) => favouriteRepos.has(r.path)),
+    [repos, favouriteRepos]
+  );
 
   const tree = useMemo(() => buildTree(repos ?? []), [repos]);
 
@@ -257,13 +487,24 @@ export const ReposPane = (): React.ReactElement => {
     [setRepo]
   );
 
+  const handleToggleFavourite = useCallback(
+    (hostId: string, repoPath: string) => {
+      toggleFavourite({ hostId, repoPath });
+    },
+    [toggleFavourite]
+  );
+
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
   }, []);
 
   const isTyping = search.length > 0 && search.length < MIN_QUERY_LENGTH;
   const hasNoResults =
-    selectedHostId && !isLoading && !isError && activeQuery !== undefined && (repos ?? []).length === 0;
+    selectedHostId &&
+    !isLoading &&
+    !isError &&
+    activeQuery !== undefined &&
+    (repos ?? []).length === 0;
 
   return (
     <aside
@@ -275,7 +516,7 @@ export const ReposPane = (): React.ReactElement => {
         flexDirection: "column",
         borderRight: "1px solid var(--border)",
         background: "var(--bg-1)",
-        height: "100vh",
+        height: "100%",
         overflow: "hidden",
       }}
     >
@@ -351,15 +592,31 @@ export const ReposPane = (): React.ReactElement => {
 
       {/* Inbox row — shown only when not searching */}
       {selectedHostId && !isLoading && activeQuery === undefined && (
-        <div style={{ padding: "8px 10px 4px" }}>
-          <button type="button" className="row-btn" style={{ justifyContent: "space-between" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "var(--fg-2)" }}>
+        <div style={{ padding: "8px 0 4px" }}>
+          <div className={`row-btn${isInbox ? "active" : ""}`} style={{ paddingLeft: 10 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setInbox(selectedHostId);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: "inherit",
+                padding: 0,
+              }}
+            >
+              <span style={{ color: "var(--fg-2)", display: "flex" }}>
                 <InboxIcon />
               </span>
               <span style={{ fontSize: 12 }}>Inbox</span>
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
       )}
 
@@ -415,7 +672,7 @@ export const ReposPane = (): React.ReactElement => {
               padding: "0 16px",
             }}
           >
-            Failed to load repositories
+            {getVcsErrorMessage(reposError)} repositories
           </div>
         )}
 
@@ -436,11 +693,42 @@ export const ReposPane = (): React.ReactElement => {
           </div>
         )}
 
+        {!isTyping && !isLoading && !isError && favouriteRepoObjects.length > 0 && (
+          <div
+            style={{ borderBottom: "1px solid var(--border)", paddingBottom: 4, marginBottom: 4 }}
+          >
+            <div
+              style={{
+                padding: "4px 10px",
+                fontSize: 10,
+                fontWeight: 600,
+                color: "var(--fg-3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Favourites
+            </div>
+            {favouriteRepoObjects.map((repo) => (
+              <RepoRow
+                key={`fav-${repo.id}`}
+                repo={repo}
+                depth={0}
+                isSelected={selectedRepoPath === repo.path}
+                isFavourite={true}
+                selectedHostId={selectedHostId}
+                onSelect={handleSelect}
+                onToggleFavourite={handleToggleFavourite}
+              />
+            ))}
+          </div>
+        )}
+
         {!isTyping &&
           !isLoading &&
           !isError &&
           tree.length > 0 &&
-          tree.map((node, idx) =>
+          tree.map((node) =>
             node.kind === "namespace" ? (
               <NamespaceRow
                 key={node.fullPath}
@@ -448,16 +736,20 @@ export const ReposPane = (): React.ReactElement => {
                 depth={0}
                 selectedRepoPath={selectedRepoPath}
                 selectedHostId={selectedHostId}
+                favouriteRepos={favouriteRepos}
                 onSelect={handleSelect}
+                onToggleFavourite={handleToggleFavourite}
               />
             ) : (
               <RepoRow
-                key={node.repo.id ?? idx}
+                key={node.repo.id}
                 repo={node.repo}
                 depth={0}
                 isSelected={selectedRepoPath === node.repo.path}
+                isFavourite={favouriteRepos.has(node.repo.path)}
                 selectedHostId={selectedHostId}
                 onSelect={handleSelect}
+                onToggleFavourite={handleToggleFavourite}
               />
             )
           )}
@@ -493,9 +785,7 @@ export const ReposPane = (): React.ReactElement => {
           />
           {selectedHostId ? "connected" : "disconnected"}
         </span>
-        <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-          v{__APP_VERSION__}
-        </span>
+        <VersionBadge />
       </div>
     </aside>
   );

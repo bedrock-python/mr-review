@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview, reviewApi, reviewKeys } from "@entities/review";
-import type { Comment, CommentSeverity, Review } from "@entities/review";
+import type { Comment, CommentSeverity } from "@entities/review";
 
 type ViewMode = "pinned" | "list" | "thread";
 
@@ -1074,27 +1074,30 @@ const PolishThread = ({ comments, onUpdate }: PolishThreadProps): React.ReactEle
 
 export const PolishStage = (): React.ReactElement => {
   const { activeReviewId } = useNav();
-  const { setStage } = useStageBarStore();
+  const { setStage, activeIterationId } = useStageBarStore();
   const { data: review, isLoading } = useReview(activeReviewId);
+
+  const activeIteration =
+    review?.iterations.find((it) => it.id === activeIterationId) ??
+    review?.iterations[review.iterations.length - 1] ??
+    null;
 
   const qc = useQueryClient();
   const updateComments = useMutation({
     mutationFn: (comments: Comment[]) => {
       if (!activeReviewId) throw new Error("No active review");
-      return reviewApi.update(activeReviewId, { comments });
+      return reviewApi.update(activeReviewId, {
+        ...(activeIterationId ? { iteration_id: activeIterationId } : {}),
+        iteration_comments: comments.map((c) => ({
+          id: c.id,
+          status: c.status,
+          body: c.body,
+          severity: c.severity,
+          resolved: c.resolved,
+        })),
+      });
     },
-    onMutate: async (comments: Comment[]) => {
-      if (!activeReviewId) return;
-      const key = reviewKeys.detail(activeReviewId);
-      await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData(key);
-      qc.setQueryData(key, (old: Review | undefined) => (old ? { ...old, comments } : old));
-      return { previous, key };
-    },
-    onError: (err: Error, _vars, context) => {
-      if (context?.previous !== undefined) {
-        qc.setQueryData(context.key, context.previous);
-      }
+    onError: (err: Error) => {
       toast.error("Failed to save comments", { description: err.message });
     },
     onSuccess: (updated) => {
@@ -1108,8 +1111,10 @@ export const PolishStage = (): React.ReactElement => {
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
 
   const handleUpdate = (id: string, patch: Partial<Comment>): void => {
-    if (!review) return;
-    const updatedComments = review.comments.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    if (!activeIteration) return;
+    const updatedComments = activeIteration.comments.map((c) =>
+      c.id === id ? { ...c, ...patch } : c
+    );
     updateComments.mutate(updatedComments);
   };
 
@@ -1161,7 +1166,9 @@ export const PolishStage = (): React.ReactElement => {
     );
   }
 
-  if (review.comments.length === 0) {
+  const comments = activeIteration?.comments ?? [];
+
+  if (comments.length === 0) {
     return (
       <div
         style={{
@@ -1187,7 +1194,7 @@ export const PolishStage = (): React.ReactElement => {
     suggestion: number;
     dismissed: number;
   };
-  const counts = review.comments.reduce<SevCounts>(
+  const counts = comments.reduce<SevCounts>(
     (acc, c) => {
       if (c.status === "dismissed") {
         return { ...acc, dismissed: acc.dismissed + 1 };
@@ -1197,7 +1204,7 @@ export const PolishStage = (): React.ReactElement => {
     { critical: 0, major: 0, minor: 0, suggestion: 0, dismissed: 0 }
   );
 
-  const activeId = activeCommentId ?? review.comments[0]?.id ?? null;
+  const activeId = activeCommentId ?? comments[0]?.id ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1302,7 +1309,7 @@ export const PolishStage = (): React.ReactElement => {
         {viewMode === "pinned" && (
           <PolishPinned
             reviewId={activeReviewId}
-            comments={review.comments}
+            comments={comments}
             activeCommentId={activeId}
             setActiveCommentId={setActiveCommentId}
             onUpdate={handleUpdate}
@@ -1311,14 +1318,12 @@ export const PolishStage = (): React.ReactElement => {
         )}
         {viewMode === "list" && (
           <PolishList
-            comments={review.comments}
+            comments={comments}
             onUpdate={handleUpdate}
             isPending={updateComments.isPending}
           />
         )}
-        {viewMode === "thread" && (
-          <PolishThread comments={review.comments} onUpdate={handleUpdate} />
-        )}
+        {viewMode === "thread" && <PolishThread comments={comments} onUpdate={handleUpdate} />}
       </div>
     </div>
   );

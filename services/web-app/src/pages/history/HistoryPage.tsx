@@ -67,6 +67,10 @@ const SEV_COLORS: Record<string, string> = {
 };
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
+const getDisplayStage = (review: Review): string => {
+  return review.iterations.at(-1)?.stage ?? "pick";
+};
+
 const formatDate = (iso: string): string => {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -125,7 +129,8 @@ const StageBadge = ({ stage }: StageBadgeProps): React.ReactElement => {
 type SeverityBarProps = { review: Review };
 
 const SeverityBar = ({ review }: SeverityBarProps): React.ReactElement | null => {
-  const kept = review.comments.filter((c) => c.status === "kept");
+  const latestComments = review.iterations.at(-1)?.comments ?? [];
+  const kept = latestComments.filter((c) => c.status === "kept");
   if (kept.length === 0) return null;
 
   const counts: Record<string, number> = {};
@@ -176,8 +181,9 @@ type ReviewCardProps = {
 
 const ReviewCard = ({ review, hostName, onOpen }: ReviewCardProps): React.ReactElement => {
   const [hovered, setHovered] = useState(false);
-  const keptCount = review.comments.filter((c) => c.status === "kept").length;
-  const totalCount = review.comments.length;
+  const latestComments = review.iterations.at(-1)?.comments ?? [];
+  const keptCount = latestComments.filter((c) => c.status === "kept").length;
+  const totalCount = latestComments.length;
 
   return (
     <button
@@ -266,7 +272,7 @@ const ReviewCard = ({ review, hostName, onOpen }: ReviewCardProps): React.ReactE
 
       {/* Right: stage + arrow */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <StageBadge stage={review.stage} />
+        <StageBadge stage={getDisplayStage(review)} />
         <span style={{ color: hovered ? "var(--fg-1)" : "var(--fg-3)", transition: "color 0.1s" }}>
           <ChevronRight />
         </span>
@@ -406,7 +412,7 @@ export const HistoryPage = (): React.ReactElement => {
     );
 
     return all.filter((r) => {
-      if (stageFilter && r.stage !== stageFilter) return false;
+      if (stageFilter && getDisplayStage(r) !== stageFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         const hostName = (hostMap.get(r.host_id) ?? r.host_id).toLowerCase();
@@ -440,11 +446,11 @@ export const HistoryPage = (): React.ReactElement => {
   const stageCounts = useMemo(() => {
     const all = reviews ?? [];
     return {
-      pick: all.filter((r) => r.stage === "pick").length,
-      brief: all.filter((r) => r.stage === "brief").length,
-      dispatch: all.filter((r) => r.stage === "dispatch").length,
-      polish: all.filter((r) => r.stage === "polish").length,
-      post: all.filter((r) => r.stage === "post").length,
+      pick: all.filter((r) => getDisplayStage(r) === "pick").length,
+      brief: all.filter((r) => getDisplayStage(r) === "brief").length,
+      dispatch: all.filter((r) => getDisplayStage(r) === "dispatch").length,
+      polish: all.filter((r) => getDisplayStage(r) === "polish").length,
+      post: all.filter((r) => getDisplayStage(r) === "post").length,
     };
   }, [reviews]);
 

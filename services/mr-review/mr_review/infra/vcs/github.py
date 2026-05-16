@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -206,6 +207,12 @@ class GitHubProvider:
             )
         return diff_files
 
+    async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
+        owner, repo = _split_repo_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/repos/{owner}/{repo}/pulls/{mr_iid}")
+        head_sha = str(data.get("head", {}).get("sha", ""))
+        return {"head_sha": head_sha}
+
     async def post_inline_comment(
         self,
         repo_path: str,
@@ -234,6 +241,60 @@ class GitHubProvider:
             f"/repos/{owner}/{repo}/issues/{mr_iid}/comments",
             {"body": body},
         )
+
+    async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
+        owner, repo = _split_repo_path(repo_path)
+        url = f"{self._base_url}/repos/{owner}/{repo}/contents/{file_path}"
+        response = await self._client.get(url, headers=self._headers, params={"ref": ref})
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data: Any = response.json()
+        if isinstance(data, list):
+            return None
+        encoding = data.get("encoding", "")
+        content = data.get("content", "")
+        if encoding == "base64":
+            return base64.b64decode(content).decode("utf-8", errors="replace")
+        return str(content)
+
+    async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        owner, repo = _split_repo_path(repo_path)
+        # Use git trees API for recursive listing
+        url = f"{self._base_url}/repos/{owner}/{repo}/git/trees/{ref}"
+        response = await self._client.get(url, headers=self._headers, params={"recursive": "1"})
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        prefix = dir_path.rstrip("/") + "/"
+        return [
+            item["path"]
+            for item in data.get("tree", [])
+            if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
+        ]
+
+    async def get_commits(
+        self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
+    ) -> list[dict[str, str]]:
+        owner, repo = _split_repo_path(repo_path)
+        data: list[dict[str, Any]] = await self._get(
+            f"/repos/{owner}/{repo}/commits",
+            params={"path": file_path, "sha": ref, "per_page": limit},
+        )
+        result: list[dict[str, str]] = []
+        for item in data:
+            commit: dict[str, Any] = item.get("commit", {})
+            author: dict[str, Any] = commit.get("author") or {}
+            result.append(
+                {
+                    "id": str(item.get("sha", ""))[:8],
+                    "title": str(commit.get("message", "")).split("\n")[0],
+                    "author": str(author.get("name", "")),
+                    "date": str(author.get("date", "")),
+                }
+            )
+        return result
 
 
 def _pr_to_mr(item: dict[str, Any]) -> MR:

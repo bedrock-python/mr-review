@@ -13,6 +13,12 @@
       rel="stylesheet"
     />
     <script src="/config.js"></script>
+    <script>
+      (function () {
+        var theme = localStorage.getItem("theme") || "ink";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

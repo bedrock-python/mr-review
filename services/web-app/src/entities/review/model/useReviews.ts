@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult, UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { reviewApi } from "../api/reviewApi";
-import type { Review, BriefConfig, ReviewStage } from "./review.schema";
+import type { UpdateCommentInput } from "../api/reviewApi";
+import type { Review, BriefConfig, IterationStage } from "./review.schema";
 
 export const reviewKeys = {
   all: ["reviews"] as const,
@@ -60,13 +61,19 @@ export const useDeleteReview = (): UseMutationResult<void, Error, string> => {
   });
 };
 
+export type UpdateReviewInput = {
+  brief_config?: BriefConfig;
+  iteration_id?: string;
+  iteration_stage?: IterationStage;
+  iteration_comments?: UpdateCommentInput[];
+};
+
 export const useUpdateReview = (
   reviewId: string
-): UseMutationResult<Review, Error, { stage?: ReviewStage; brief_config?: BriefConfig }> => {
+): UseMutationResult<Review, Error, UpdateReviewInput> => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { stage?: ReviewStage; brief_config?: BriefConfig }) =>
-      reviewApi.update(reviewId, data),
+    mutationFn: (data: UpdateReviewInput) => reviewApi.update(reviewId, data),
     onSuccess: (updated) => {
       qc.setQueryData(reviewKeys.detail(reviewId), updated);
     },

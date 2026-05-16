@@ -6,11 +6,13 @@ import { MRList } from "@widgets/mr-list";
 import { StageBar, useStageBarStore } from "@widgets/stage-bar";
 import { MRHeader } from "@widgets/mr-header";
 import { HistoryPanel } from "@widgets/history-panel";
+import { IterationHistoryPanel } from "@widgets/iteration-history-panel";
 import { PickStage } from "@features/pick";
 import { BriefStage } from "@features/brief";
 import { DispatchStage } from "@features/dispatch";
 import { PolishStage } from "@features/polish";
 import { PostStage } from "@features/post";
+import { UpdateBanner } from "@features/check-update";
 import type { ReviewStage } from "@entities/review";
 
 const STAGE_COMPONENTS: Record<ReviewStage, () => React.ReactElement> = {
@@ -111,13 +113,14 @@ const CollapseToggle = ({ collapsed }: { collapsed: boolean }): React.ReactEleme
 export const MainPage = (): React.ReactElement => {
   const { navCollapsed, setNavCollapsed } = useAppStore();
   const { selectedHostId, selectedMRIid } = useNav();
+  const { activeIterationId, setStage, setIterationId } = useStageBarStore();
 
   // Collapse nav when a MR is opened
   useEffect(() => {
     if (selectedMRIid !== null) setNavCollapsed(true);
   }, [selectedMRIid, setNavCollapsed]);
 
-  // Expand nav when a host is selected but no MR is open
+  // Expand nav when a host is selected but no MR is open (includes inbox)
   useEffect(() => {
     if (selectedHostId !== null && selectedMRIid === null) setNavCollapsed(false);
   }, [selectedHostId, selectedMRIid, setNavCollapsed]);
@@ -126,55 +129,66 @@ export const MainPage = (): React.ReactElement => {
     <div
       style={{
         display: "flex",
+        flexDirection: "column",
         height: "100vh",
         overflow: "hidden",
         background: "var(--bg-0)",
         color: "var(--fg-0)",
       }}
     >
-      <HostsRail />
+      <UpdateBanner />
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        <HostsRail />
 
-      {/* Collapsible nav: ReposPane + MRList */}
-      <div
-        style={{
-          display: "flex",
-          flexShrink: 0,
-          overflow: "hidden",
-          width: navCollapsed ? 0 : 628,
-          transition: "width 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
-        }}
-      >
-        <ReposPane />
-        <MRList />
+        {/* Collapsible nav: ReposPane + MRList */}
+        <div
+          style={{
+            display: "flex",
+            flexShrink: 0,
+            overflow: "hidden",
+            width: navCollapsed ? 0 : 628,
+            transition: "width 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        >
+          <ReposPane />
+          <MRList />
+        </div>
+
+        {/* Main content with collapse toggle on the left edge */}
+        <main
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            position: "relative",
+          }}
+        >
+          <CollapseToggle collapsed={navCollapsed} />
+
+          {selectedMRIid !== null ? (
+            <>
+              <MRHeader />
+              <StageBar />
+              <div style={{ flex: 1, overflow: "auto" }}>
+                <ActiveStage />
+              </div>
+            </>
+          ) : (
+            <EmptyState />
+          )}
+        </main>
+
+        <HistoryPanel />
+        <IterationHistoryPanel
+          activeIterationId={activeIterationId}
+          onIterationSelect={(id, stage) => {
+            setIterationId(id);
+            setStage(stage);
+          }}
+        />
       </div>
-
-      {/* Main content with collapse toggle on the left edge */}
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <CollapseToggle collapsed={navCollapsed} />
-
-        {selectedMRIid !== null ? (
-          <>
-            <MRHeader />
-            <StageBar />
-            <div style={{ flex: 1, overflow: "auto" }}>
-              <ActiveStage />
-            </div>
-          </>
-        ) : (
-          <EmptyState />
-        )}
-      </main>
-
-      <HistoryPanel />
     </div>
   );
 };

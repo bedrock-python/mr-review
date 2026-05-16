@@ -10,10 +10,13 @@ export const DIFF_HARD_CHARS = 100_000 * CHARS_PER_TOKEN; // 400 KB
 
 export type DiffSizeLevel = "ok" | "warn" | "large";
 
+export const COMMIT_HISTORY_FILE_LIMIT = 50;
+
 export type DiffSizeInfo = {
   chars: number;
   tokens: number;
   level: DiffSizeLevel;
+  fileCount: number;
   isLoading: boolean;
 };
 
@@ -43,6 +46,7 @@ export const useDiffSize = (reviewId: string | null): DiffSizeInfo => {
         : chars >= DIFF_WARN_CHARS
           ? "warn"
           : "ok";
+  const fileCount = diff ? (diff.match(/^--- a\//gm) ?? []).length : 0;
 
-  return { chars, tokens, level, isLoading };
+  return { chars, tokens, level, fileCount, isLoading };
 };

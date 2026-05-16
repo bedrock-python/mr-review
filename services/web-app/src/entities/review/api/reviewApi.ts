@@ -2,7 +2,7 @@ import { z } from "zod";
 import { httpClient } from "@shared/api";
 import { env } from "@shared/config";
 import { ReviewSchema } from "../model/review.schema";
-import type { Review, BriefConfig, ReviewStage, Comment } from "../model/review.schema";
+import type { Review, BriefConfig, Comment } from "../model/review.schema";
 
 const CommentParseErrorSchema = z.object({
   index: z.number(),
@@ -18,6 +18,14 @@ export const ImportResponseResultSchema = z.object({
 
 export type ImportResponseResult = z.infer<typeof ImportResponseResultSchema>;
 export type CommentParseError = z.infer<typeof CommentParseErrorSchema>;
+
+export type UpdateCommentInput = {
+  id: string;
+  status?: "kept" | "dismissed";
+  body?: string;
+  severity?: Comment["severity"];
+  resolved?: boolean;
+};
 
 export const reviewApi = {
   list: async (): Promise<Review[]> => {
@@ -37,9 +45,21 @@ export const reviewApi = {
 
   update: async (
     reviewId: string,
-    data: { stage?: ReviewStage; brief_config?: BriefConfig; comments?: Comment[] }
+    data: {
+      brief_config?: BriefConfig;
+      iteration_id?: string;
+      iteration_stage?: "brief" | "dispatch" | "polish" | "post";
+      iteration_comments?: UpdateCommentInput[];
+    }
   ): Promise<Review> => {
     const res = await httpClient.patch<unknown>(`/api/v1/reviews/${reviewId}`, data);
+    return ReviewSchema.parse(res.data);
+  },
+
+  createIteration: async (reviewId: string, briefConfig?: BriefConfig): Promise<Review> => {
+    const res = await httpClient.post<unknown>(`/api/v1/reviews/${reviewId}/iterations`, {
+      brief_config: briefConfig ?? null,
+    });
     return ReviewSchema.parse(res.data);
   },
 
@@ -52,9 +72,20 @@ export const reviewApi = {
     await httpClient.delete(`/api/v1/reviews/${reviewId}`);
   },
 
-  getPrompt: async (reviewId: string, excludeDiff = false): Promise<string> => {
-    const params = excludeDiff ? { exclude_diff: true } : undefined;
-    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/prompt`, { params });
+  getContext: async (reviewId: string): Promise<string> => {
+    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/context`);
+    return res.data;
+  },
+
+  getPrompt: async (
+    reviewId: string,
+    briefConfig?: BriefConfig,
+    iterationId?: string
+  ): Promise<string> => {
+    const res = await httpClient.post<string>(`/api/v1/reviews/${reviewId}/prompt`, {
+      brief_config: briefConfig ?? null,
+      iteration_id: iterationId ?? null,
+    });
     return res.data;
   },
 
@@ -63,12 +94,23 @@ export const reviewApi = {
     reviewId: string,
     aiProviderId: string,
     signal?: AbortSignal,
-    model?: string
+    model?: string,
+    temperature?: number | null,
+    reasoningBudget?: number | null,
+    reasoningEffort?: string | null,
+    iterationId?: string | null
   ): AsyncGenerator<string> {
     const response = await fetch(`${env.VITE_API_BASE_URL}/api/v1/reviews/${reviewId}/dispatch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ai_provider_id: aiProviderId, model: model ?? null }),
+      body: JSON.stringify({
+        ai_provider_id: aiProviderId,
+        model: model ?? null,
+        temperature: temperature ?? null,
+        reasoning_budget: reasoningBudget ?? null,
+        reasoning_effort: reasoningEffort ?? null,
+        iteration_id: iterationId ?? null,
+      }),
       signal: signal ?? null,
     });
 
@@ -109,19 +151,28 @@ export const reviewApi = {
     }
   },
 
-  importResponse: async (reviewId: string, raw: string): Promise<ImportResponseResult> => {
+  importResponse: async (
+    reviewId: string,
+    raw: string,
+    iterationId?: string | null
+  ): Promise<ImportResponseResult> => {
     const res = await httpClient.post<unknown>(`/api/v1/reviews/${reviewId}/import-response`, {
       raw,
+      iteration_id: iterationId ?? null,
     });
     return ImportResponseResultSchema.parse(res.data);
   },
 
   post: async (
     reviewId: string,
-    diff_refs?: Record<string, string>
+    diff_refs?: Record<string, string>,
+    iterationId?: string | null,
+    fallbackToGeneralNote = true
   ): Promise<{ posted: number }> => {
     const res = await httpClient.post<unknown>(`/api/v1/reviews/${reviewId}/post`, {
       diff_refs: diff_refs ?? {},
+      iteration_id: iterationId ?? null,
+      fallback_to_general_note: fallbackToGeneralNote,
     });
     return res.data as { posted: number };
   },

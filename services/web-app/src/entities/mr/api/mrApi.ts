@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { httpClient } from "@shared/api";
-import { MRSchema, RepoSchema, DiffFileSchema } from "../model/mr.schema";
-import type { MR, Repo, DiffFile, MRStatus } from "../model/mr.schema";
+import { MRSchema, RepoSchema, DiffFileSchema, InboxMRSchema } from "../model/mr.schema";
+import type { MR, Repo, DiffFile, MRStatus, InboxMR } from "../model/mr.schema";
 
 export type GetMRsParams = {
   status?: MRStatus;
@@ -30,6 +30,11 @@ export const mrApi = {
       `/api/v1/hosts/${hostId}/repos/${repoPath}/mrs/${String(mrIid)}`
     );
     return MRSchema.parse(res.data);
+  },
+
+  listInboxMRs: async (hostId: string): Promise<InboxMR[]> => {
+    const res = await httpClient.get<unknown>(`/api/v1/hosts/${hostId}/inbox`);
+    return z.array(InboxMRSchema).parse(res.data);
   },
 
   getDiff: async (hostId: string, repoPath: string, mrIid: number): Promise<DiffFile[]> => {

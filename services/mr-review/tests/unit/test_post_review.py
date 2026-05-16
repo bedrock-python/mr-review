@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import httpx
 import pytest
-from mr_review.core.reviews.entities import Review, ReviewStage
+from mr_review.core.reviews.entities import IterationStage, Review
+from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase, _post_one_comment
 
-from tests.factories.entities import make_comment, make_host, make_review
+from tests.factories.entities import make_comment, make_host, make_iteration, make_review
 
 pytestmark = pytest.mark.unit
 
@@ -89,13 +90,26 @@ async def test__post_one_comment__both_fail__returns_false() -> None:
 # ── PostReviewUseCase.execute ─────────────────────────────────────────────────
 
 
+def _make_use_case(
+    review_repo: AsyncMock,
+    host_repo: AsyncMock,
+    mock_provider: AsyncMock | None = None,
+) -> tuple[PostReviewUseCase, AsyncMock]:
+    vcs_cache = MagicMock(spec=VCSCache)
+    provider = mock_provider or AsyncMock()
+    vcs_cache.get_or_create.return_value = provider
+    vcs_client = MagicMock(spec=httpx.AsyncClient)
+    use_case = PostReviewUseCase(review_repo, host_repo, vcs_cache, vcs_client)
+    return use_case, provider
+
+
 async def test__post_review__review_not_found__raises_value_error() -> None:
     """Raises ValueError when review does not exist."""
     review_repo = AsyncMock()
     host_repo = AsyncMock()
     review_repo.get_by_id.return_value = None
 
-    use_case = PostReviewUseCase(review_repo, host_repo)
+    use_case, _ = _make_use_case(review_repo, host_repo)
 
     with pytest.raises(ValueError, match="not found"):
         await use_case.execute(uuid4())
@@ -109,27 +123,43 @@ async def test__post_review__host_not_found__raises_value_error() -> None:
     review_repo.get_by_id.return_value = review
     host_repo.get_by_id.return_value = None
 
-    use_case = PostReviewUseCase(review_repo, host_repo)
+    use_case, _ = _make_use_case(review_repo, host_repo)
 
     with pytest.raises(ValueError, match="not found"):
         await use_case.execute(review.id)
+
+
+async def test__post_review__no_iterations__returns_zero_without_posting() -> None:
+    """Returns 0 immediately when the review has no iterations."""
+    review_repo = AsyncMock()
+    host_repo = AsyncMock()
+    review = make_review(iterations=[])
+    review_repo.get_by_id.return_value = review
+    host_repo.get_by_id.return_value = make_host()
+
+    use_case, _ = _make_use_case(review_repo, host_repo)
+    posted = await use_case.execute(review.id)
+
+    assert posted == 0
+    review_repo.update.assert_not_awaited()
 
 
 async def test__post_review__no_kept_comments__returns_zero_without_posting() -> None:
     """Returns 0 immediately when no comments have status='kept'."""
     review_repo = AsyncMock()
     host_repo = AsyncMock()
-    review = make_review(
-        stage=ReviewStage.polish,
+    iteration = make_iteration(
+        stage=IterationStage.polish,
         comments=[
             make_comment(status="dismissed"),
             make_comment(status="dismissed"),
         ],
     )
+    review = make_review(iterations=[iteration])
     review_repo.get_by_id.return_value = review
     host_repo.get_by_id.return_value = make_host()
 
-    use_case = PostReviewUseCase(review_repo, host_repo)
+    use_case, _ = _make_use_case(review_repo, host_repo)
     posted = await use_case.execute(review.id)
 
     assert posted == 0
@@ -137,35 +167,35 @@ async def test__post_review__no_kept_comments__returns_zero_without_posting() ->
 
 
 async def test__post_review__kept_comments__posts_and_advances_stage() -> None:
-    """Posts kept comments and updates stage to post."""
+    """Posts kept comments and updates iteration stage to post."""
     review_repo = AsyncMock()
     host_repo = AsyncMock()
     kept = make_comment(status="kept", file="src/a.py", line=1, body="A")
     dismissed = make_comment(status="dismissed", file="src/b.py", line=2, body="B")
-    review = make_review(stage=ReviewStage.polish, comments=[kept, dismissed])
+    iteration = make_iteration(stage=IterationStage.polish, comments=[kept, dismissed])
+    review = make_review(iterations=[iteration])
     host = make_host(type="gitlab")
     review_repo.get_by_id.return_value = review
     host_repo.get_by_id.return_value = host
 
     mock_provider = AsyncMock()
-
-    with patch("mr_review.use_cases.reviews.post_review.create_vcs_provider", return_value=mock_provider):
-        use_case = PostReviewUseCase(review_repo, host_repo)
-        posted = await use_case.execute(review.id, diff_refs={"base_sha": "abc"})
+    use_case, _ = _make_use_case(review_repo, host_repo, mock_provider)
+    posted = await use_case.execute(review.id, diff_refs={"base_sha": "abc"})
 
     assert posted == 1
     mock_provider.post_inline_comment.assert_awaited_once()
     review_repo.update.assert_awaited_once()
     saved: Review = review_repo.update.call_args[0][0]
-    assert saved.stage == ReviewStage.post
+    assert saved.iterations[0].stage == IterationStage.post
 
 
 async def test__post_review__all_comments_fail__returns_zero_but_updates_stage() -> None:
-    """Updates stage to post even when all individual comment postings fail."""
+    """Updates iteration stage to post even when all individual comment postings fail."""
     review_repo = AsyncMock()
     host_repo = AsyncMock()
     comment = make_comment(status="kept", file="src/x.py", line=9, body="X")
-    review = make_review(stage=ReviewStage.polish, comments=[comment])
+    iteration = make_iteration(stage=IterationStage.polish, comments=[comment])
+    review = make_review(iterations=[iteration])
     host = make_host(type="gitlab")
     review_repo.get_by_id.return_value = review
     host_repo.get_by_id.return_value = host
@@ -179,11 +209,10 @@ async def test__post_review__all_comments_fail__returns_zero_but_updates_stage()
     )
     mock_provider.post_general_note.side_effect = RuntimeError("also failed")
 
-    with patch("mr_review.use_cases.reviews.post_review.create_vcs_provider", return_value=mock_provider):
-        use_case = PostReviewUseCase(review_repo, host_repo)
-        posted = await use_case.execute(review.id)
+    use_case, _ = _make_use_case(review_repo, host_repo, mock_provider)
+    posted = await use_case.execute(review.id)
 
     assert posted == 0
     review_repo.update.assert_awaited_once()
     saved: Review = review_repo.update.call_args[0][0]
-    assert saved.stage == ReviewStage.post
+    assert saved.iterations[0].stage == IterationStage.post

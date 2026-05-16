@@ -47,8 +47,7 @@ async def test__create_review__valid_payload__returns_201_with_review_data(
     assert body["host_id"] == host_id
     assert body["repo_path"] == "team/service"
     assert body["mr_iid"] == 42
-    assert body["stage"] == "pick"
-    assert body["comments"] == []
+    assert body["iterations"] == []
     assert "id" in body
 
 
@@ -96,21 +95,25 @@ async def test__list_reviews__after_create__returns_created_review(client: Async
     assert "owner/listed" in repo_paths
 
 
-async def test__update_review__valid_stage__returns_200_with_updated_stage(
+async def test__update_review__valid_brief_config__returns_200_with_updated_review(
     client: AsyncClient,
 ) -> None:
-    """PATCH /api/v1/reviews/{id} with a new stage returns 200 and the updated entity."""
+    """PATCH /api/v1/reviews/{id} with a new brief_config returns 200 and the updated entity."""
     # Arrange
     host_id = await _create_host(client, name="GL for Update Stage")
     create_resp = await client.post("/api/v1/reviews", json={"host_id": host_id, "repo_path": "ns/repo", "mr_iid": 2})
     review_id = create_resp.json()["id"]
 
     # Act
-    response = await client.patch(f"/api/v1/reviews/{review_id}", json={"stage": "polish"})
+    response = await client.patch(
+        f"/api/v1/reviews/{review_id}",
+        json={"brief_config": {"preset": "security"}},
+    )
 
     # Assert
     assert response.status_code == 200
-    assert response.json()["stage"] == "polish"
+    assert response.json()["id"] == review_id
+    assert response.json()["brief_config"]["preset"] == "security"
 
 
 async def test__update_review__review_not_found__returns_404(client: AsyncClient) -> None:

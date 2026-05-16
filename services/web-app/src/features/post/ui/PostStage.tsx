@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
+import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview, reviewApi } from "@entities/review";
 import type { CommentSeverity } from "@entities/review";
 import { useMR } from "@entities/mr";
@@ -34,12 +35,14 @@ const SectionHeader = ({ title, hint }: { title: string; hint?: string }): React
 
 export const PostStage = (): React.ReactElement => {
   const { activeReviewId, selectedHostId, selectedRepoPath, selectedMRIid, clearMR } = useNav();
+  const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const { data: review, isLoading } = useReview(activeReviewId);
   const { data: mr } = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
 
   const [posting, setPosting] = useState(false);
   const [result, setResult] = useState<PostResult | null>(null);
   const [previewMode, setPreviewMode] = useState<"json" | "dryrun">("json");
+  const [fallbackToGeneralNote, setFallbackToGeneralNote] = useState(true);
 
   if (activeReviewId === null) {
     return (
@@ -85,7 +88,9 @@ export const PostStage = (): React.ReactElement => {
     );
   }
 
-  const keptComments = review.comments.filter((c) => c.status !== "dismissed");
+  const activeIteration = review.iterations.find((it) => it.id === activeIterationId) ?? null;
+  const iterationComments = activeIteration?.comments ?? [];
+  const keptComments = iterationComments.filter((c) => c.status !== "dismissed");
   const inlineComments = keptComments.filter((c) => c.file !== null);
   const generalComments = keptComments.filter((c) => c.file === null);
   const keptCount = keptComments.length;
@@ -96,7 +101,12 @@ export const PostStage = (): React.ReactElement => {
   const handlePost = async (): Promise<void> => {
     setPosting(true);
     try {
-      const res = await reviewApi.post(activeReviewId);
+      const res = await reviewApi.post(
+        activeReviewId,
+        undefined,
+        activeIterationId,
+        fallbackToGeneralNote
+      );
       setResult(res);
       toast.success(
         `Posted ${String(res.posted)} ${res.posted === 1 ? "comment" : "comments"} to MR`
@@ -343,35 +353,29 @@ export const PostStage = (): React.ReactElement => {
 
         {/* Options */}
         <div style={{ margin: "0 24px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {(
-            [
-              { label: "Fall back to general note if inline comment can't anchor", checked: true },
-              { label: "Open as draft thread (resolvable later)", checked: false },
-              { label: "Save run to history", checked: true },
-            ] as { label: string; checked: boolean }[]
-          ).map((opt) => (
-            <label
-              key={opt.label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 12px",
-                background: "var(--bg-1)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                fontSize: 12.5,
-                cursor: "pointer",
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 12px",
+              background: "var(--bg-1)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              fontSize: 12.5,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={fallbackToGeneralNote}
+              onChange={(e) => {
+                setFallbackToGeneralNote(e.target.checked);
               }}
-            >
-              <input
-                type="checkbox"
-                defaultChecked={opt.checked}
-                style={{ accentColor: "var(--accent)" }}
-              />
-              <span>{opt.label}</span>
-            </label>
-          ))}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span>Fall back to general note if inline comment can&apos;t anchor</span>
+          </label>
         </div>
 
         {/* No kept warning */}

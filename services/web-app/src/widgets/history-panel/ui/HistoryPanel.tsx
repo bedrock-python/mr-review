@@ -5,6 +5,11 @@ import { useHosts } from "@entities/host";
 import { useAppStore } from "@app/store";
 import type { Review } from "@entities/review";
 
+const getReviewDisplayStage = (review: Review): string => {
+  const latest = review.iterations.at(-1);
+  return latest?.stage ?? "pick";
+};
+
 /* ── Icons ──────────────────────────────────────────────────────────── */
 const CloseIcon = (): React.ReactElement => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -91,13 +96,15 @@ const ReviewItem = ({
   const [hovered, setHovered] = useState(false);
   const [deleteHovered, setDeleteHovered] = useState(false);
 
-  const keptComments = review.comments.filter((c) => c.status === "kept");
+  const latestIteration = review.iterations.at(-1) ?? null;
+  const keptComments = (latestIteration?.comments ?? []).filter((c) => c.status === "kept");
   const sevCounts: Record<string, number> = {};
   for (const c of keptComments) {
     sevCounts[c.severity] = (sevCounts[c.severity] ?? 0) + 1;
   }
 
-  const stageMeta = STAGE_META[review.stage] ?? { label: review.stage, color: "var(--fg-2)" };
+  const displayStage = getReviewDisplayStage(review);
+  const stageMeta = STAGE_META[displayStage] ?? { label: displayStage, color: "var(--fg-2)" };
 
   const bg = isActive ? "var(--bg-3)" : hovered ? "var(--bg-hover)" : "transparent";
 
@@ -416,7 +423,7 @@ export const HistoryPanel = (): React.ReactElement => {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     return all.filter((r) => {
-      if (stageFilter && r.stage !== stageFilter) return false;
+      if (stageFilter && getReviewDisplayStage(r) !== stageFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         const hostName = (hostMap.get(r.host_id) ?? "").toLowerCase();
@@ -449,7 +456,8 @@ export const HistoryPanel = (): React.ReactElement => {
     const all = reviews ?? [];
     const counts: Record<string, number> = {};
     for (const r of all) {
-      counts[r.stage] = (counts[r.stage] ?? 0) + 1;
+      const stage = getReviewDisplayStage(r);
+      counts[stage] = (counts[stage] ?? 0) + 1;
     }
     return counts;
   }, [reviews]);

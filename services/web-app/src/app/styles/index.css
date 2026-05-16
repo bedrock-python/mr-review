@@ -410,6 +410,15 @@
     flex-shrink: 0;
   }
 
+  /* favourite star — show on row hover */
+  .row-btn .fav-star {
+    opacity: 0;
+  }
+  .row-btn:hover .fav-star,
+  .row-btn .fav-star[data-active="true"] {
+    opacity: 1;
+  }
+
   /* buttons */
   .btn {
     display: inline-flex;

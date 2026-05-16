@@ -4,9 +4,29 @@ from __future__ import annotations
 
 import time
 from typing import Any, cast
+from uuid import UUID
 
+import httpx
+
+from mr_review.core.hosts.entities import Host
 from mr_review.core.mrs.entities import MR, DiffFile, Repo
 from mr_review.core.vcs.protocols import VCSProvider
+from mr_review.infra.vcs.bitbucket import BitbucketProvider
+from mr_review.infra.vcs.gitea import GiteaProvider
+from mr_review.infra.vcs.github import GitHubProvider
+from mr_review.infra.vcs.gitlab import GitLabProvider
+
+
+def _build_raw_provider(host: Host, client: httpx.AsyncClient) -> VCSProvider:
+    if host.type == "gitlab":
+        return GitLabProvider(client=client, base_url=host.base_url, token=host.token)
+    if host.type == "github":
+        return GitHubProvider(client=client, base_url=host.base_url, token=host.token)
+    if host.type in ("gitea", "forgejo"):
+        return GiteaProvider(client=client, base_url=host.base_url, token=host.token)
+    if host.type == "bitbucket":
+        return BitbucketProvider(client=client, base_url=host.base_url, token=host.token)
+    raise ValueError(f"Unsupported host type: {host.type!r}")
 
 
 class _TTLStore:
@@ -95,6 +115,15 @@ class CachedVCSProvider:
         self._cache.set(key, result)
         return result
 
+    async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
+        key = f"diff_refs:{repo_path}:{mr_iid}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast(dict[str, str], cached)
+        result = await self._provider.get_diff_refs(repo_path, mr_iid)
+        self._cache.set(key, result)
+        return result
+
     async def post_inline_comment(
         self,
         repo_path: str,
@@ -108,3 +137,69 @@ class CachedVCSProvider:
 
     async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
         await self._provider.post_general_note(repo_path, mr_iid, body)
+
+    async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
+        key = f"file:{repo_path}:{ref}:{file_path}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast("str | None", cached)
+        result = await self._provider.get_file(repo_path, file_path, ref)
+        self._cache.set(key, result)
+        return result
+
+    async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        key = f"dir:{repo_path}:{ref}:{dir_path}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast(list[str], cached)
+        result = await self._provider.list_directory(repo_path, dir_path, ref)
+        self._cache.set(key, result)
+        return result
+
+    async def get_commits(
+        self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
+    ) -> list[dict[str, str]]:
+        key = f"commits:{repo_path}:{ref}:{file_path}:{limit}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast("list[dict[str, str]]", cached)
+        result = await self._provider.get_commits(repo_path, file_path, ref, limit)
+        self._cache.set(key, result)
+        return result
+
+
+class VCSCache:
+    """APP-scoped registry of CachedVCSProvider instances keyed by host_id.
+
+    Lives for the lifetime of the process so cached data (TTL 5 min) is shared
+    across all requests hitting the same host — diff/file/MR data fetched during
+    brief-building is instantly available during dispatch without extra API calls.
+    """
+
+    def __init__(self, ttl: float = 300.0, repos_ttl: float = 900.0) -> None:
+        self._ttl = ttl
+        self._repos_ttl = repos_ttl
+        self._providers: dict[UUID, CachedVCSProvider] = {}
+
+    def get_or_create(self, host: Host, client: httpx.AsyncClient) -> CachedVCSProvider:
+        """Return the shared CachedVCSProvider for this host, creating it if needed.
+
+        The caller supplies a per-request httpx client.  The CachedVCSProvider
+        (and its TTL stores) lives across requests; only the inner raw provider is
+        swapped on each call so cache misses use the current live connection.
+        """
+        raw = _build_raw_provider(host, client)
+        if host.id not in self._providers:
+            self._providers[host.id] = CachedVCSProvider(
+                provider=raw,
+                ttl=self._ttl,
+                repos_ttl=self._repos_ttl,
+            )
+        else:
+            # Keep TTL stores intact, just refresh the underlying HTTP client.
+            self._providers[host.id]._provider = raw
+        return self._providers[host.id]
+
+    def invalidate(self, host_id: UUID) -> None:
+        """Evict all cached data for a host (e.g. after a Sync action)."""
+        self._providers.pop(host_id, None)

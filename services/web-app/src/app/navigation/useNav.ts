@@ -5,6 +5,7 @@ export type NavState = {
   selectedRepoPath: string | null;
   selectedMRIid: number | null;
   activeReviewId: string | null;
+  isInbox: boolean;
 };
 
 export type NavActions = {
@@ -12,19 +13,27 @@ export type NavActions = {
   setRepo: (hostId: string, repoPath: string) => void;
   setMR: (hostId: string, repoPath: string, mrIid: number) => void;
   setReview: (id: string | null) => void;
+  setInbox: (hostId: string) => void;
   clearMR: () => void;
 };
 
+const INBOX_SEGMENT = "~inbox";
+
 const parsePath = (
   pathname: string
-): { hostId: string | null; repoPath: string | null; mrIid: number | null } => {
+): { hostId: string | null; repoPath: string | null; mrIid: number | null; isInbox: boolean } => {
   // Strip leading slash, split by "/"
   const raw = pathname.startsWith("/") ? pathname.slice(1) : pathname;
-  if (!raw) return { hostId: null, repoPath: null, mrIid: null };
+  if (!raw) return { hostId: null, repoPath: null, mrIid: null, isInbox: false };
 
   const segments = raw.split("/");
   const hostId = decodeURIComponent(segments[0] ?? "");
-  if (!hostId) return { hostId: null, repoPath: null, mrIid: null };
+  if (!hostId) return { hostId: null, repoPath: null, mrIid: null, isInbox: false };
+
+  // /{hostId}/~inbox
+  if (segments.length === 2 && segments[1] === INBOX_SEGMENT) {
+    return { hostId, repoPath: null, mrIid: null, isInbox: true };
+  }
 
   // Look for /mrs/<iid> sentinel from the end
   const mrsIdx = segments.lastIndexOf("mrs");
@@ -37,12 +46,13 @@ const parsePath = (
       hostId,
       repoPath: repoPath || null,
       mrIid: isNaN(mrIid) ? null : mrIid,
+      isInbox: false,
     };
   }
 
   // No /mrs/ segment — just host + optional repo
   if (segments.length === 1) {
-    return { hostId, repoPath: null, mrIid: null };
+    return { hostId, repoPath: null, mrIid: null, isInbox: false };
   }
 
   const repoPathEncoded = segments.slice(1).join("/");
@@ -50,6 +60,7 @@ const parsePath = (
     hostId,
     repoPath: decodeURIComponent(repoPathEncoded),
     mrIid: null,
+    isInbox: false,
   };
 };
 
@@ -58,7 +69,7 @@ export const useNav = (): NavState & NavActions => {
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { hostId, repoPath, mrIid } = parsePath(pathname);
+  const { hostId, repoPath, mrIid, isInbox } = parsePath(pathname);
 
   const selectedHostId = hostId;
   const selectedRepoPath = repoPath;
@@ -66,7 +77,7 @@ export const useNav = (): NavState & NavActions => {
   const activeReviewId = searchParams.get("review");
 
   const setHost = (id: string): void => {
-    void navigate(`/${encodeURIComponent(id)}`);
+    void navigate(`/${encodeURIComponent(id)}/${INBOX_SEGMENT}`);
   };
 
   const setRepo = (hId: string, rPath: string): void => {
@@ -89,6 +100,10 @@ export const useNav = (): NavState & NavActions => {
     });
   };
 
+  const setInbox = (hId: string): void => {
+    void navigate(`/${encodeURIComponent(hId)}/${INBOX_SEGMENT}`);
+  };
+
   const clearMR = (): void => {
     if (selectedHostId && selectedRepoPath) {
       void navigate(
@@ -106,10 +121,12 @@ export const useNav = (): NavState & NavActions => {
     selectedRepoPath,
     selectedMRIid,
     activeReviewId,
+    isInbox,
     setHost,
     setRepo,
     setMR,
     setReview,
+    setInbox,
     clearMR,
   };
 };

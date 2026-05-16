@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-qu
 import { ApiError } from "@shared/api";
 import { persistQueryClient } from "@tanstack/query-persist-client-core";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { ThemeProvider } from "next-themes";
 import { I18nextProvider } from "react-i18next";
 import { Toaster, toast } from "sonner";
@@ -49,16 +48,19 @@ export type ProvidersProps = {
 
 export const Providers = ({ children }: ProvidersProps) => {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <ThemeProvider
+          attribute="data-theme"
+          defaultTheme="ink"
+          themes={["ink", "paper", "phosphor"]}
+        >
           <I18nextProvider i18n={i18n}>
             {children}
             <Toaster position="top-right" richColors closeButton />
-            <ReactQueryDevtools initialIsOpen={false} />
           </I18nextProvider>
         </ThemeProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 };

@@ -5,6 +5,7 @@ import type { GetMRsParams } from "../api/mrApi";
 export const mrKeys = {
   all: ["mrs"] as const,
   repos: (hostId: string, query?: string) => [...mrKeys.all, "repos", hostId, query ?? ""] as const,
+  inbox: (hostId: string) => [...mrKeys.all, "inbox", hostId] as const,
   lists: (hostId: string, repoPath: string) => [...mrKeys.all, "list", hostId, repoPath] as const,
   list: (hostId: string, repoPath: string, params: GetMRsParams) =>
     [...mrKeys.lists(hostId, repoPath), params] as const,
@@ -62,6 +63,20 @@ export const useMR = (
     },
     enabled: hostId !== null && repoPath !== null && mrIid !== null,
     staleTime: 10 * 60 * 1000,
+  });
+};
+
+export const useInboxMRs = (
+  hostId: string | null
+): ReturnType<typeof useQuery<Awaited<ReturnType<typeof mrApi.listInboxMRs>>>> => {
+  return useQuery({
+    queryKey: mrKeys.inbox(hostId ?? ""),
+    queryFn: () => {
+      if (hostId === null) return Promise.reject(new Error("hostId is null"));
+      return mrApi.listInboxMRs(hostId);
+    },
+    enabled: hostId !== null,
+    staleTime: 2 * 60 * 1000,
   });
 };
 

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { hostApi } from "../api/hostApi";
-import type { CreateHost, UpdateHost } from "./host.schema";
+import type { CreateHost, Host, UpdateHost } from "./host.schema";
 
 export const hostKeys = {
   all: ["hosts"] as const,
@@ -64,6 +64,21 @@ export const useDeleteHost = (): ReturnType<typeof useMutation<void, Error, stri
     },
     onError: (err) => {
       toast.error("Failed to remove host", { description: err.message });
+    },
+  });
+};
+
+export const useToggleFavouriteRepo = (): ReturnType<
+  typeof useMutation<Host, Error, { hostId: string; repoPath: string }>
+> => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ hostId, repoPath }) => hostApi.toggleFavouriteRepo(hostId, repoPath),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: hostKeys.lists() });
+    },
+    onError: (err) => {
+      toast.error("Failed to update favourites", { description: err.message });
     },
   });
 };

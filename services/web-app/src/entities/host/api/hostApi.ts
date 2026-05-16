@@ -32,4 +32,10 @@ export const hostApi = {
     const res = await httpClient.get<TestConnectionResult>(`/api/v1/hosts/${id}/test`);
     return res.data;
   },
+
+  toggleFavouriteRepo: async (id: string, repoPath: string): Promise<Host> => {
+    const encoded = encodeURIComponent(repoPath);
+    const res = await httpClient.post<unknown>(`/api/v1/hosts/${id}/favourite-repos/${encoded}`);
+    return HostSchema.parse(res.data);
+  },
 };

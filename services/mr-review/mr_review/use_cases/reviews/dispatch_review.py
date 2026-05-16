@@ -1,23 +1,34 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import textwrap
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import httpx
 
 from mr_review.core.ai_providers.entities import AIProvider
+from mr_review.core.ai_providers.repositories import AIProviderRepository
+from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.mrs.entities import DiffFile
-from mr_review.core.reviews.entities import BriefPreset, Comment, Review, ReviewStage
+from mr_review.core.reviews.entities import BriefConfig, BriefPreset, Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.infra.ai.claude import ClaudeProvider
 from mr_review.infra.ai.openai_compat import OpenAICompatProvider
-from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
-from mr_review.infra.repositories.host import FileHostRepository
-from mr_review.infra.repositories.review import FileReviewRepository
-from mr_review.infra.vcs.factory import create_vcs_provider
+from mr_review.infra.vcs.cache import VCSCache
+from mr_review.infra.vcs.factory import get_cached_provider
+from mr_review.use_cases.reviews.context_files import (
+    _CONCURRENCY,
+    collect_commit_history,
+    collect_context_files,
+    collect_full_files,
+    collect_related_code,
+    collect_test_files,
+)
 
 _PRESET_INSTRUCTIONS: dict[BriefPreset, str] = {
     BriefPreset.thorough: (
@@ -67,22 +78,66 @@ _OUTPUT_SCHEMA = textwrap.dedent("""
 """).strip()
 
 
-def _build_prompt(review: Review, diff_text: str, mr_title: str, mr_description: str) -> str:
-    config = review.brief_config
+def _code_files_section(heading: str, files: dict[str, str]) -> str:
+    parts = [f"### {path}\n\n```\n{content}\n```" for path, content in files.items()]
+    return f"## {heading}\n\n" + "\n\n---\n\n".join(parts)
+
+
+def _commit_history_section(commit_history: dict[str, list[dict[str, str]]]) -> str:
+    lines: list[str] = []
+    for file_path, commits in commit_history.items():
+        lines.append(f"### {file_path}")
+        lines.extend(f"- `{c['id']}` {c['date'][:10]} **{c['author']}**: {c['title']}" for c in commits)
+    return "## Commit History\n\n" + "\n\n".join(lines)
+
+
+def _append_code_context(
+    sections: list[str],
+    full_files: dict[str, str] | None,
+    test_files: dict[str, str] | None,
+    related_code: dict[str, str] | None,
+    commit_history: dict[str, list[dict[str, str]]] | None,
+) -> None:
+    if full_files:
+        sections.append(_code_files_section("Changed Files (Full Content)", full_files))
+    if test_files:
+        sections.append(_code_files_section("Test Context", test_files))
+    if related_code:
+        sections.append(_code_files_section("Related Code", related_code))
+    if commit_history:
+        sections.append(_commit_history_section(commit_history))
+
+
+def _build_prompt(
+    brief_config: BriefConfig,
+    diff_text: str,
+    mr_title: str,
+    mr_description: str,
+    context_contents: dict[str, str] | None = None,
+    full_files: dict[str, str] | None = None,
+    test_files: dict[str, str] | None = None,
+    related_code: dict[str, str] | None = None,
+    commit_history: dict[str, list[dict[str, str]]] | None = None,
+) -> str:
+    config = brief_config
     instructions = _PRESET_INSTRUCTIONS.get(config.preset, _PRESET_INSTRUCTIONS[BriefPreset.thorough])
 
-    sections: list[str] = []
-
-    sections.append(f"# Code Review Task\n\n{instructions}")
+    sections: list[str] = [f"# Code Review Task\n\n{instructions}"]
 
     if config.custom_instructions:
         sections.append(f"## Additional Instructions\n\n{config.custom_instructions}")
+
+    if context_contents:
+        parts = [f"### {path}\n\n{content}" for path, content in context_contents.items()]
+        sections.append("## Project Context\n\n" + "\n\n---\n\n".join(parts))
 
     if config.include_description:
         sections.append(f"## MR Title\n\n{mr_title}\n\n## MR Description\n\n{mr_description or '(none)'}")
 
     if config.include_diff:
         sections.append(f"## Diff\n\n```diff\n{diff_text}\n```")
+
+    _append_code_context(sections, full_files, test_files, related_code, commit_history)
 
     sections.append(_OUTPUT_SCHEMA)
 
@@ -210,19 +265,27 @@ def parse_ai_response(raw: str) -> ParseResult:
 class DispatchReviewUseCase:
     def __init__(
         self,
-        review_repo: FileReviewRepository,
-        host_repo: FileHostRepository,
-        ai_provider_repo: FileAIProviderRepository,
+        review_repo: ReviewRepository,
+        host_repo: HostRepository,
+        ai_provider_repo: AIProviderRepository,
+        vcs_cache: VCSCache,
+        vcs_client: httpx.AsyncClient,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
         self._ai_provider_repo = ai_provider_repo
+        self._vcs_cache = vcs_cache
+        self._vcs_client = vcs_client
 
     async def execute(
         self,
         review_id: UUID,
         ai_provider_id: UUID,
         model: str | None = None,
+        temperature: float | None = None,
+        reasoning_budget: int | None = None,
+        reasoning_effort: str | None = None,
+        iteration_id: UUID | None = None,
     ) -> AsyncIterator[str]:
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
@@ -236,25 +299,145 @@ class DispatchReviewUseCase:
         if ai_provider is None:
             raise ValueError(f"AI provider {ai_provider_id} not found")
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            provider = create_vcs_provider(host, client)
-            mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
-            diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        # Resolve or create the iteration to dispatch into
+        iteration, review = await self._resolve_iteration(review, iteration_id, ai_provider_id, model)
+
+        provider = get_cached_provider(host, self._vcs_client, self._vcs_cache)
+        mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        cfg = iteration.brief_config
+        ref = mr.source_branch
+
+        semaphore = asyncio.Semaphore(_CONCURRENCY)
+
+        async def _noop_dict() -> dict[str, str]:
+            return {}
+
+        async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
+            return {}
+
+        context_contents, full_files, test_files, related_code, commit_history = await asyncio.gather(
+            collect_context_files(
+                provider=provider,
+                repo_path=review.repo_path,
+                requested_paths=cfg.context_files,
+                ref=ref,
+                semaphore=semaphore,
+            )
+            if cfg.include_context
+            else _noop_dict(),
+            collect_full_files(provider, review.repo_path, diff_files, ref, semaphore)
+            if cfg.include_full_files
+            else _noop_dict(),
+            collect_test_files(provider, review.repo_path, diff_files, ref, semaphore)
+            if cfg.include_test_context
+            else _noop_dict(),
+            collect_related_code(provider, review.repo_path, diff_files, ref, semaphore)
+            if cfg.include_related_code
+            else _noop_dict(),
+            collect_commit_history(provider, review.repo_path, diff_files, ref, semaphore)
+            if cfg.include_commit_history
+            else _noop_commit_history(),
+        )
 
         diff_text = _format_diff(diff_files)
-        prompt = _build_prompt(review, diff_text, mr.title, mr.description)
+        prompt = _build_prompt(
+            cfg,
+            diff_text,
+            mr.title,
+            mr.description,
+            context_contents,
+            full_files=full_files,
+            test_files=test_files,
+            related_code=related_code,
+            commit_history=commit_history,
+        )
 
-        updated = review.model_copy(update={"stage": ReviewStage.dispatch})
-        await self._review_repo.update(updated)
+        return self._stream_and_save(
+            review_id=review_id,
+            iteration_id=iteration.id,
+            prompt=prompt,
+            ai_provider=ai_provider,
+            model=model,
+            temperature=temperature,
+            reasoning_budget=reasoning_budget,
+            reasoning_effort=reasoning_effort,
+        )
 
-        return self._stream_and_save(review_id, prompt, ai_provider, model=model)
+    async def _resolve_iteration(
+        self,
+        review: Review,
+        iteration_id: UUID | None,
+        ai_provider_id: UUID,
+        model: str | None,
+    ) -> tuple[Iteration, Review]:
+        """Return the iteration to dispatch into, creating one if needed, and the updated review."""
+        if iteration_id is not None:
+            idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
+            if idx is None:
+                raise ValueError(f"Iteration {iteration_id} not found on review {review.id}")
+            iteration = review.iterations[idx]
+            if iteration.completed_at is not None:
+                raise ValueError(f"Iteration {iteration_id} is already completed and cannot be re-dispatched")
+            if iteration.stage == IterationStage.post:
+                raise ValueError(f"Iteration {iteration_id} is in stage 'post' and cannot be re-dispatched")
+            dispatching = iteration.model_copy(
+                update={
+                    "stage": IterationStage.dispatch,
+                    "ai_provider_id": ai_provider_id,
+                    "model": model,
+                    "comments": [],
+                }
+            )
+            new_iterations = list(review.iterations)
+            new_iterations[idx] = dispatching
+            updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
+            return dispatching, updated_review
+
+        # Reuse the last incomplete iteration if it is not yet in post stage
+        last = review.iterations[-1] if review.iterations else None
+        if last is not None and last.completed_at is None and last.stage != IterationStage.post:
+            idx = len(review.iterations) - 1
+            dispatching = last.model_copy(
+                update={
+                    "stage": IterationStage.dispatch,
+                    "ai_provider_id": ai_provider_id,
+                    "model": model,
+                    "comments": [],
+                }
+            )
+            new_iterations = list(review.iterations)
+            new_iterations[idx] = dispatching
+            updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
+            return dispatching, updated_review
+
+        # Create a new iteration
+        number = len(review.iterations) + 1
+        iteration = Iteration(
+            id=uuid4(),
+            number=number,
+            stage=IterationStage.dispatch,
+            comments=[],
+            ai_provider_id=ai_provider_id,
+            model=model,
+            brief_config=review.iterations[-1].brief_config if review.iterations else BriefConfig(),
+            created_at=datetime.now(timezone.utc),
+            completed_at=None,
+        )
+        new_iterations = list(review.iterations) + [iteration]
+        updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
+        return iteration, updated_review
 
     async def _stream_and_save(
         self,
         review_id: UUID,
+        iteration_id: UUID,
         prompt: str,
         ai_provider: AIProvider,
         model: str | None = None,
+        temperature: float | None = None,
+        reasoning_budget: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> AsyncIterator[str]:
         ai: ClaudeProvider | OpenAICompatProvider
         if ai_provider.type == "claude":
@@ -264,6 +447,8 @@ class DispatchReviewUseCase:
                 model=resolved_model,
                 ssl_verify=ai_provider.ssl_verify,
                 timeout=ai_provider.timeout,
+                temperature=temperature,
+                reasoning_budget=reasoning_budget,
             )
         else:
             resolved_model = model or (ai_provider.models[0] if ai_provider.models else "gpt-4o")
@@ -273,6 +458,9 @@ class DispatchReviewUseCase:
                 base_url=ai_provider.base_url or None,
                 ssl_verify=ai_provider.ssl_verify,
                 timeout=ai_provider.timeout,
+                temperature=temperature,
+                reasoning_budget=reasoning_budget,
+                reasoning_effort=reasoning_effort,
             )
 
         accumulated = ""
@@ -281,11 +469,15 @@ class DispatchReviewUseCase:
             accumulated += chunk
             yield chunk
 
-        await self._persist_ai_response(review_id, accumulated)
+        await self._persist_ai_response(review_id, iteration_id, accumulated)
 
-    async def _persist_ai_response(self, review_id: UUID, raw: str) -> None:
+    async def _persist_ai_response(self, review_id: UUID, iteration_id: UUID, raw: str) -> None:
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
+            return
+
+        idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
+        if idx is None:
             return
 
         result = parse_ai_response(raw)
@@ -294,5 +486,10 @@ class DispatchReviewUseCase:
             comments = [fallback]
         else:
             comments = result.comments
-        updated = review.model_copy(update={"stage": ReviewStage.polish, "comments": comments})
-        await self._review_repo.update(updated)
+
+        updated_iteration = review.iterations[idx].model_copy(
+            update={"stage": IterationStage.polish, "comments": comments}
+        )
+        new_iterations = list(review.iterations)
+        new_iterations[idx] = updated_iteration
+        await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))

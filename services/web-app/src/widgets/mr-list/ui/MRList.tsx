@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { useMRs } from "@entities/mr";
+import { useMRs, useInboxMRs } from "@entities/mr";
 import type { MRStatus } from "@entities/mr";
 import { useNav } from "@app/navigation";
 import { Skeleton } from "@shared/ui";
+import { getVcsErrorMessage } from "@shared/lib";
 import { MRListItem } from "./MRListItem";
+import { InboxMRListItem } from "./InboxMRListItem";
 
 const MRListSkeleton = (): React.ReactElement => (
   <div style={{ padding: "6px 0" }}>
@@ -52,22 +54,38 @@ export const MRList = (): React.ReactElement => {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("updated");
   const [search, setSearch] = useState("");
-  const { selectedHostId, selectedRepoPath, selectedMRIid, setMR } = useNav();
+  const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR } = useNav();
 
   const statusFilter: MRStatus = "opened";
   const {
     data: mrs,
-    isLoading,
-    isError,
+    isLoading: isMRsLoading,
+    isError: isMRsError,
+    error: mrsError,
   } = useMRs(selectedHostId, selectedRepoPath, { status: statusFilter });
 
-  const filtered =
-    mrs?.filter((mr) => {
+  const {
+    data: inboxMRs,
+    isLoading: isInboxLoading,
+    isError: isInboxError,
+    error: inboxError,
+  } = useInboxMRs(isInbox ? selectedHostId : null);
+
+  const isLoading = isInbox ? isInboxLoading : isMRsLoading;
+  const isError = isInbox ? isInboxError : isMRsError;
+  const activeError = isInbox ? inboxError : mrsError;
+
+  const applyFilters = <T extends { title: string; draft: boolean }>(items: T[]): T[] =>
+    items.filter((mr) => {
       if (search && !mr.title.toLowerCase().includes(search.toLowerCase())) return false;
       if (filter === "draft") return mr.draft;
       if (filter === "ready") return !mr.draft;
       return true;
-    }) ?? [];
+    });
+
+  const filteredMRs = applyFilters(mrs ?? []);
+  const filteredInbox = applyFilters(inboxMRs ?? []);
+  const hasResults = isInbox ? filteredInbox.length > 0 : filteredMRs.length > 0;
 
   return (
     <section
@@ -79,7 +97,7 @@ export const MRList = (): React.ReactElement => {
         flexDirection: "column",
         borderRight: "1px solid var(--border)",
         background: "var(--bg-0)",
-        height: "100vh",
+        height: "100%",
         overflow: "hidden",
       }}
     >
@@ -189,7 +207,7 @@ export const MRList = (): React.ReactElement => {
 
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {!selectedRepoPath && (
+        {!isInbox && !selectedRepoPath && (
           <div
             style={{
               display: "flex",
@@ -206,9 +224,9 @@ export const MRList = (): React.ReactElement => {
           </div>
         )}
 
-        {selectedRepoPath && isLoading && <MRListSkeleton />}
+        {(isInbox || selectedRepoPath) && isLoading && <MRListSkeleton />}
 
-        {selectedRepoPath && isError && (
+        {(isInbox || selectedRepoPath) && isError && (
           <div
             style={{
               display: "flex",
@@ -221,11 +239,11 @@ export const MRList = (): React.ReactElement => {
               padding: "0 20px",
             }}
           >
-            Failed to load merge requests
+            {getVcsErrorMessage(activeError)} merge requests
           </div>
         )}
 
-        {selectedRepoPath && !isLoading && filtered.length === 0 && !isError && (
+        {(isInbox || selectedRepoPath) && !isLoading && !hasResults && !isError && (
           <div
             style={{
               display: "flex",
@@ -242,17 +260,28 @@ export const MRList = (): React.ReactElement => {
           </div>
         )}
 
-        {filtered.map((mr) => (
-          <MRListItem
-            key={mr.iid}
-            mr={mr}
-            isSelected={selectedMRIid === mr.iid}
-            onClick={() => {
-              if (selectedHostId && selectedRepoPath)
-                setMR(selectedHostId, selectedRepoPath, mr.iid);
-            }}
-          />
-        ))}
+        {isInbox
+          ? filteredInbox.map((mr) => (
+              <InboxMRListItem
+                key={`${mr.repo_path}/${String(mr.iid)}`}
+                mr={mr}
+                isSelected={selectedMRIid === mr.iid && selectedRepoPath === mr.repo_path}
+                onClick={() => {
+                  if (selectedHostId) setMR(selectedHostId, mr.repo_path, mr.iid);
+                }}
+              />
+            ))
+          : filteredMRs.map((mr) => (
+              <MRListItem
+                key={mr.iid}
+                mr={mr}
+                isSelected={selectedMRIid === mr.iid}
+                onClick={() => {
+                  if (selectedHostId && selectedRepoPath)
+                    setMR(selectedHostId, selectedRepoPath, mr.iid);
+                }}
+              />
+            ))}
       </div>
     </section>
   );

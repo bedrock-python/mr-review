@@ -17,6 +17,9 @@ class CreateReviewUseCase:
         mr_iid: int,
         brief_config: BriefConfig | None = None,
     ) -> Review:
+        existing = await self._repo.get_by_mr(host_id=host_id, repo_path=repo_path, mr_iid=mr_iid)
+        if existing is not None:
+            return existing
         return await self._repo.create(
             host_id=host_id,
             repo_path=repo_path,

@@ -16,5 +16,7 @@ class UpdateHostUseCase:
         name: str | None = None,
         base_url: str | None = None,
         token: str | None = None,
+        color: str | None = None,
+        timeout: int | None = None,
     ) -> Host | None:
-        return await self._repo.update(host_id, name=name, base_url=base_url, token=token)
+        return await self._repo.update(host_id, name=name, base_url=base_url, token=token, color=color, timeout=timeout)

@@ -1,12 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useHosts, useCreateHost } from "@entities/host";
-import { CreateHostSchema } from "@entities/host";
-import type { CreateHost, Host, HostType } from "@entities/host";
+import { z } from "zod";
+
+import {
+  useHosts,
+  useCreateHost,
+  HOST_COLORS,
+  getHostColor,
+  ColorPicker,
+  CreateHostSchema,
+} from "@entities/host";
+import type { Host, HostType, HostColorId } from "@entities/host";
 import { useNav } from "@app/navigation";
 import { useAppStore } from "@app/store";
+
+const AddHostFormSchema = CreateHostSchema.extend({
+  colorId: z.string(),
+  timeout: z.number().int().min(1, "Must be at least 1").max(600, "Max 600s"),
+});
+type AddHostFormValues = z.infer<typeof AddHostFormSchema>;
 
 /* ── SVG icons ──────────────────────────────────────────────── */
 const GitLabIcon = (): React.ReactElement => (
@@ -70,6 +84,54 @@ const HOST_ICONS: Record<HostType, () => React.ReactElement> = {
   bitbucket: BitbucketIcon,
 };
 
+/* ── Tooltip ────────────────────────────────────────────────── */
+type TooltipProps = {
+  label: string;
+  children: React.ReactElement;
+};
+
+const Tooltip = ({ label, children }: TooltipProps): React.ReactElement => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div
+      style={{ position: "relative", width: "100%", display: "flex", justifyContent: "center" }}
+      onMouseEnter={() => {
+        setIsVisible(true);
+      }}
+      onMouseLeave={() => {
+        setIsVisible(false);
+      }}
+    >
+      {children}
+      {isVisible && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: "calc(100% + 8px)",
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "var(--bg-3)",
+            border: "1px solid var(--border-strong)",
+            borderRadius: 6,
+            padding: "4px 8px",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--fg-0)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            zIndex: 100,
+            boxShadow: "var(--shadow)",
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ── HostAvatar ─────────────────────────────────────────────── */
 type HostAvatarProps = {
   host: Host;
@@ -79,49 +141,42 @@ type HostAvatarProps = {
 
 const HostAvatar = ({ host, isSelected, onClick }: HostAvatarProps): React.ReactElement => {
   const Icon = HOST_ICONS[host.type];
+  const hostColor = getHostColor(host.color as HostColorId | undefined);
+
   return (
-    <div className="relative flex w-full items-center justify-center">
-      {isSelected && (
-        <div
-          className="absolute left-0 h-9 w-[3px] rounded-r-[999px]"
-          style={{ background: "var(--accent)" }}
-        />
-      )}
-      <button
-        type="button"
-        onClick={onClick}
-        title={host.name}
-        aria-label={`Select host: ${host.name}`}
-        aria-pressed={isSelected}
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: isSelected ? "var(--bg-3)" : "var(--bg-2)",
-          border: `1px solid ${isSelected ? "var(--border-strong)" : "var(--border)"}`,
-          color: isSelected ? "var(--fg-0)" : "var(--fg-2)",
-          transition: "background 0.08s, border 0.08s, color 0.08s",
-          cursor: "pointer",
-        }}
-        onMouseEnter={(e) => {
-          if (!isSelected) {
-            (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
-            (e.currentTarget as HTMLElement).style.color = "var(--fg-0)";
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isSelected) {
-            (e.currentTarget as HTMLElement).style.background = "var(--bg-2)";
-            (e.currentTarget as HTMLElement).style.color = "var(--fg-2)";
-          }
-        }}
-      >
-        <Icon />
-      </button>
-    </div>
+    <Tooltip label={host.name}>
+      <div className="relative flex w-full items-center justify-center">
+        {isSelected && (
+          <div
+            className="absolute left-0 h-9 w-[3px] rounded-r-[999px]"
+            style={{ background: hostColor }}
+          />
+        )}
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={`Select host: ${host.name}`}
+          aria-pressed={isSelected}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: isSelected ? "var(--bg-3)" : "var(--bg-2)",
+            border: isSelected
+              ? `1px solid color-mix(in oklch, ${hostColor} 60%, var(--border))`
+              : `1px solid color-mix(in oklch, ${hostColor} 30%, var(--border))`,
+            color: hostColor,
+            transition: "background 0.08s, border 0.08s",
+            cursor: "pointer",
+          }}
+        >
+          <Icon />
+        </button>
+      </div>
+    </Tooltip>
   );
 };
 
@@ -133,18 +188,29 @@ type AddHostModalProps = {
 
 const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElement | null => {
   const createHost = useCreateHost();
-  const form = useForm<CreateHost>({
-    resolver: zodResolver(CreateHostSchema),
-    defaultValues: { name: "", type: "gitlab", base_url: "", token: "" },
+  const defaultColorId = HOST_COLORS[0].id;
+
+  const form = useForm<AddHostFormValues>({
+    resolver: zodResolver(AddHostFormSchema),
+    defaultValues: { name: "", type: "gitlab", base_url: "", token: "", colorId: defaultColorId },
   });
 
-  const handleSubmit = (data: CreateHost): void => {
-    createHost.mutate(data, {
-      onSuccess: () => {
-        form.reset();
-        onClose();
-      },
-    });
+  const handleSubmit = ({ colorId, ...data }: AddHostFormValues): void => {
+    createHost.mutate(
+      { ...data, color: colorId },
+      {
+        onSuccess: () => {
+          form.reset({
+            name: "",
+            type: "gitlab",
+            base_url: "",
+            token: "",
+            colorId: defaultColorId,
+          });
+          onClose();
+        },
+      }
+    );
   };
 
   if (!isOpen) return null;
@@ -177,29 +243,31 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
           noValidate
           style={{ display: "flex", flexDirection: "column", gap: 16 }}
         >
-          {[
-            {
-              id: "host-name",
-              label: "Name",
-              field: "name",
-              type: "text",
-              placeholder: "My GitLab",
-            },
-            {
-              id: "host-url",
-              label: "Base URL",
-              field: "base_url",
-              type: "url",
-              placeholder: "https://gitlab.example.com",
-            },
-            {
-              id: "host-token",
-              label: "Access Token",
-              field: "token",
-              type: "password",
-              placeholder: "glpat-xxxx",
-            },
-          ].map(({ id, label, field, type, placeholder }) => (
+          {(
+            [
+              {
+                id: "host-name",
+                label: "Name",
+                field: "name",
+                type: "text",
+                placeholder: "My GitLab",
+              },
+              {
+                id: "host-url",
+                label: "Base URL",
+                field: "base_url",
+                type: "url",
+                placeholder: "https://gitlab.example.com",
+              },
+              {
+                id: "host-token",
+                label: "Access Token",
+                field: "token",
+                type: "password",
+                placeholder: "glpat-xxxx",
+              },
+            ] as const
+          ).map(({ id, label, field, type, placeholder }) => (
             <div key={id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <label
                 htmlFor={id}
@@ -215,11 +283,11 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
               <input
                 id={id}
                 type={type}
-                {...form.register(field as keyof CreateHost)}
+                {...form.register(field)}
                 placeholder={placeholder}
                 style={{
                   background: "var(--bg-2)",
-                  border: `1px solid ${form.formState.errors[field as keyof CreateHost] ? "var(--c-critical)" : "var(--border)"}`,
+                  border: `1px solid ${form.formState.errors[field] ? "var(--c-critical)" : "var(--border)"}`,
                   borderRadius: 6,
                   padding: "7px 10px",
                   fontSize: 13,
@@ -229,9 +297,9 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
                   width: "100%",
                 }}
               />
-              {form.formState.errors[field as keyof CreateHost] && (
+              {form.formState.errors[field] && (
                 <p role="alert" style={{ fontSize: 11, color: "var(--c-critical)" }}>
-                  {String(form.formState.errors[field as keyof CreateHost]?.message)}
+                  {String(form.formState.errors[field].message)}
                 </p>
               )}
             </div>
@@ -269,6 +337,26 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
               <option value="forgejo">Forgejo</option>
               <option value="bitbucket">Bitbucket</option>
             </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 10,
+                color: "var(--fg-2)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Color
+            </span>
+            <Controller
+              name="colorId"
+              control={form.control}
+              render={({ field }) => (
+                <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
+              )}
+            />
           </div>
 
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
@@ -322,12 +410,21 @@ export const HostsRail = (): React.ReactElement => {
           background: "var(--bg-1)",
           paddingTop: 10,
           paddingBottom: 10,
-          height: "100vh",
+          height: "100%",
+          overflow: "visible",
+          position: "relative",
+          zIndex: 10,
         }}
       >
         {/* Brand box */}
         <div style={{ marginBottom: 8, position: "relative" }}>
-          <div
+          <button
+            type="button"
+            aria-label="Home"
+            title="Go to home"
+            onClick={() => {
+              void navigate("/");
+            }}
             style={{
               width: 28,
               height: 28,
@@ -336,6 +433,9 @@ export const HostsRail = (): React.ReactElement => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
             }}
           >
             <div
@@ -346,7 +446,7 @@ export const HostsRail = (): React.ReactElement => {
                 background: "var(--accent-ink)",
               }}
             />
-          </div>
+          </button>
         </div>
 
         <div style={{ width: 36, height: 1, background: "var(--border)", marginBottom: 4 }} />

@@ -31,6 +31,25 @@ class MRResponse(BaseModel):
     updated_at: datetime
 
 
+class InboxMRResponse(BaseModel):
+    repo_path: str
+    iid: int
+    title: str
+    description: str
+    author: str
+    source_branch: str
+    target_branch: str
+    status: Literal["opened", "merged", "closed"]
+    draft: bool
+    pipeline: Literal["passed", "failed", "running", "none"] | None = None
+    additions: int
+    deletions: int
+    file_count: int
+    web_url: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
 class DiffLineResponse(BaseModel):
     type: Literal["context", "added", "removed"]
     old_line: int | None = None

@@ -51,10 +51,15 @@ export const DiffFileSchema = z.object({
   hunks: z.array(DiffHunkSchema),
 });
 
+export const InboxMRSchema = MRSchema.extend({
+  repo_path: z.string(),
+});
+
 export type Repo = z.infer<typeof RepoSchema>;
 export type MRStatus = z.infer<typeof MRStatusSchema>;
 export type PipelineStatus = z.infer<typeof PipelineStatusSchema>;
 export type MR = z.infer<typeof MRSchema>;
 export type DiffLine = z.infer<typeof DiffLineSchema>;
 export type DiffHunk = z.infer<typeof DiffHunkSchema>;
+export type InboxMR = z.infer<typeof InboxMRSchema>;
 export type DiffFile = z.infer<typeof DiffFileSchema>;

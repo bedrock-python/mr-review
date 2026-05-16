@@ -206,6 +206,9 @@ class BitbucketProvider:
         raw_diff = response.text
         return _parse_full_diff(raw_diff)
 
+    async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
+        return {}
+
     async def post_inline_comment(
         self,
         repo_path: str,
@@ -233,6 +236,67 @@ class BitbucketProvider:
             f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}/comments",
             {"content": {"raw": body}},
         )
+
+    async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
+        workspace, repo_slug = _split_repo_path(repo_path)
+        url = f"{self._api_url}/repositories/{workspace}/{repo_slug}/src/{ref}/{file_path}"
+        response = await self._client.get(url, headers=self._build_headers(), **self._request_kwargs())
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.text
+
+    async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        workspace, repo_slug = _split_repo_path(repo_path)
+        paths: list[str] = []
+        url = f"{self._api_url}/repositories/{workspace}/{repo_slug}/src/{ref}/{dir_path}/"
+        next_url: str | None = url
+        while next_url:
+            response = await self._client.get(
+                next_url,
+                headers=self._build_headers(),
+                params={"pagelen": 100},
+                **self._request_kwargs(),
+            )
+            if response.status_code == 404:
+                return []
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+            for item in data.get("values", []):
+                item_type = item.get("type", "")
+                item_path = item.get("path", "")
+                if item_type == "commit_file":
+                    paths.append(item_path)
+                elif item_type == "commit_directory":
+                    # Recurse into subdirectories
+                    sub = await self.list_directory(repo_path, item_path, ref)
+                    paths.extend(sub)
+            next_url = data.get("next")
+        return paths
+
+    async def get_commits(
+        self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
+    ) -> list[dict[str, str]]:
+        workspace, repo_slug = _split_repo_path(repo_path)
+        url = f"{self._api_url}/repositories/{workspace}/{repo_slug}/commits/{ref}"
+        items = await self._get_paginated(url, params={"path": file_path, "pagelen": limit})
+        result: list[dict[str, str]] = []
+        for item in items[:limit]:
+            author_raw: dict[str, Any] = item.get("author", {})
+            author_name = str(author_raw.get("raw", "")).split("<")[0].strip() or str(
+                author_raw.get("user", {}).get("display_name", "")
+            )
+            date_str = str(item.get("date", ""))
+            message = str(item.get("message", "")).split("\n")[0]
+            result.append(
+                {
+                    "id": str(item.get("hash", ""))[:8],
+                    "title": message,
+                    "author": author_name,
+                    "date": date_str,
+                }
+            )
+        return result
 
 
 _FILE_HEADER_RE = re.compile(r"^diff --git a/(.+) b/(.+)$")

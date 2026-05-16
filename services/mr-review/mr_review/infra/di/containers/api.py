@@ -6,6 +6,7 @@ from mr_review.api.config import Settings
 from mr_review.infra.di.providers.api_config import ApiConfigProvider
 from mr_review.infra.di.providers.repositories import RepositoryProvider
 from mr_review.infra.di.providers.use_cases import UseCaseProvider
+from mr_review.infra.di.providers.vcs import VCSProvider
 
 
 def create_api_container(settings: Settings) -> AsyncContainer:
@@ -13,5 +14,6 @@ def create_api_container(settings: Settings) -> AsyncContainer:
     return make_async_container(
         ApiConfigProvider(settings),
         RepositoryProvider(),
+        VCSProvider(),
         UseCaseProvider(),
     )

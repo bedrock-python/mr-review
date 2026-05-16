@@ -1,4 +1,5 @@
 import { cn } from "@shared/lib";
+import { Markdown } from "@shared/ui";
 import type { MR, PipelineStatus } from "@entities/mr";
 
 export type MRMetaProps = {
@@ -150,9 +151,7 @@ export const MRMeta = ({ mr, totalFiles }: MRMetaProps): React.ReactElement => {
             </span>
             <div className="h-px flex-1 bg-[var(--border)]" />
           </div>
-          <p className="text-xs leading-relaxed break-words whitespace-pre-wrap text-[var(--text-muted)]">
-            {mr.description.length > 500 ? `${mr.description.slice(0, 500)}…` : mr.description}
-          </p>
+          <Markdown>{mr.description}</Markdown>
         </div>
       )}
     </div>
