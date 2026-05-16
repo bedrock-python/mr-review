@@ -8,7 +8,6 @@ from uuid import uuid4
 import httpx
 import pytest
 from mr_review.core.reviews.entities import IterationStage, Review
-from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase, _post_one_comment
 
 from tests.factories.entities import make_comment, make_host, make_iteration, make_review
@@ -79,7 +78,7 @@ async def test__post_one_comment__both_fail__returns_false() -> None:
     mock_response.status_code = 500
     mock_response.text = "server error"
     provider.post_inline_comment.side_effect = httpx.HTTPStatusError("500", request=MagicMock(), response=mock_response)
-    provider.post_general_note.side_effect = RuntimeError("network down")
+    provider.post_general_note.side_effect = httpx.RequestError("network down")
     comment = make_comment(file="src/baz.py", line=5, body="Issue")
 
     result = await _post_one_comment(provider, comment, "org/repo", 2, {})
@@ -95,11 +94,8 @@ def _make_use_case(
     host_repo: AsyncMock,
     mock_provider: AsyncMock | None = None,
 ) -> tuple[PostReviewUseCase, AsyncMock]:
-    vcs_cache = MagicMock(spec=VCSCache)
     provider = mock_provider or AsyncMock()
-    vcs_cache.get_or_create.return_value = provider
-    vcs_client = MagicMock(spec=httpx.AsyncClient)
-    use_case = PostReviewUseCase(review_repo, host_repo, vcs_cache, vcs_client)
+    use_case = PostReviewUseCase(review_repo, host_repo, vcs_factory=lambda _host: provider)
     return use_case, provider
 
 
@@ -207,7 +203,7 @@ async def test__post_review__all_comments_fail__returns_zero_but_updates_stage()
     mock_provider.post_inline_comment.side_effect = httpx.HTTPStatusError(
         "500", request=MagicMock(), response=mock_response
     )
-    mock_provider.post_general_note.side_effect = RuntimeError("also failed")
+    mock_provider.post_general_note.side_effect = httpx.RequestError("also failed")
 
     use_case, _ = _make_use_case(review_repo, host_repo, mock_provider)
     posted = await use_case.execute(review.id)

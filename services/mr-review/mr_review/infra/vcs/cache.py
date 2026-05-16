@@ -18,14 +18,15 @@ from mr_review.infra.vcs.gitlab import GitLabProvider
 
 
 def _build_raw_provider(host: Host, client: httpx.AsyncClient) -> VCSProvider:
+    token = host.token.get_secret_value()
     if host.type == "gitlab":
-        return GitLabProvider(client=client, base_url=host.base_url, token=host.token)
+        return GitLabProvider(client=client, base_url=host.base_url, token=token)
     if host.type == "github":
-        return GitHubProvider(client=client, base_url=host.base_url, token=host.token)
+        return GitHubProvider(client=client, base_url=host.base_url, token=token)
     if host.type in ("gitea", "forgejo"):
-        return GiteaProvider(client=client, base_url=host.base_url, token=host.token)
+        return GiteaProvider(client=client, base_url=host.base_url, token=token)
     if host.type == "bitbucket":
-        return BitbucketProvider(client=client, base_url=host.base_url, token=host.token)
+        return BitbucketProvider(client=client, base_url=host.base_url, token=token)
     raise ValueError(f"Unsupported host type: {host.type!r}")
 
 
@@ -73,6 +74,10 @@ class CachedVCSProvider:
         self._provider = provider
         self._cache = _TTLStore(ttl)
         self._repos_cache = _TTLStore(repos_ttl)
+
+    def swap_provider(self, provider: VCSProvider) -> None:
+        """Replace the inner provider (refreshes HTTP client) while keeping TTL caches."""
+        self._provider = provider
 
     async def test_connection(self) -> dict[str, str]:
         return await self._provider.test_connection()
@@ -197,7 +202,7 @@ class VCSCache:
             )
         else:
             # Keep TTL stores intact, just refresh the underlying HTTP client.
-            self._providers[host.id]._provider = raw
+            self._providers[host.id].swap_provider(raw)
         return self._providers[host.id]
 
     def invalidate(self, host_id: UUID) -> None:

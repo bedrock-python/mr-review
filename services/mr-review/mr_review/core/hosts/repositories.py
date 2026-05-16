@@ -7,7 +7,9 @@ from mr_review.core.hosts.entities import Host
 
 
 class HostRepository(Protocol):
-    async def create(self, name: str, type_: str, base_url: str, token: str, color: str | None = None) -> Host: ...
+    async def create(
+        self, name: str, type_: str, base_url: str, token: str, color: str | None = None, timeout: int = 30
+    ) -> Host: ...
 
     async def get_by_id(self, host_id: UUID) -> Host | None: ...
 
@@ -20,6 +22,7 @@ class HostRepository(Protocol):
         base_url: str | None = None,
         token: str | None = None,
         color: str | None = None,
+        timeout: int | None = None,
     ) -> Host | None: ...
 
     async def set_favourite_repos(self, host_id: UUID, repo_paths: list[str]) -> Host | None: ...

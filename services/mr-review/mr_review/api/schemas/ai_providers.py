@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mr_review.core.ai_providers.entities import AIProviderType
 
@@ -13,7 +13,7 @@ class CreateAIProviderRequest(BaseModel):
     type: AIProviderType
     api_key: str
     base_url: str = ""
-    models: list[str] = []
+    models: list[str] = Field(default_factory=list)
     ssl_verify: bool = True
     timeout: int = 60
 

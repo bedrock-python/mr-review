@@ -7,10 +7,10 @@ from fastapi import APIRouter, HTTPException, status
 
 from mr_review.api.schemas.hosts import CreateHostRequest, HostResponse, TestConnectionResponse, UpdateHostRequest
 from mr_review.core.hosts.entities import Host
+from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
 from mr_review.use_cases.hosts.list_hosts import ListHostsUseCase
-from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
 from mr_review.use_cases.hosts.update_host import UpdateHostUseCase
 

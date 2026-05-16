@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,10 +16,10 @@ from mr_review.core.reviews.entities import (
     IterationStage,
     Review,
 )
+from mr_review.infra.utils import now_utc as _now_utc
 
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+_log = logging.getLogger(__name__)
+_MAX_REVIEWS = 50
 
 
 def _aware(dt: datetime) -> datetime:
@@ -140,10 +141,13 @@ class FileReviewRepository:
             return []
         reviews: list[Review] = []
         for path in self._reviews_dir.glob("*.yaml"):
-            with path.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
-            if data is not None:
-                reviews.append(_review_from_dict(data))
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                if data is not None:
+                    reviews.append(_review_from_dict(data))
+            except Exception:
+                _log.warning("Corrupt or unreadable review file %s, skipping", path)
         return reviews
 
     async def create(
@@ -151,7 +155,7 @@ class FileReviewRepository:
         host_id: UUID,
         repo_path: str,
         mr_iid: int,
-        brief_config: BriefConfig | None = None,
+        brief_config: BriefConfig | None = None,  # stored in first iteration created by dispatch
     ) -> Review:
         now = _now_utc()
         review = Review(
@@ -182,7 +186,7 @@ class FileReviewRepository:
         def _sync() -> list[Review]:
             reviews = self._scan_all()
             reviews.sort(key=lambda r: r.updated_at, reverse=True)
-            return reviews[:50]
+            return reviews[:_MAX_REVIEWS]
 
         return await asyncio.to_thread(_sync)
 

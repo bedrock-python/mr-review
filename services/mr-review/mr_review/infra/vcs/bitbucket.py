@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -7,17 +8,15 @@ from typing import Any
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_diff_text
 
 _BITBUCKET_API = "https://api.bitbucket.org/2.0"
 
-_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
 
 def _parse_datetime(value: str) -> datetime:
-    # Bitbucket uses ISO 8601 with +00:00 or Z
     value = value.replace("Z", "+00:00")
-    # Strip microseconds beyond 6 digits if present
+    # Strip microseconds beyond 6 digits — Bitbucket occasionally emits 7+
     value = re.sub(r"(\.\d{6})\d+", r"\1", value)
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
@@ -31,55 +30,6 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError(f"Invalid Bitbucket repo path: {repo_path!r}. Expected 'workspace/repo-slug'.")
     return parts[0], parts[1]
-
-
-def _apply_diff_line(
-    hunk: DiffHunk,
-    raw_line: str,
-    old_line: int,
-    new_line: int,
-) -> tuple[int, int]:
-    if raw_line.startswith("+") and not raw_line.startswith("+++"):
-        hunk.lines.append(DiffLine(type="added", new_line=new_line, content=raw_line[1:]))
-        return old_line, new_line + 1
-    if raw_line.startswith("-") and not raw_line.startswith("---"):
-        hunk.lines.append(DiffLine(type="removed", old_line=old_line, content=raw_line[1:]))
-        return old_line + 1, new_line
-    content = raw_line[1:] if raw_line.startswith(" ") else raw_line
-    hunk.lines.append(DiffLine(type="context", old_line=old_line, new_line=new_line, content=content))
-    return old_line + 1, new_line + 1
-
-
-def _parse_diff_text(diff_text: str) -> list[DiffHunk]:
-    hunks: list[DiffHunk] = []
-    current_hunk: DiffHunk | None = None
-    old_line = 0
-    new_line = 0
-
-    for raw_line in diff_text.splitlines():
-        m = _HUNK_HEADER_RE.match(raw_line)
-        if m:
-            if current_hunk is not None:
-                hunks.append(current_hunk)
-            old_start = int(m.group(1))
-            new_start = int(m.group(3))
-            current_hunk = DiffHunk(
-                old_start=old_start,
-                new_start=new_start,
-                old_count=int(m.group(2)) if m.group(2) is not None else 1,
-                new_count=int(m.group(4)) if m.group(4) is not None else 1,
-                lines=[],
-            )
-            old_line, new_line = old_start, new_start
-            continue
-
-        if current_hunk is not None:
-            old_line, new_line = _apply_diff_line(current_hunk, raw_line, old_line, new_line)
-
-    if current_hunk is not None:
-        hunks.append(current_hunk)
-
-    return hunks
 
 
 class BitbucketProvider:
@@ -125,11 +75,14 @@ class BitbucketProvider:
         response.raise_for_status()
         return response.json()
 
-    async def _get_paginated(self, url: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def _get_paginated(
+        self, url: str, params: dict[str, Any] | None = None, max_pages: int = 100
+    ) -> list[dict[str, Any]]:
         """Follow Bitbucket's cursor-based pagination ('next' field)."""
         results: list[dict[str, Any]] = []
         next_url: str | None = url
-        while next_url:
+        pages = 0
+        while next_url and pages < max_pages:
             response = await self._client.get(
                 next_url,
                 headers=self._build_headers(),
@@ -141,6 +94,7 @@ class BitbucketProvider:
             results.extend(data.get("values", []))
             next_url = data.get("next")
             params = None  # next URL already contains query params
+            pages += 1
         return results
 
     async def _post(self, path: str, json_body: dict[str, Any]) -> Any:
@@ -190,8 +144,18 @@ class BitbucketProvider:
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
         workspace, repo_slug = _split_repo_path(repo_path)
-        data: dict[str, Any] = await self._get(f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}")
-        return _pr_to_mr(data)
+
+        pr_data, diffstat_items = await asyncio.gather(
+            self._get(f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}"),
+            self._get_paginated(
+                f"{self._api_url}/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}/diffstat",
+                params={"pagelen": 100},
+            ),
+        )
+        additions = sum(int(f.get("lines_added", 0)) for f in diffstat_items)
+        deletions = sum(int(f.get("lines_removed", 0)) for f in diffstat_items)
+        file_count = len(diffstat_items)
+        return _pr_to_mr(pr_data, additions=additions, deletions=deletions, file_count=file_count)
 
     async def get_diff(self, repo_path: str, mr_iid: int) -> list[DiffFile]:
         workspace, repo_slug = _split_repo_path(repo_path)
@@ -372,7 +336,13 @@ def _map_state_to_bb(state: str) -> str:
     return mapping.get(state, "OPEN")
 
 
-def _pr_to_mr(item: dict[str, Any]) -> MR:
+def _pr_to_mr(
+    item: dict[str, Any],
+    *,
+    additions: int = 0,
+    deletions: int = 0,
+    file_count: int = 0,
+) -> MR:
     bb_state = str(item.get("state", "DECLINED"))
     if bb_state == "MERGED":
         status = "merged"
@@ -401,9 +371,9 @@ def _pr_to_mr(item: dict[str, Any]) -> MR:
         status=status,
         draft=is_draft,
         pipeline=None,
-        additions=0,
-        deletions=0,
-        file_count=0,
+        additions=additions,
+        deletions=deletions,
+        file_count=file_count,
         web_url=str(item.get("links", {}).get("html", {}).get("href", "")),
         created_at=_parse_datetime(str(item["created_on"])),
         updated_at=_parse_datetime(str(item["updated_on"])),

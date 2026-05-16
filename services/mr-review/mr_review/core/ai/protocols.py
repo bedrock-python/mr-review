@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 class AIProvider(Protocol):
-    async def dispatch(self, prompt: str) -> AsyncIterator[str]: ...
+    def dispatch(self, prompt: str) -> AsyncIterator[str]: ...
 
 
 # Factory that builds a streaming AI dispatcher: takes provider entity + prompt + dispatch params,

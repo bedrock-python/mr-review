@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import base64
-import re
-from datetime import datetime, timezone
+import logging
 from typing import Any
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
-
-
-def _parse_datetime(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
+from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -25,63 +19,32 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
-_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_GITHUB_COM = "https://github.com"
+_GITHUB_API = "https://api.github.com"
 
 
-def _apply_diff_line(
-    hunk: DiffHunk,
-    raw_line: str,
-    old_line: int,
-    new_line: int,
-) -> tuple[int, int]:
-    if raw_line.startswith("+") and not raw_line.startswith("+++"):
-        hunk.lines.append(DiffLine(type="added", new_line=new_line, content=raw_line[1:]))
-        return old_line, new_line + 1
-    if raw_line.startswith("-") and not raw_line.startswith("---"):
-        hunk.lines.append(DiffLine(type="removed", old_line=old_line, content=raw_line[1:]))
-        return old_line + 1, new_line
-    content = raw_line[1:] if raw_line.startswith(" ") else raw_line
-    hunk.lines.append(DiffLine(type="context", old_line=old_line, new_line=new_line, content=content))
-    return old_line + 1, new_line + 1
+def _resolve_api_base_url(base_url: str) -> str:
+    """Map a user-supplied GitHub URL to the correct REST API base URL.
 
-
-def _parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
-    """Parse GitHub patch string into DiffHunk objects."""
-    hunks: list[DiffHunk] = []
-    current_hunk: DiffHunk | None = None
-    old_line = 0
-    new_line = 0
-
-    for raw_line in patch.splitlines():
-        m = _HUNK_HEADER_RE.match(raw_line)
-        if m:
-            if current_hunk is not None:
-                hunks.append(current_hunk)
-            old_start = int(m.group(1))
-            new_start = int(m.group(3))
-            current_hunk = DiffHunk(
-                old_start=old_start,
-                new_start=new_start,
-                old_count=int(m.group(2)) if m.group(2) is not None else 1,
-                new_count=int(m.group(4)) if m.group(4) is not None else 1,
-                lines=[],
-            )
-            old_line, new_line = old_start, new_start
-            continue
-
-        if current_hunk is not None:
-            old_line, new_line = _apply_diff_line(current_hunk, raw_line, old_line, new_line)
-
-    if current_hunk is not None:
-        hunks.append(current_hunk)
-
-    return hunks
+    GitHub.com: https://github.com → https://api.github.com
+    GitHub Enterprise: https://ghe.company.com → https://ghe.company.com/api/v3
+    Empty/unset: default to https://api.github.com
+    """
+    url = base_url.rstrip("/") if base_url else ""
+    if not url:
+        return _GITHUB_API
+    if url.rstrip("/").lower() == _GITHUB_COM:
+        return _GITHUB_API
+    # GitHub Enterprise Server exposes the API under /api/v3
+    if not url.endswith("/api/v3"):
+        return f"{url}/api/v3"
+    return url
 
 
 class GitHubProvider:
     def __init__(self, client: httpx.AsyncClient, base_url: str, token: str) -> None:
         self._client = client
-        self._base_url = base_url.rstrip("/") if base_url else "https://api.github.com"
+        self._base_url = _resolve_api_base_url(base_url)
         self._token = token
         self._headers = {
             "Authorization": f"Bearer {token}",
@@ -186,10 +149,19 @@ class GitHubProvider:
 
     async def get_diff(self, repo_path: str, mr_iid: int) -> list[DiffFile]:
         owner, repo = _split_repo_path(repo_path)
-        files: list[dict[str, Any]] = await self._get(
-            f"/repos/{owner}/{repo}/pulls/{mr_iid}/files",
-            params={"per_page": 100},
-        )
+        files: list[dict[str, Any]] = []
+        page = 1
+        while page <= 100:
+            page_data: list[dict[str, Any]] = await self._get(
+                f"/repos/{owner}/{repo}/pulls/{mr_iid}/files",
+                params={"per_page": 100, "page": page},
+            )
+            if not page_data:
+                break
+            files.extend(page_data)
+            if len(page_data) < 100:
+                break
+            page += 1
         diff_files: list[DiffFile] = []
         for f in files:
             patch = f.get("patch", "")
@@ -260,13 +232,16 @@ class GitHubProvider:
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
         owner, repo = _split_repo_path(repo_path)
-        # Use git trees API for recursive listing
         url = f"{self._base_url}/repos/{owner}/{repo}/git/trees/{ref}"
         response = await self._client.get(url, headers=self._headers, params={"recursive": "1"})
         if response.status_code == 404:
             return []
         response.raise_for_status()
         data: dict[str, Any] = response.json()
+        if data.get("truncated"):
+            logging.getLogger(__name__).warning(
+                "GitHub git tree for %s@%s is truncated; some files may be missing", repo_path, ref
+            )
         prefix = dir_path.rstrip("/") + "/"
         return [
             item["path"]

@@ -4,9 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-import httpx
 import pytest
-from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.reviews.context_files import CONTEXT_EMBED_CHARS
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
 
@@ -28,14 +26,10 @@ def _make_use_case(
     host_repo: AsyncMock,
     provider: AsyncMock,
 ) -> GetReviewContextUseCase:
-    vcs_cache = MagicMock(spec=VCSCache)
-    vcs_cache.get_or_create.return_value = provider
-    vcs_client = MagicMock(spec=httpx.AsyncClient)
     return GetReviewContextUseCase(
         review_repo=review_repo,
         host_repo=host_repo,
-        vcs_cache=vcs_cache,
-        vcs_client=vcs_client,
+        vcs_factory=lambda _host: provider,
     )
 
 

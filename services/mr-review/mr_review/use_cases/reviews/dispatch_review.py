@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -22,6 +23,16 @@ from mr_review.use_cases.reviews.context_files import (
     collect_test_files,
 )
 from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
+
+_log = logging.getLogger(__name__)
+
+
+async def _noop_dict() -> dict[str, str]:
+    return {}
+
+
+async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
+    return {}
 
 
 class DispatchReviewUseCase:
@@ -71,12 +82,6 @@ class DispatchReviewUseCase:
         ref = mr.source_branch
 
         semaphore = asyncio.Semaphore(CONCURRENCY)
-
-        async def _noop_dict() -> dict[str, str]:
-            return {}
-
-        async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
-            return {}
 
         context_contents, full_files, test_files, related_code, commit_history = await asyncio.gather(
             collect_context_files(
@@ -135,46 +140,85 @@ class DispatchReviewUseCase:
     ) -> tuple[Iteration, Review]:
         """Return the iteration to dispatch into, creating one if needed, and the updated review."""
         if iteration_id is not None:
-            idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
-            if idx is None:
-                raise ValueError(f"Iteration {iteration_id} not found on review {review.id}")
-            iteration = review.iterations[idx]
-            if iteration.completed_at is not None:
-                raise ValueError(f"Iteration {iteration_id} is already completed and cannot be re-dispatched")
-            if iteration.stage == IterationStage.post:
-                raise ValueError(f"Iteration {iteration_id} is in stage 'post' and cannot be re-dispatched")
-            dispatching = iteration.model_copy(
-                update={
-                    "stage": IterationStage.dispatch,
-                    "ai_provider_id": ai_provider_id,
-                    "model": model,
-                    "comments": [],
-                }
-            )
-            new_iterations = list(review.iterations)
-            new_iterations[idx] = dispatching
-            updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
-            return dispatching, updated_review
+            return await self._redispatch_by_id(review, iteration_id, ai_provider_id, model)
 
         # Reuse the last incomplete iteration if it is not yet in post stage
         last = review.iterations[-1] if review.iterations else None
         if last is not None and last.completed_at is None and last.stage != IterationStage.post:
-            idx = len(review.iterations) - 1
-            dispatching = last.model_copy(
-                update={
-                    "stage": IterationStage.dispatch,
-                    "ai_provider_id": ai_provider_id,
-                    "model": model,
-                    "comments": [],
-                }
-            )
-            new_iterations = list(review.iterations)
-            new_iterations[idx] = dispatching
-            updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
-            return dispatching, updated_review
+            return await self._redispatch_last(review, last, ai_provider_id, model)
 
         # Create a new iteration
-        number = len(review.iterations) + 1
+        return await self._create_iteration(review, ai_provider_id, model)
+
+    async def _redispatch_by_id(
+        self,
+        review: Review,
+        iteration_id: UUID,
+        ai_provider_id: UUID,
+        model: str | None,
+    ) -> tuple[Iteration, Review]:
+        idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
+        if idx is None:
+            raise ValueError(f"Iteration {iteration_id} not found on review {review.id}")
+        iteration = review.iterations[idx]
+        if iteration.completed_at is not None:
+            raise ValueError(f"Iteration {iteration_id} is already completed and cannot be re-dispatched")
+        if iteration.stage == IterationStage.post:
+            raise ValueError(f"Iteration {iteration_id} is in stage 'post' and cannot be re-dispatched")
+        if iteration.comments:
+            _log.warning(
+                "Re-dispatching iteration %s on review %s — clearing %d existing comments",
+                iteration_id,
+                review.id,
+                len(iteration.comments),
+            )
+        return await self._save_dispatching(review, idx, iteration, ai_provider_id, model)
+
+    async def _redispatch_last(
+        self,
+        review: Review,
+        last: Iteration,
+        ai_provider_id: UUID,
+        model: str | None,
+    ) -> tuple[Iteration, Review]:
+        idx = len(review.iterations) - 1
+        if last.comments:
+            _log.warning(
+                "Re-dispatching last iteration %s on review %s — clearing %d existing comments",
+                last.id,
+                review.id,
+                len(last.comments),
+            )
+        return await self._save_dispatching(review, idx, last, ai_provider_id, model)
+
+    async def _save_dispatching(
+        self,
+        review: Review,
+        idx: int,
+        iteration: Iteration,
+        ai_provider_id: UUID,
+        model: str | None,
+    ) -> tuple[Iteration, Review]:
+        dispatching = iteration.model_copy(
+            update={
+                "stage": IterationStage.dispatch,
+                "ai_provider_id": ai_provider_id,
+                "model": model,
+                "comments": [],
+            }
+        )
+        new_iterations = list(review.iterations)
+        new_iterations[idx] = dispatching
+        updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
+        return dispatching, updated_review
+
+    async def _create_iteration(
+        self,
+        review: Review,
+        ai_provider_id: UUID,
+        model: str | None,
+    ) -> tuple[Iteration, Review]:
+        number = max((it.number for it in review.iterations), default=0) + 1
         iteration = Iteration(
             id=uuid4(),
             number=number,
@@ -205,19 +249,26 @@ class DispatchReviewUseCase:
             ai_provider, prompt, model, temperature, reasoning_budget, reasoning_effort
         )
         accumulated = ""
-        async for chunk in stream:
-            accumulated += chunk
-            yield chunk
-
-        await self._persist_ai_response(review_id, iteration_id, accumulated)
+        try:
+            async for chunk in stream:
+                accumulated += chunk
+                yield chunk
+        finally:
+            await self._persist_ai_response(review_id, iteration_id, accumulated)
 
     async def _persist_ai_response(self, review_id: UUID, iteration_id: UUID, raw: str) -> None:
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
+            _log.warning("Review %s not found during persistence — response lost", review_id)
             return
 
         idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
         if idx is None:
+            _log.warning(
+                "Iteration %s not found on review %s during persistence — response lost",
+                iteration_id,
+                review_id,
+            )
             return
 
         result: ParseResult = parse_ai_response(raw)

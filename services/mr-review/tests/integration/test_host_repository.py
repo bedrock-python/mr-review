@@ -26,7 +26,7 @@ async def test__host_repo_create__valid_params__persists_and_returns_entity(
     assert host.name == "GitLab Instance"
     assert host.type == "gitlab"
     assert host.base_url == "https://gitlab.example.com"
-    assert host.token == _TOKEN
+    assert host.token.get_secret_value() == _TOKEN
 
 
 async def test__host_repo_get_by_id__host_exists__returns_matching_entity(

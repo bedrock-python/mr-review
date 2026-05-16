@@ -4,25 +4,22 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from dishka.integrations.fastapi import DishkaRoute, FromDishka
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from mr_review.api.config import Settings
 
-router = APIRouter(prefix="/api/v1", tags=["system"])
+router = APIRouter(prefix="/api/v1", tags=["system"], route_class=DishkaRoute)
 
 DeploymentMode = Literal["all-in-one", "standard"]
-
-
-def _get_settings() -> Settings:
-    return Settings()
 
 
 def _read_frontend_version(static_dir: Path) -> str | None:
     try:
         data = json.loads((static_dir / "version.json").read_text())
         return str(data["version"])
-    except Exception:  # noqa: BLE001
+    except (OSError, KeyError, ValueError, json.JSONDecodeError):
         return None
 
 
@@ -54,5 +51,5 @@ def _build_system_info(settings: Settings) -> SystemInfoResponse:
 
 
 @router.get("/system/info")
-async def get_system_info(settings: Settings = Depends(_get_settings)) -> SystemInfoResponse:
+async def get_system_info(settings: FromDishka[Settings]) -> SystemInfoResponse:
     return _build_system_info(settings)

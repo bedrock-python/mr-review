@@ -12,7 +12,7 @@ from mr_review.infra.repositories.review import FileReviewRepository
 class RepositoryProvider(Provider):
     """Provider for repositories."""
 
-    scope = Scope.REQUEST
+    scope = Scope.APP
 
     @provide
     def get_host_repository(self, data_dir: Path) -> FileHostRepository:

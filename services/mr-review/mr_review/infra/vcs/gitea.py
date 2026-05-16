@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import re
-from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
-
-
-def _parse_datetime(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
+from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -23,58 +16,6 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError(f"Invalid Gitea repo path: {repo_path!r}. Expected 'owner/repo'.")
     return parts[0], parts[1]
-
-
-_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
-
-def _apply_diff_line(
-    hunk: DiffHunk,
-    raw_line: str,
-    old_line: int,
-    new_line: int,
-) -> tuple[int, int]:
-    if raw_line.startswith("+") and not raw_line.startswith("+++"):
-        hunk.lines.append(DiffLine(type="added", new_line=new_line, content=raw_line[1:]))
-        return old_line, new_line + 1
-    if raw_line.startswith("-") and not raw_line.startswith("---"):
-        hunk.lines.append(DiffLine(type="removed", old_line=old_line, content=raw_line[1:]))
-        return old_line + 1, new_line
-    content = raw_line[1:] if raw_line.startswith(" ") else raw_line
-    hunk.lines.append(DiffLine(type="context", old_line=old_line, new_line=new_line, content=content))
-    return old_line + 1, new_line + 1
-
-
-def _parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
-    hunks: list[DiffHunk] = []
-    current_hunk: DiffHunk | None = None
-    old_line = 0
-    new_line = 0
-
-    for raw_line in patch.splitlines():
-        m = _HUNK_HEADER_RE.match(raw_line)
-        if m:
-            if current_hunk is not None:
-                hunks.append(current_hunk)
-            old_start = int(m.group(1))
-            new_start = int(m.group(3))
-            current_hunk = DiffHunk(
-                old_start=old_start,
-                new_start=new_start,
-                old_count=int(m.group(2)) if m.group(2) is not None else 1,
-                new_count=int(m.group(4)) if m.group(4) is not None else 1,
-                lines=[],
-            )
-            old_line, new_line = old_start, new_start
-            continue
-
-        if current_hunk is not None:
-            old_line, new_line = _apply_diff_line(current_hunk, raw_line, old_line, new_line)
-
-    if current_hunk is not None:
-        hunks.append(current_hunk)
-
-    return hunks
 
 
 class GiteaProvider:
@@ -115,12 +56,12 @@ class GiteaProvider:
         base_params: dict[str, Any] = {"limit": 50, "sort": "newest"}
         if query:
             base_params["q"] = query
-        while True:
-            data: list[dict[str, Any]] = await self._get(
+        while page <= 100:
+            data: dict[str, Any] = await self._get(
                 "/repos/search",
                 params={**base_params, "page": page},
             )
-            items: list[dict[str, Any]] = data if isinstance(data, list) else data.get("data", [])
+            items: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
             if not items:
                 break
             repos.extend(
@@ -142,7 +83,7 @@ class GiteaProvider:
         gitea_state = "open" if state == "opened" else state
         mrs: list[MR] = []
         page = 1
-        while True:
+        while page <= 100:
             data: list[dict[str, Any]] = await self._get(
                 f"/repos/{owner}/{repo}/pulls",
                 params={"state": gitea_state, "limit": 50, "page": page},

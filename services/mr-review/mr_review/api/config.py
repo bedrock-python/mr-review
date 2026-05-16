@@ -1,6 +1,7 @@
 """API configuration."""
 
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -55,6 +56,7 @@ class Settings(BaseSettings):
     cors: CorsConfig = Field(default_factory=CorsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     data_dir: Path = Field(default=Path.home() / ".mr-review", description="Local data storage directory")
+    vcs_timeout: float = Field(default=60.0, description="HTTP timeout in seconds for VCS API calls")
     host_data_dir: Path | None = Field(
         default=None, description="Host-side data path shown in UI when running in Docker"
     )
@@ -66,7 +68,7 @@ class Settings(BaseSettings):
     def get_app_version() -> str:
         return project_version
 
-    def get_uvicorn_kwargs(self) -> dict[str, object]:
+    def get_uvicorn_kwargs(self) -> dict[str, Any]:
         """Build kwargs for uvicorn.run()."""
         return {
             "host": self.server.host,

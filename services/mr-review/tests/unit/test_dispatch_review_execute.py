@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.mrs.entities import MR
 from mr_review.core.reviews.entities import IterationStage, Review
 from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
@@ -43,17 +44,30 @@ async def _async_iter(items: list[str]) -> AsyncIterator[str]:
         yield item
 
 
+_AIDispatcherFactory = Callable[
+    [AIProvider, str, str | None, float | None, int | None, str | None],
+    Awaitable[AsyncIterator[str]],
+]
+
+
 def _make_use_case(
     review_repo: AsyncMock,
     host_repo: AsyncMock,
     ai_provider_repo: AsyncMock,
     mock_vcs: AsyncMock | None = None,
-    ai_dispatcher_factory: object | None = None,
+    ai_dispatcher_factory: _AIDispatcherFactory | None = None,
 ) -> tuple[DispatchReviewUseCase, AsyncMock]:
     provider = mock_vcs or AsyncMock()
     vcs_factory = MagicMock(return_value=provider)
 
-    async def _default_dispatcher(ai_provider: object, prompt: str, model: object, temperature: object, reasoning_budget: object, reasoning_effort: object) -> AsyncIterator[str]:
+    async def _default_dispatcher(
+        ai_provider: AIProvider,
+        prompt: str,
+        model: str | None,
+        temperature: float | None,
+        reasoning_budget: int | None,
+        reasoning_effort: str | None,
+    ) -> AsyncIterator[str]:
         return _async_iter([json.dumps([])])
 
     factory = ai_dispatcher_factory or _default_dispatcher
@@ -131,7 +145,14 @@ async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> 
 
     dispatched_chunks = [json.dumps([])]
 
-    async def _factory(prov: object, prompt: str, model: object, temperature: object, reasoning_budget: object, reasoning_effort: object) -> AsyncIterator[str]:
+    async def _factory(
+        prov: object,
+        prompt: str,
+        model: object,
+        temperature: object,
+        reasoning_budget: object,
+        reasoning_effort: object,
+    ) -> AsyncIterator[str]:
         return _async_iter(dispatched_chunks)
 
     use_case, _ = _make_use_case(review_repo, host_repo, ai_provider_repo, mock_vcs, _factory)
@@ -160,7 +181,14 @@ async def test__stream_and_save__streams_chunks_and_persists() -> None:
 
     received: list[tuple[object, str, object, object, object, object]] = []
 
-    async def _factory(prov: object, prompt: str, model: object, temperature: object, reasoning_budget: object, reasoning_effort: object) -> AsyncIterator[str]:
+    async def _factory(
+        prov: object,
+        prompt: str,
+        model: object,
+        temperature: object,
+        reasoning_budget: object,
+        reasoning_effort: object,
+    ) -> AsyncIterator[str]:
         received.append((prov, prompt, model, temperature, reasoning_budget, reasoning_effort))
         return _async_iter([ai_response[:10], ai_response[10:]])
 
@@ -187,7 +215,14 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
 
     received_model: list[object] = []
 
-    async def _factory(prov: object, prompt: str, model: object, temperature: object, reasoning_budget: object, reasoning_effort: object) -> AsyncIterator[str]:
+    async def _factory(
+        prov: object,
+        prompt: str,
+        model: object,
+        temperature: object,
+        reasoning_budget: object,
+        reasoning_effort: object,
+    ) -> AsyncIterator[str]:
         received_model.append(model)
         return _async_iter([json.dumps([])])
 
@@ -208,13 +243,19 @@ async def test__stream_and_save__review_gone_after_stream__no_persist_error() ->
     review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
     review = make_review(iterations=[iteration])
-    # First call (get_by_id for review check before streaming) returns review;
-    # second call (inside _persist_ai_response) returns None.
-    review_repo.get_by_id.side_effect = [review, None]
+    # _persist_ai_response calls get_by_id once; returning None makes it a no-op.
+    review_repo.get_by_id.return_value = None
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=[])
 
-    async def _factory(prov: object, prompt: str, model: object, temperature: object, reasoning_budget: object, reasoning_effort: object) -> AsyncIterator[str]:
+    async def _factory(
+        prov: object,
+        prompt: str,
+        model: object,
+        temperature: object,
+        reasoning_budget: object,
+        reasoning_effort: object,
+    ) -> AsyncIterator[str]:
         return _async_iter([json.dumps([])])
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
