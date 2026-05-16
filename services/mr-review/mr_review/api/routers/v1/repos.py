@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import NoReturn
 from uuid import UUID
 
 import httpx
@@ -24,7 +25,7 @@ from mr_review.use_cases.mrs.list_repos import ListReposUseCase
 router = APIRouter(prefix="/api/v1/hosts/{host_id}", tags=["repos"], route_class=DishkaRoute)
 
 
-def _handle_vcs_error(exc: httpx.HTTPStatusError) -> None:
+def _handle_vcs_error(exc: httpx.HTTPStatusError) -> NoReturn:
     code = exc.response.status_code
     if code == 401:
         raise HTTPException(

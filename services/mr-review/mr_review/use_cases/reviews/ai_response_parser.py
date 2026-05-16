@@ -105,7 +105,7 @@ def parse_ai_response(raw: str) -> ParseResult:
         comment, error = _parse_comment(i, item)
         if comment is not None:
             result.comments.append(comment)
-        else:
-            result.errors.append(error)  # type: ignore[arg-type]
+        elif error is not None:
+            result.errors.append(error)
 
     return result

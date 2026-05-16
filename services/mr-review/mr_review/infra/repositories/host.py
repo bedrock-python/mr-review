@@ -9,10 +9,7 @@ from uuid import UUID, uuid4
 import yaml
 
 from mr_review.core.hosts.entities import Host
-
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+from mr_review.infra.utils import now_utc as _now_utc
 
 
 def _host_from_dict(data: dict[str, object]) -> Host:
@@ -41,7 +38,7 @@ def _host_to_dict(host: Host) -> dict[str, object]:
         "name": host.name,
         "type": host.type,
         "base_url": host.base_url,
-        "token": host.token,
+        "token": host.token.get_secret_value(),
         "color": host.color,
         "favourite_repos": host.favourite_repos,
         "timeout": host.timeout,

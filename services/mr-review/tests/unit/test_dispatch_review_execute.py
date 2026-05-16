@@ -208,9 +208,8 @@ async def test__stream_and_save__review_gone_after_stream__no_persist_error() ->
     review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
     review = make_review(iterations=[iteration])
-    # First call (get_by_id for review check before streaming) returns review;
-    # second call (inside _persist_ai_response) returns None.
-    review_repo.get_by_id.side_effect = [review, None]
+    # _persist_ai_response calls get_by_id once; returning None makes it a no-op.
+    review_repo.get_by_id.return_value = None
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=[])
 

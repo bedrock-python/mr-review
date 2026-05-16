@@ -13,7 +13,7 @@ class CreateAIProviderRequest(BaseModel):
     type: AIProviderType
     api_key: str
     base_url: str = ""
-    models: list[str] = []
+    models: list[str] = Field(default_factory=list)
     ssl_verify: bool = True
     timeout: int = 60
 

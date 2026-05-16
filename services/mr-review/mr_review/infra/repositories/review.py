@@ -15,10 +15,10 @@ from mr_review.core.reviews.entities import (
     IterationStage,
     Review,
 )
+from mr_review.infra.utils import now_utc as _now_utc
 
 
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+_MAX_REVIEWS = 50
 
 
 def _aware(dt: datetime) -> datetime:
@@ -182,7 +182,7 @@ class FileReviewRepository:
         def _sync() -> list[Review]:
             reviews = self._scan_all()
             reviews.sort(key=lambda r: r.updated_at, reverse=True)
-            return reviews[:50]
+            return reviews[:_MAX_REVIEWS]
 
         return await asyncio.to_thread(_sync)
 

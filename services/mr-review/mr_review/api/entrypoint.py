@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import suppress
 
@@ -83,10 +84,10 @@ def _mount_spa(app: FastAPI, settings: Settings) -> None:
     api_base_url = os.environ.get("MR_REVIEW__API_BASE_URL", "")
     config_js_content = (
         f"window.__APP_CONFIG__ = {{\n"
-        f'  API_BASE_URL: "{api_base_url}",\n'
+        f"  API_BASE_URL: {json.dumps(api_base_url)},\n"
         f'  APP_ENV: "production",\n'
         f"  BUILD_TIME: new Date().toISOString(),\n"
-        f'  VERSION: "{settings.get_app_version()}",\n'
+        f"  VERSION: {json.dumps(settings.get_app_version())},\n"
         f"}};\n"
     )
 

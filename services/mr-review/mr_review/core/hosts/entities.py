@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class Host(BaseModel):
@@ -12,7 +12,7 @@ class Host(BaseModel):
     name: str
     type: Literal["gitlab", "github", "gitea", "forgejo", "bitbucket"]
     base_url: str
-    token: str
+    token: SecretStr
     color: str | None = None
     favourite_repos: list[str] = Field(default_factory=list)
     timeout: int = 30
