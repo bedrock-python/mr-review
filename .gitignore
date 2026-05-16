@@ -1,4 +1,5 @@
 # ── Project-specific ─────────────────────────────────────────────────────────
+.claude/worktrees/
 examples-of-good-code/
 prototype/
 *.db
