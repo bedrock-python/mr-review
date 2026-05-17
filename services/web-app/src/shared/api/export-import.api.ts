@@ -8,11 +8,13 @@ export type ExportRequest = {
   include_hosts: boolean;
   include_ai_providers: boolean;
   include_reviews: boolean;
+  encryption_password?: string | null;
 };
 
 export type ExportResponse = {
   version: string;
   exported_at: string;
+  encrypted: boolean;
   hosts: unknown[];
   ai_providers: unknown[];
   reviews: unknown[];
@@ -21,10 +23,12 @@ export type ExportResponse = {
 export type ImportRequest = {
   version: string;
   exported_at: string;
+  encrypted: boolean;
   hosts: unknown[];
   ai_providers: unknown[];
   reviews: unknown[];
   merge_strategy: "skip" | "replace" | "merge";
+  decryption_password?: string | null;
 };
 
 export type ImportResponse = {

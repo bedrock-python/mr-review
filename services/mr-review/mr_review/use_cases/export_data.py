@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from pydantic import SecretStr
+
+from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.ai_providers.repositories import AIProviderRepository
+from mr_review.core.export_import.encryption import encrypt_token
 from mr_review.core.export_import.entities import ExportData, ExportRequest
+from mr_review.core.hosts.entities import Host
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.infra.utils import now_utc
@@ -29,17 +34,51 @@ class ExportDataUseCase:
             request: Export request specifying what to include
 
         Returns:
-            ExportData containing all requested entities
+            ExportData containing all requested entities with optionally encrypted tokens
         """
-        export_data = ExportData(exported_at=now_utc())
+        export_data = ExportData(
+            exported_at=now_utc(),
+            encrypted=request.encryption_password is not None,
+        )
 
         if request.include_hosts:
-            export_data.hosts = await self._host_repo.list_all()
+            hosts = await self._host_repo.list_all()
+            if request.encryption_password:
+                export_data.hosts = [self._encrypt_host_token(h, request.encryption_password) for h in hosts]
+            else:
+                # Get plain tokens using get_secret_value()
+                export_data.hosts = [self._expose_host_token(h) for h in hosts]
 
         if request.include_ai_providers:
-            export_data.ai_providers = await self._ai_provider_repo.list_all()
+            providers = await self._ai_provider_repo.list_all()
+            if request.encryption_password:
+                export_data.ai_providers = [
+                    self._encrypt_provider_token(p, request.encryption_password) for p in providers
+                ]
+            else:
+                export_data.ai_providers = [self._expose_provider_token(p) for p in providers]
 
         if request.include_reviews:
             export_data.reviews = await self._review_repo.list_all()
 
         return export_data
+
+    def _expose_host_token(self, host: Host) -> Host:
+        """Return host with exposed token (for plain export)."""
+        return host.model_copy(update={"token": SecretStr(host.token.get_secret_value())})
+
+    def _encrypt_host_token(self, host: Host, password: str) -> Host:
+        """Return host with encrypted token."""
+        plain_token = host.token.get_secret_value()
+        encrypted_token = encrypt_token(plain_token, password)
+        return host.model_copy(update={"token": SecretStr(encrypted_token)})
+
+    def _expose_provider_token(self, provider: AIProvider) -> AIProvider:
+        """Return provider with exposed API key (for plain export)."""
+        return provider.model_copy(update={"api_key": SecretStr(provider.api_key.get_secret_value())})
+
+    def _encrypt_provider_token(self, provider: AIProvider, password: str) -> AIProvider:
+        """Return provider with encrypted API key."""
+        plain_key = provider.api_key.get_secret_value()
+        encrypted_key = encrypt_token(plain_key, password)
+        return provider.model_copy(update={"api_key": SecretStr(encrypted_key)})

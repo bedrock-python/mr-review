@@ -14,6 +14,7 @@ class ExportRequestSchema(BaseModel):
     include_hosts: bool = True
     include_ai_providers: bool = True
     include_reviews: bool = True
+    encryption_password: str | None = None
 
 
 class ExportResponseSchema(BaseModel):
@@ -21,6 +22,7 @@ class ExportResponseSchema(BaseModel):
 
     version: str
     exported_at: datetime
+    encrypted: bool
     hosts: list[dict[str, Any]] = Field(default_factory=list)
     ai_providers: list[dict[str, Any]] = Field(default_factory=list)
     reviews: list[dict[str, Any]] = Field(default_factory=list)
@@ -31,10 +33,12 @@ class ImportRequestSchema(BaseModel):
 
     version: str
     exported_at: datetime
+    encrypted: bool
     hosts: list[dict[str, Any]] = Field(default_factory=list)
     ai_providers: list[dict[str, Any]] = Field(default_factory=list)
     reviews: list[dict[str, Any]] = Field(default_factory=list)
     merge_strategy: str = "skip"  # "skip", "replace", or "merge"
+    decryption_password: str | None = None
 
 
 class ImportResponseSchema(BaseModel):

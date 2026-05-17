@@ -12,7 +12,10 @@ from mr_review.api.schemas.export_import import (
     ImportRequestSchema,
     ImportResponseSchema,
 )
+from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.export_import.entities import ExportData, ExportRequest, ImportRequest
+from mr_review.core.hosts.entities import Host
+from mr_review.core.reviews.entities import Review
 from mr_review.use_cases.export_data import ExportDataUseCase
 from mr_review.use_cases.import_data import ImportDataUseCase
 
@@ -37,6 +40,7 @@ async def export_data(
         include_hosts=body.include_hosts,
         include_ai_providers=body.include_ai_providers,
         include_reviews=body.include_reviews,
+        encryption_password=body.encryption_password,
     )
 
     export_data_result: ExportData = await use_case.execute(request)
@@ -45,17 +49,17 @@ async def export_data(
     response_data = ExportResponseSchema(
         version=export_data_result.version,
         exported_at=export_data_result.exported_at,
+        encrypted=export_data_result.encrypted,
         hosts=[h.model_dump(mode="json") for h in export_data_result.hosts],
         ai_providers=[p.model_dump(mode="json") for p in export_data_result.ai_providers],
         reviews=[r.model_dump(mode="json") for r in export_data_result.reviews],
     )
 
+    filename = f"mr-review-export-{export_data_result.exported_at.isoformat()}.json"
     return JSONResponse(
         content=response_data.model_dump(mode="json"),
         media_type="application/json",
-        headers={
-            "Content-Disposition": f'attachment; filename="mr-review-export-{export_data_result.exported_at.isoformat()}.json"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -77,17 +81,13 @@ async def import_data(
     export_data = ExportData(
         version=body.version,
         exported_at=body.exported_at,
+        encrypted=body.encrypted,
         hosts=[],
         ai_providers=[],
         reviews=[],
     )
 
-    # Parse hosts, ai_providers, reviews from dicts
-    # This will be validated by Pydantic
-    from mr_review.core.ai_providers.entities import AIProvider
-    from mr_review.core.hosts.entities import Host
-    from mr_review.core.reviews.entities import Review
-
+    # Parse hosts, ai_providers, reviews from dicts (validated by Pydantic)
     export_data.hosts = [Host.model_validate(h) for h in body.hosts]
     export_data.ai_providers = [AIProvider.model_validate(p) for p in body.ai_providers]
     export_data.reviews = [Review.model_validate(r) for r in body.reviews]
@@ -95,6 +95,7 @@ async def import_data(
     request = ImportRequest(
         data=export_data,
         merge_strategy=body.merge_strategy,
+        decryption_password=body.decryption_password,
     )
 
     result = await use_case.execute(request)
