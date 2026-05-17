@@ -14,6 +14,8 @@ from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSou
 def make_host(**kwargs: object) -> Host:
     """Build a Host domain entity with sensible defaults."""
     now = datetime.now(timezone.utc)
+    raw_favourites = kwargs.get("favourite_repos", [])
+    favourites: list[str] = list(raw_favourites) if isinstance(raw_favourites, list) else []
     return Host(
         id=kwargs.get("id", uuid4()),
         name=str(kwargs.get("name", "test-host")),
@@ -21,6 +23,7 @@ def make_host(**kwargs: object) -> Host:
         base_url=str(kwargs.get("base_url", "https://gitlab.example.com")),
         token=str(kwargs.get("token", "secret-token")),
         created_at=kwargs.get("created_at", now),
+        favourite_repos=favourites,
     )
 
 
