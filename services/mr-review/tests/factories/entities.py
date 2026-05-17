@@ -86,6 +86,8 @@ def make_ai_provider(**kwargs: object) -> AIProvider:
     now = datetime.now(timezone.utc)
     raw_models = kwargs.get("models", ["claude-haiku-4-5"])
     models: list[str] = list(raw_models) if isinstance(raw_models, list) else ["claude-haiku-4-5"]
+    raw_max_concurrent = kwargs.get("max_concurrent")
+    max_concurrent: int | None = int(str(raw_max_concurrent)) if raw_max_concurrent is not None else None
     return AIProvider(
         id=kwargs.get("id", uuid4()),
         name=str(kwargs.get("name", "test-provider")),
@@ -96,6 +98,7 @@ def make_ai_provider(**kwargs: object) -> AIProvider:
         ssl_verify=bool(kwargs.get("ssl_verify", True)),
         timeout=int(str(kwargs.get("timeout", 60))),
         created_at=kwargs.get("created_at", now),
+        max_concurrent=max_concurrent,
     )
 
 

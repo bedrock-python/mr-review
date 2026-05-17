@@ -15,6 +15,7 @@ class CreateAIProviderUseCase:
         models: list[str],
         ssl_verify: bool = True,
         timeout: int = 60,
+        max_concurrent: int | None = None,
     ) -> AIProvider:
         return await self._repo.create(
             name=name,
@@ -24,4 +25,5 @@ class CreateAIProviderUseCase:
             models=models,
             ssl_verify=ssl_verify,
             timeout=timeout,
+            max_concurrent=max_concurrent,
         )

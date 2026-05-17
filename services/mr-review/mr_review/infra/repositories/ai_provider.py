@@ -19,6 +19,8 @@ def _ai_provider_from_dict(data: dict[str, object]) -> AIProvider:
     models = data.get("models", [])
     raw_timeout = data.get("timeout", 60)
     timeout = int(str(raw_timeout)) if raw_timeout is not None else 60
+    raw_max_concurrent = data.get("max_concurrent")
+    max_concurrent = int(str(raw_max_concurrent)) if raw_max_concurrent is not None else None
     return AIProvider(
         id=UUID(str(data["id"])),
         name=str(data["name"]),
@@ -29,11 +31,12 @@ def _ai_provider_from_dict(data: dict[str, object]) -> AIProvider:
         ssl_verify=bool(data.get("ssl_verify", True)),
         timeout=timeout,
         created_at=created_at,
+        max_concurrent=max_concurrent,
     )
 
 
 def _ai_provider_to_dict(provider: AIProvider) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "id": str(provider.id),
         "name": provider.name,
         "type": provider.type,
@@ -44,6 +47,9 @@ def _ai_provider_to_dict(provider: AIProvider) -> dict[str, object]:
         "timeout": provider.timeout,
         "created_at": provider.created_at.isoformat(),
     }
+    if provider.max_concurrent is not None:
+        data["max_concurrent"] = provider.max_concurrent
+    return data
 
 
 class FileAIProviderRepository:
@@ -74,6 +80,7 @@ class FileAIProviderRepository:
         models: list[str],
         ssl_verify: bool = True,
         timeout: int = 60,
+        max_concurrent: int | None = None,
     ) -> AIProvider:
         provider = AIProvider(
             id=uuid4(),
@@ -84,6 +91,7 @@ class FileAIProviderRepository:
             models=models,
             ssl_verify=ssl_verify,
             timeout=timeout,
+            max_concurrent=max_concurrent,
             created_at=_now_utc(),
         )
 
@@ -122,6 +130,8 @@ class FileAIProviderRepository:
         models: list[str] | None,
         ssl_verify: bool | None,
         timeout: int | None,
+        max_concurrent: int | None,
+        clear_max_concurrent: bool,
     ) -> None:
         if name is not None:
             data["name"] = name
@@ -135,6 +145,10 @@ class FileAIProviderRepository:
             data["ssl_verify"] = ssl_verify
         if timeout is not None:
             data["timeout"] = timeout
+        if max_concurrent is not None:
+            data["max_concurrent"] = max_concurrent
+        elif clear_max_concurrent:
+            data.pop("max_concurrent", None)
 
     async def update(
         self,
@@ -145,12 +159,24 @@ class FileAIProviderRepository:
         models: list[str] | None = None,
         ssl_verify: bool | None = None,
         timeout: int | None = None,
+        max_concurrent: int | None = None,
+        clear_max_concurrent: bool = False,
     ) -> AIProvider | None:
         def _sync() -> AIProvider | None:
             items = self._read()
             for data in items:
                 if str(data["id"]) == str(provider_id):
-                    self._apply_update(data, name, api_key, base_url, models, ssl_verify, timeout)
+                    self._apply_update(
+                        data,
+                        name,
+                        api_key,
+                        base_url,
+                        models,
+                        ssl_verify,
+                        timeout,
+                        max_concurrent,
+                        clear_max_concurrent,
+                    )
                     self._write(items)
                     return _ai_provider_from_dict(data)
             return None

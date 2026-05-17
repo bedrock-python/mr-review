@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 
 import httpx
 from dishka import Provider, Scope, provide
 
+from mr_review.core.ai.protocols import AIDispatcherFactory, AIFenceRegistry
 from mr_review.core.ai_providers.entities import AIProvider as AIProviderEntity
 from mr_review.core.hosts.entities import Host
 from mr_review.core.vcs.protocols import VCSProvider, VCSProviderFactory
@@ -47,19 +48,18 @@ from mr_review.use_cases.reviews.post_review import PostReviewUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 
-async def _ai_dispatcher_factory(
+def _build_ai_backend(
     ai_provider: AIProviderEntity,
-    prompt: str,
     model: str | None,
     temperature: float | None,
     reasoning_budget: int | None,
     reasoning_effort: str | None,
-) -> AsyncIterator[str]:
-    """Resolve the correct AI backend and return a streaming iterator of text chunks."""
+) -> ClaudeProvider | OpenAICompatProvider:
+    """Resolve the correct AI backend for ``ai_provider``."""
     api_key = ai_provider.api_key.get_secret_value()
     if ai_provider.type == "claude":
         resolved_model = model or (ai_provider.models[0] if ai_provider.models else "claude-opus-4-5")
-        ai: ClaudeProvider | OpenAICompatProvider = ClaudeProvider(
+        return ClaudeProvider(
             api_key=api_key,
             model=resolved_model,
             ssl_verify=ai_provider.ssl_verify,
@@ -67,19 +67,45 @@ async def _ai_dispatcher_factory(
             temperature=temperature,
             reasoning_budget=reasoning_budget,
         )
-    else:
-        resolved_model = model or (ai_provider.models[0] if ai_provider.models else "gpt-4o")
-        ai = OpenAICompatProvider(
-            api_key=api_key,
-            model=resolved_model,
-            base_url=ai_provider.base_url or None,
-            ssl_verify=ai_provider.ssl_verify,
-            timeout=ai_provider.timeout,
-            temperature=temperature,
-            reasoning_budget=reasoning_budget,
-            reasoning_effort=reasoning_effort,
-        )
-    return ai.dispatch(prompt)
+    resolved_model = model or (ai_provider.models[0] if ai_provider.models else "gpt-4o")
+    return OpenAICompatProvider(
+        api_key=api_key,
+        model=resolved_model,
+        base_url=ai_provider.base_url or None,
+        ssl_verify=ai_provider.ssl_verify,
+        timeout=ai_provider.timeout,
+        temperature=temperature,
+        reasoning_budget=reasoning_budget,
+        reasoning_effort=reasoning_effort,
+    )
+
+
+async def _fenced_stream(
+    fence_registry: AIFenceRegistry,
+    ai_provider: AIProviderEntity,
+    inner: AsyncIterator[str],
+) -> AsyncGenerator[str, None]:
+    """Hold one fence slot for ``ai_provider`` from first chunk through close/error/cancel."""
+    async with fence_registry.acquire(ai_provider):
+        async for chunk in inner:
+            yield chunk
+
+
+def _make_ai_dispatcher_factory(fence_registry: AIFenceRegistry) -> AIDispatcherFactory:
+    """Build a streaming AI dispatcher factory whose output is fenced per provider."""
+
+    async def factory(
+        ai_provider: AIProviderEntity,
+        prompt: str,
+        model: str | None,
+        temperature: float | None,
+        reasoning_budget: int | None,
+        reasoning_effort: str | None,
+    ) -> AsyncIterator[str]:
+        backend = _build_ai_backend(ai_provider, model, temperature, reasoning_budget, reasoning_effort)
+        return _fenced_stream(fence_registry, ai_provider, backend.dispatch(prompt))
+
+    return factory
 
 
 async def _model_lister(ai_provider: AIProviderEntity) -> list[str]:
@@ -248,13 +274,14 @@ class UseCaseProvider(Provider):
         ai_provider_repo: FileAIProviderRepository,
         vcs_cache: VCSCache,
         vcs_client: httpx.AsyncClient,
+        fence_registry: AIFenceRegistry,
     ) -> DispatchReviewUseCase:
         return DispatchReviewUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
-            ai_dispatcher_factory=_ai_dispatcher_factory,
+            ai_dispatcher_factory=_make_ai_dispatcher_factory(fence_registry),
         )
 
     @provide
