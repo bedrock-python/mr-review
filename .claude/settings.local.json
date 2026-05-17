@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Read",
@@ -71,10 +74,9 @@
       "Bash(pnpm add *)",
       "Bash(Format-Table -AutoSize)",
       "Bash(netstat -ano)",
-      "Bash(findstr :*)"
+      "Bash(findstr :*)",
+      "Bash(gh issue *)",
+      "Bash(gh pr *)"
     ]
-  },
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
 }
