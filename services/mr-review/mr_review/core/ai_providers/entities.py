@@ -19,3 +19,5 @@ class AIProvider(BaseModel):
     ssl_verify: bool
     timeout: int
     created_at: datetime
+    # When unset, the service-wide default from AIThrottleConfig applies.
+    max_concurrent: int | None = None

@@ -19,6 +19,8 @@ def _ai_provider_from_dict(data: dict[str, object]) -> AIProvider:
     models = data.get("models", [])
     raw_timeout = data.get("timeout", 60)
     timeout = int(str(raw_timeout)) if raw_timeout is not None else 60
+    raw_max_concurrent = data.get("max_concurrent")
+    max_concurrent = int(str(raw_max_concurrent)) if raw_max_concurrent is not None else None
     return AIProvider(
         id=UUID(str(data["id"])),
         name=str(data["name"]),
@@ -29,11 +31,12 @@ def _ai_provider_from_dict(data: dict[str, object]) -> AIProvider:
         ssl_verify=bool(data.get("ssl_verify", True)),
         timeout=timeout,
         created_at=created_at,
+        max_concurrent=max_concurrent,
     )
 
 
 def _ai_provider_to_dict(provider: AIProvider) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "id": str(provider.id),
         "name": provider.name,
         "type": provider.type,
@@ -44,6 +47,9 @@ def _ai_provider_to_dict(provider: AIProvider) -> dict[str, object]:
         "timeout": provider.timeout,
         "created_at": provider.created_at.isoformat(),
     }
+    if provider.max_concurrent is not None:
+        data["max_concurrent"] = provider.max_concurrent
+    return data
 
 
 class FileAIProviderRepository:

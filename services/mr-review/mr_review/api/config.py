@@ -41,6 +41,22 @@ class LoggingConfig(BaseModel):
     use_json: bool = Field(default=False, description="JSON format (False = console)")
 
 
+class AIThrottleConfig(BaseModel):
+    """AI dispatch concurrency-fence configuration.
+
+    Caps the number of in-flight AI dispatch streams per AIProvider entity
+    so a local model (e.g. Ollama) cannot be overwhelmed and so cloud usage
+    has a coarse upper bound. Per-provider overrides via ``AIProvider.max_concurrent``.
+    """
+
+    default_max_concurrent: int = Field(
+        default=4,
+        ge=1,
+        description="Default per-provider concurrent in-flight AI dispatch cap "
+        "(overridden by AIProvider.max_concurrent when set).",
+    )
+
+
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -55,6 +71,7 @@ class Settings(BaseSettings):
     server: HttpServerConfig = Field(default_factory=HttpServerConfig)
     cors: CorsConfig = Field(default_factory=CorsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    ai_throttle: AIThrottleConfig = Field(default_factory=AIThrottleConfig)
     data_dir: Path = Field(default=Path.home() / ".mr-review", description="Local data storage directory")
     vcs_timeout: float = Field(default=60.0, description="HTTP timeout in seconds for VCS API calls")
     host_data_dir: Path | None = Field(

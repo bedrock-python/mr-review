@@ -5,6 +5,8 @@ from pathlib import Path
 from dishka import Provider, Scope, provide
 
 from mr_review.api.config import Settings
+from mr_review.core.ai.protocols import AIFenceRegistry
+from mr_review.infra.ai.fence import AsyncioSemaphoreFenceRegistry
 
 
 class ApiConfigProvider(Provider):
@@ -26,3 +28,9 @@ class ApiConfigProvider(Provider):
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "reviews").mkdir(parents=True, exist_ok=True)
         return data_dir
+
+    @provide
+    def get_ai_fence_registry(self, settings: Settings) -> AIFenceRegistry:
+        return AsyncioSemaphoreFenceRegistry(
+            default_max_concurrent=settings.ai_throttle.default_max_concurrent,
+        )
