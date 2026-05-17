@@ -7,6 +7,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY services/web-app/package.json services/web-app/pnpm-lock.yaml services/web-app/.npmrc ./
+COPY services/web-app/patches ./patches
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY services/web-app/ .
