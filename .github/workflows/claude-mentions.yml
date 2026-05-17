@@ -10,6 +10,7 @@ permissions:
   issues: write
   pull-requests: write
   contents: read
+  id-token: write
 
 jobs:
   respond:
@@ -48,7 +49,7 @@ jobs:
       - name: Respond to mention
         uses: anthropics/claude-code-action@v1
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You've been mentioned in a comment:
 
@@ -58,13 +59,13 @@ jobs:
             ${{ github.event.comment.body }}
 
             **Action requested**: ${{ steps.command.outputs.action }}
+            **Suggested agent**: ${{ steps.command.outputs.agent }}
 
             Respond to this request appropriately:
             - If asked to review: perform code review
             - If asked to implement: clarify requirements and implement
             - If asked to test: write/run tests
-            - If asked to triage: analyze and label issue
+            - If asked to triage: analyze and label issue (check .claude/agents/triage.md)
             - Otherwise: ask for clarification on what you should do
 
             Reply in the comment thread with your response.
-          agent: ${{ steps.command.outputs.agent }}

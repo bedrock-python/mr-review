@@ -10,6 +10,7 @@ permissions:
   issues: write
   pull-requests: read
   contents: read
+  id-token: write
 
 jobs:
   backlog-review:
@@ -21,11 +22,11 @@ jobs:
       - name: Review backlog
         uses: anthropics/claude-code-action@v1
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Daily product management review for mr-review service.
 
-            As the product manager agent:
+            As the product manager:
 
             1. **Review Open Issues**:
                - List all open issues
@@ -54,7 +55,6 @@ jobs:
                - Tag with label "product-review"
 
             Follow guidelines in .claude/agents/product-manager.md
-          agent: product-manager
 
   milestone-planning:
     runs-on: ubuntu-latest
@@ -68,7 +68,7 @@ jobs:
       - name: Plan next milestone
         uses: anthropics/claude-code-action@v1
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Weekly milestone planning for mr-review service.
 
@@ -89,4 +89,3 @@ jobs:
             - User value (new features, integrations)
             - Technical health (refactoring, testing, docs)
             - Team velocity (don't overcommit)
-          agent: product-manager

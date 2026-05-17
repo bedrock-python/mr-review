@@ -11,6 +11,7 @@ permissions:
   pull-requests: write
   contents: read
   issues: write
+  id-token: write
 
 jobs:
   review:
@@ -47,7 +48,7 @@ jobs:
       - name: Review PR with Claude
         uses: anthropics/claude-code-action@v1
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Review this pull request:
 
@@ -58,7 +59,7 @@ jobs:
             **Description**:
             ${{ github.event.pull_request.body }}
 
-            As the code reviewer:
+            As the code reviewer (${{ steps.agent.outputs.agent }}):
             1. Review all changed files for:
                - Architecture violations (layer dependencies)
                - Naming convention compliance
@@ -72,4 +73,3 @@ jobs:
             5. Provide summary with approve/request changes recommendation
 
             Review guidelines are in .claude/rules/
-          agent: ${{ steps.agent.outputs.agent }}

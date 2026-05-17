@@ -7,6 +7,7 @@ on:
 permissions:
   issues: write
   contents: read
+  id-token: write
 
 jobs:
   triage:
@@ -18,7 +19,7 @@ jobs:
       - name: Triage issue with Claude
         uses: anthropics/claude-code-action@v1
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             A new issue has been opened: #${{ github.event.issue.number }}
 
@@ -27,12 +28,11 @@ jobs:
             Body:
             ${{ github.event.issue.body }}
 
-            As the triage specialist agent:
+            As the triage specialist:
             1. Read the issue carefully
             2. Apply appropriate labels (type, priority, area)
             3. Check for duplicates by searching existing issues
             4. If information is missing, comment asking for clarification
             5. Link related issues if found
 
-            Use the triage agent guidelines from .claude/agents/triage.md
-          agent: triage
+            Follow guidelines from .claude/agents/triage.md
