@@ -35,16 +35,6 @@ async def _noop_dict() -> dict[str, str]:
 async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
     return {}
 
-_log = logging.getLogger(__name__)
-
-
-async def _noop_dict() -> dict[str, str]:
-    return {}
-
-
-async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
-    return {}
-
 
 class DispatchReviewUseCase:
     def __init__(
