@@ -113,5 +113,11 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "pnpm": {
+    "//": "expect-type@1.x ships CJS but lacks an `exports` map and `type` field, so Node's ESM resolver (used by vitest>=3.x) fails to load it via pnpm's symlinked layout on Windows with ERR_MODULE_NOT_FOUND from legacyMainResolve. The patch in patches/expect-type@1.3.0.patch adds an explicit `exports` map + `type: commonjs` so the resolver treats it as a proper CJS package boundary. Remove once upstream ships an `exports` field (track at https://github.com/mmkal/expect-type/issues). See docs/troubleshooting/vitest-expect-type.md for diagnosis + bump procedure.",
+    "patchedDependencies": {
+      "expect-type@1.3.0": "patches/expect-type@1.3.0.patch"
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PatchStatusSchema, SuggestedPatchSchema } from "./patch.schema";
 
 export const BriefPresetSchema = z.enum(["thorough", "security", "style", "performance"]);
 
@@ -27,6 +28,12 @@ export const CommentSchema = z.object({
   body: z.string(),
   status: CommentStatusSchema,
   resolved: z.boolean().default(false),
+  // Inline Fix Suggestions (C1). All fields are optional/nullable so
+  // backward-compat with existing YAML/responses is preserved.
+  suggested_patch: SuggestedPatchSchema.nullable().default(null),
+  patch_status: PatchStatusSchema.default("pending"),
+  patch_ref_url: z.string().url().nullable().default(null),
+  patch_applied_at: z.string().datetime({ offset: true }).nullable().default(null),
 });
 
 export const IterationStageSchema = z.enum(["brief", "dispatch", "polish", "post"]);
