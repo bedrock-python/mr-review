@@ -58,8 +58,8 @@ export const ExportImportSection = (): React.ReactElement => {
   const importMutation = useImportData();
 
   const handleExport = (): void => {
-    if (exportType === "encrypted" && exportPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (exportType === "encrypted" && !exportPassword) {
+      toast.error("Password is required for encrypted export");
       return;
     }
 
@@ -153,8 +153,8 @@ export const ExportImportSection = (): React.ReactElement => {
 
   const handleImportWithPassword = (): void => {
     if (!importFileData) return;
-    if (importPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (!importPassword) {
+      toast.error("Password is required to decrypt data");
       return;
     }
     handleImport(importFileData, importPassword);
@@ -260,7 +260,7 @@ export const ExportImportSection = (): React.ReactElement => {
                   onChange={(e) => {
                     setExportPassword(e.target.value);
                   }}
-                  placeholder="Min 8 characters"
+                  placeholder="Enter encryption password"
                   style={inputStyle}
                 />
               </div>
