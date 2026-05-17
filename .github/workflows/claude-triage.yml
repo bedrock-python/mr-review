@@ -32,9 +32,24 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Triage issue #${{ github.event.issue.number }}: "${{ github.event.issue.title }}"
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ github.event.issue.number }}
+            TITLE: ${{ github.event.issue.title }}
+            BODY: ${{ github.event.issue.body }}
+            AUTHOR: ${{ github.event.issue.user.login }}
 
-            Apply labels: type (bug/feature/enhancement), priority (high/medium/low), area (backend/frontend/vcs/ai/infra).
-            Check for duplicates. Add comment if info missing.
+            Analyze this new issue and:
+            1. Determine type: bug, feature, enhancement, or documentation
+            2. Assess priority: priority:high, priority:medium, priority:low
+            3. Identify area: area:backend, area:frontend, area:vcs, area:ai, area:infra, area:docs
+            4. Check for duplicates using ./scripts/gh.sh search issues "keywords"
 
-            Body: ${{ github.event.issue.body }}
+            Use ./scripts/gh.sh to interact with GitHub:
+            - `./scripts/gh.sh label list` to see available labels
+            - `./scripts/gh.sh search issues "query"` to find similar issues
+
+            Add labels using:
+            `./scripts/edit-issue-labels.sh --add-label "label1" --add-label "label2"`
+
+          claude_args: |
+            --allowedTools "Bash(./scripts/gh.sh:*),Bash(./scripts/edit-issue-labels.sh:*)"
