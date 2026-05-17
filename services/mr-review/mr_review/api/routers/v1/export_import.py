@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
@@ -46,12 +48,30 @@ async def export_data(
     export_data_result: ExportData = await use_case.execute(request)
 
     # Convert to JSON-serializable format
+    # For plain export, we need to expose SecretStr values
+    # For encrypted export, SecretStr contains encrypted tokens
+    def serialize_with_secrets(obj: Host | AIProvider) -> dict[str, Any]:
+        """Serialize entity with exposed secret fields."""
+        data = obj.model_dump(mode="json")
+        # For plain export, expose the secret values
+        if not export_data_result.encrypted:
+            if isinstance(obj, Host):
+                data["token"] = obj.token.get_secret_value()
+            elif isinstance(obj, AIProvider):
+                data["api_key"] = obj.api_key.get_secret_value()
+        # For encrypted export, SecretStr already contains encrypted string
+        elif isinstance(obj, Host):
+            data["token"] = obj.token.get_secret_value()
+        elif isinstance(obj, AIProvider):
+            data["api_key"] = obj.api_key.get_secret_value()
+        return data
+
     response_data = ExportResponseSchema(
         version=export_data_result.version,
         exported_at=export_data_result.exported_at,
         encrypted=export_data_result.encrypted,
-        hosts=[h.model_dump(mode="json") for h in export_data_result.hosts],
-        ai_providers=[p.model_dump(mode="json") for p in export_data_result.ai_providers],
+        hosts=[serialize_with_secrets(h) for h in export_data_result.hosts],
+        ai_providers=[serialize_with_secrets(p) for p in export_data_result.ai_providers],
         reviews=[r.model_dump(mode="json") for r in export_data_result.reviews],
     )
 

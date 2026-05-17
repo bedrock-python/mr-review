@@ -64,8 +64,8 @@ class ExportDataUseCase:
         return export_data
 
     def _expose_host_token(self, host: Host) -> Host:
-        """Return host with exposed token (for plain export)."""
-        return host.model_copy(update={"token": SecretStr(host.token.get_secret_value())})
+        """Return host as-is. Tokens will be exposed during serialization."""
+        return host
 
     def _encrypt_host_token(self, host: Host, password: str) -> Host:
         """Return host with encrypted token."""
@@ -74,8 +74,8 @@ class ExportDataUseCase:
         return host.model_copy(update={"token": SecretStr(encrypted_token)})
 
     def _expose_provider_token(self, provider: AIProvider) -> AIProvider:
-        """Return provider with exposed API key (for plain export)."""
-        return provider.model_copy(update={"api_key": SecretStr(provider.api_key.get_secret_value())})
+        """Return provider as-is. API keys will be exposed during serialization."""
+        return provider
 
     def _encrypt_provider_token(self, provider: AIProvider, password: str) -> AIProvider:
         """Return provider with encrypted API key."""
