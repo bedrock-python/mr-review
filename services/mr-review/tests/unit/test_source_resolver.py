@@ -63,9 +63,7 @@ async def test__resolve_source__branch_diff_source__calls_get_branch_diff() -> N
 
     resolved = await resolve_source(review, provider)
 
-    provider.get_branch_diff.assert_awaited_once_with(
-        repo_path="team/svc", base_ref="main", head_ref="feature/y"
-    )
+    provider.get_branch_diff.assert_awaited_once_with(repo_path="team/svc", base_ref="main", head_ref="feature/y")
     provider.get_mr.assert_not_called()
     provider.get_diff.assert_not_called()
     assert resolved.diff_files == diff

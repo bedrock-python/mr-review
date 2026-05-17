@@ -36,9 +36,7 @@ async def test__add_repo_by_url__valid_url__pins_and_returns_repo() -> None:
     use_case = AddRepoByUrlUseCase(host_repo=host_repo, vcs_factory=factory)
 
     # Act
-    result_host, result_repo = await use_case.execute(
-        host_id=host.id, url_or_path="https://github.com/torvalds/linux"
-    )
+    result_host, result_repo = await use_case.execute(host_id=host.id, url_or_path="https://github.com/torvalds/linux")
 
     # Assert
     provider.get_repo.assert_awaited_once_with("torvalds/linux")
@@ -60,9 +58,7 @@ async def test__add_repo_by_url__already_pinned__skips_write() -> None:
     use_case = AddRepoByUrlUseCase(host_repo=host_repo, vcs_factory=factory)
 
     # Act
-    result_host, result_repo = await use_case.execute(
-        host_id=host.id, url_or_path="torvalds/linux"
-    )
+    result_host, result_repo = await use_case.execute(host_id=host.id, url_or_path="torvalds/linux")
 
     # Assert
     host_repo.set_favourite_repos.assert_not_called()

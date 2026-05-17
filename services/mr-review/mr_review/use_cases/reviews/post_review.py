@@ -17,6 +17,7 @@ from mr_review.core.vcs.protocols import VCSProvider, VCSProviderFactory
 class PostNotSupportedForSourceError(ValueError):
     """Raised when posting comments is attempted on a review whose source has no MR/PR target."""
 
+
 logger = logging.getLogger(__name__)
 
 _POST_CONCURRENCY = 5

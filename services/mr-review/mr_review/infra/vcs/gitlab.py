@@ -189,12 +189,8 @@ class GitLabProvider:
         for change in data.get("diffs", []):
             diff_text: str = change.get("diff", "")
             hunks = _parse_diff_text(diff_text)
-            additions = sum(
-                1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++")
-            )
-            deletions = sum(
-                1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---")
-            )
+            additions = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))
+            deletions = sum(1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---"))
             old_path = change.get("old_path")
             new_path = str(change["new_path"])
             diff_files.append(

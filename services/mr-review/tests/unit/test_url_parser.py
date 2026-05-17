@@ -22,9 +22,7 @@ class TestParseRepoUrl:
             ("  torvalds/linux  ", "torvalds/linux"),
         ],
     )
-    def test__parse_repo_url__github_inputs__returns_owner_repo(
-        self, value: str, expected: str
-    ) -> None:
+    def test__parse_repo_url__github_inputs__returns_owner_repo(self, value: str, expected: str) -> None:
         assert parse_repo_url(value, host_type="github") == expected
 
     @pytest.mark.parametrize(
@@ -36,9 +34,7 @@ class TestParseRepoUrl:
             ("group/subgroup/deep/project", "group/subgroup/deep/project"),
         ],
     )
-    def test__parse_repo_url__gitlab_nested_groups__preserved(
-        self, value: str, expected: str
-    ) -> None:
+    def test__parse_repo_url__gitlab_nested_groups__preserved(self, value: str, expected: str) -> None:
         assert parse_repo_url(value, host_type="gitlab") == expected
 
     @pytest.mark.parametrize(

@@ -58,10 +58,6 @@ def _strip_git_suffix(path: str) -> str:
 
 def _validate_segments(segments: list[str], original: str, host_type: str) -> None:
     if len(segments) < 2:
-        raise InvalidRepoUrlError(
-            f"Repo path must include at least 'owner/repo', got {original!r}"
-        )
+        raise InvalidRepoUrlError(f"Repo path must include at least 'owner/repo', got {original!r}")
     if host_type not in _HOST_TYPES_WITH_NESTED_PATHS and len(segments) > 2:
-        raise InvalidRepoUrlError(
-            f"Host type {host_type!r} does not support nested groups; got {original!r}"
-        )
+        raise InvalidRepoUrlError(f"Host type {host_type!r} does not support nested groups; got {original!r}")
