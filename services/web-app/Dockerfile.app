@@ -13,6 +13,7 @@ ENV NPM_CONFIG_STRICT_SSL=${NPM_CONFIG_STRICT_SSL}
 
 # Cache dependencies layer (.npmrc: lower concurrency vs Nexus proxy timeouts)
 COPY package.json pnpm-lock.yaml .npmrc ./
+COPY patches ./patches
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # Build application
