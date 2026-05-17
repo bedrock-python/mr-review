@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
-import httpx
 import pytest
 from mr_review.core.mrs.entities import MR, Repo
-from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.mrs.list_inbox_mrs import INBOX_REPO_LIMIT, InboxMR, ListInboxMRsUseCase
 
 from tests.factories.entities import make_host
@@ -40,10 +38,7 @@ def _make_repo(path: str = "group/repo") -> Repo:
 
 
 def _make_use_case(host_repo: AsyncMock, provider: AsyncMock) -> ListInboxMRsUseCase:
-    vcs_cache = MagicMock(spec=VCSCache)
-    vcs_cache.get_or_create.return_value = provider
-    vcs_client = MagicMock(spec=httpx.AsyncClient)
-    return ListInboxMRsUseCase(host_repo=host_repo, vcs_cache=vcs_cache, vcs_client=vcs_client)
+    return ListInboxMRsUseCase(host_repo=host_repo, vcs_factory=lambda _host: provider)
 
 
 async def test__list_inbox_mrs__host_not_found__raises_value_error() -> None:

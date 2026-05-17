@@ -62,7 +62,7 @@ class UpdateReviewUseCase:
         iteration_id: UUID,
         iteration_stage: IterationStage | None,
         iteration_comments: list[Comment] | None,
-    ) -> list[object]:
+    ) -> list[Iteration]:
         iteration_index = next(
             (i for i, it in enumerate(review.iterations) if it.id == iteration_id),
             None,
@@ -77,7 +77,7 @@ class UpdateReviewUseCase:
         if iteration_comments is not None:
             iteration_updates["comments"] = iteration_comments
 
-        new_iterations: list[object] = list(review.iterations)
+        new_iterations: list[Iteration] = list(review.iterations)
         if iteration_updates:
             new_iterations[iteration_index] = iteration.model_copy(update=iteration_updates)
         return new_iterations

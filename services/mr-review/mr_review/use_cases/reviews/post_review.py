@@ -53,7 +53,7 @@ async def _post_one_comment(
                 mr_iid=mr_iid,
                 body=f"**{comment.file}:{comment.line}**\n\n{comment.body}",
             )
-        except Exception:
+        except (httpx.HTTPStatusError, httpx.RequestError):
             logger.exception("Fallback general note also failed for comment %s", comment.id)
             return False
     return True
