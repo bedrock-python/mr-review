@@ -135,6 +135,16 @@ class BitbucketProvider:
             for item in items
         ]
 
+    async def get_repo(self, repo_path: str) -> Repo:
+        workspace, repo_slug = _split_repo_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/repositories/{workspace}/{repo_slug}")
+        return Repo(
+            id=str(data.get("uuid", data.get("slug", ""))),
+            path=str(data["full_name"]),
+            name=str(data["slug"]),
+            description=data.get("description") or None,
+        )
+
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
         workspace, repo_slug = _split_repo_path(repo_path)
         bb_state = _map_state_to_bb(state)

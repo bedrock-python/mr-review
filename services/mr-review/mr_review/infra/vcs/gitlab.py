@@ -86,6 +86,16 @@ class GitLabProvider:
             page += 1
         return repos
 
+    async def get_repo(self, repo_path: str) -> Repo:
+        encoded = _encode_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/projects/{encoded}")
+        return Repo(
+            id=str(data["id"]),
+            path=str(data["path_with_namespace"]),
+            name=str(data["name"]),
+            description=data.get("description"),
+        )
+
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
         encoded = _encode_path(repo_path)
         mrs: list[MR] = []

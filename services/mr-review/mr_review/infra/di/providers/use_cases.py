@@ -23,6 +23,7 @@ from mr_review.use_cases.ai_providers.delete_ai_provider import DeleteAIProvider
 from mr_review.use_cases.ai_providers.list_ai_providers import ListAIProvidersUseCase
 from mr_review.use_cases.ai_providers.list_provider_models import ListProviderModelsUseCase
 from mr_review.use_cases.ai_providers.update_ai_provider import UpdateAIProviderUseCase
+from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
@@ -169,6 +170,12 @@ class UseCaseProvider(Provider):
     @provide
     def get_toggle_favourite_repo_use_case(self, repo: FileHostRepository) -> ToggleFavouriteRepoUseCase:
         return ToggleFavouriteRepoUseCase(repo)
+
+    @provide
+    def get_add_repo_by_url_use_case(
+        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
+    ) -> AddRepoByUrlUseCase:
+        return AddRepoByUrlUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
 
     @provide
     def get_list_repos_use_case(

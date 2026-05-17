@@ -124,6 +124,16 @@ class GitHubProvider:
             page += 1
         return repos
 
+    async def get_repo(self, repo_path: str) -> Repo:
+        owner, repo = _split_repo_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/repos/{owner}/{repo}")
+        return Repo(
+            id=str(data["id"]),
+            path=str(data["full_name"]),
+            name=str(data["name"]),
+            description=data.get("description"),
+        )
+
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
         owner, repo = _split_repo_path(repo_path)
         gh_state = "open" if state == "opened" else state
