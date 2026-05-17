@@ -25,6 +25,12 @@ export {
   reviewKeys,
   DEFAULT_BRIEF_CONFIG,
   getReviewBriefConfig,
+  PatchStatusSchema,
+  PatchStatsSchema,
+  SuggestedPatchSchema,
+  AppliedPatchSchema,
+  PatchErrorCodeSchema,
+  PatchErrorEnvelopeSchema,
 } from "./model";
 export type {
   BriefPreset,
@@ -41,4 +47,10 @@ export type {
   ContextSizeLevel,
   ContextSizeInfo,
   UpdateReviewInput,
+  PatchStatus,
+  PatchStats,
+  SuggestedPatch,
+  AppliedPatch,
+  PatchErrorCode,
+  PatchErrorEnvelope,
 } from "./model";
