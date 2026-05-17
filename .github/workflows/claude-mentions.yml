@@ -1,0 +1,70 @@
+name: Claude Mentions
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    # Only respond to @claude mentions
+    if: contains(github.event.comment.body, '@claude')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+      - name: Extract command
+        id: command
+        run: |
+          COMMENT_BODY="${{ github.event.comment.body }}"
+
+          # Extract command after @claude
+          if echo "$COMMENT_BODY" | grep -qE '@claude\s+review'; then
+            echo "agent=backend-reviewer" >> $GITHUB_OUTPUT
+            echo "action=review" >> $GITHUB_OUTPUT
+          elif echo "$COMMENT_BODY" | grep -qE '@claude\s+implement'; then
+            echo "agent=backend-engineer" >> $GITHUB_OUTPUT
+            echo "action=implement" >> $GITHUB_OUTPUT
+          elif echo "$COMMENT_BODY" | grep -qE '@claude\s+test'; then
+            echo "agent=frontend-qa-engineer" >> $GITHUB_OUTPUT
+            echo "action=test" >> $GITHUB_OUTPUT
+          elif echo "$COMMENT_BODY" | grep -qE '@claude\s+triage'; then
+            echo "agent=triage" >> $GITHUB_OUTPUT
+            echo "action=triage" >> $GITHUB_OUTPUT
+          else
+            echo "agent=backend-engineer" >> $GITHUB_OUTPUT
+            echo "action=help" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Respond to mention
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You've been mentioned in a comment:
+
+            **Context**: ${{ github.event.issue.title || github.event.pull_request.title }}
+            **Author**: ${{ github.event.comment.user.login }}
+            **Comment**:
+            ${{ github.event.comment.body }}
+
+            **Action requested**: ${{ steps.command.outputs.action }}
+
+            Respond to this request appropriately:
+            - If asked to review: perform code review
+            - If asked to implement: clarify requirements and implement
+            - If asked to test: write/run tests
+            - If asked to triage: analyze and label issue
+            - Otherwise: ask for clarification on what you should do
+
+            Reply in the comment thread with your response.
+          agent: ${{ steps.command.outputs.agent }}

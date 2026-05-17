@@ -1,0 +1,75 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+      - develop
+
+permissions:
+  pull-requests: write
+  contents: read
+  issues: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # Skip auto-generated PRs (release-please, dependabot)
+    if: |
+      !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+
+      - name: Determine review agent
+        id: agent
+        run: |
+          # Check which files were changed to select appropriate reviewer
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
+
+          if echo "$CHANGED_FILES" | grep -qE '^(services/|libs/python/)'; then
+            echo "agent=backend-reviewer" >> $GITHUB_OUTPUT
+          elif echo "$CHANGED_FILES" | grep -qE '^(frontend/|apps/)'; then
+            echo "agent=frontend-qa-engineer" >> $GITHUB_OUTPUT
+          else
+            echo "agent=backend-reviewer" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Review PR with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request:
+
+            **PR #${{ github.event.pull_request.number }}**: ${{ github.event.pull_request.title }}
+            **Author**: ${{ github.event.pull_request.user.login }}
+            **Base**: ${{ github.event.pull_request.base.ref }} ← **Head**: ${{ github.event.pull_request.head.ref }}
+
+            **Description**:
+            ${{ github.event.pull_request.body }}
+
+            As the code reviewer:
+            1. Review all changed files for:
+               - Architecture violations (layer dependencies)
+               - Naming convention compliance
+               - Type safety (mypy/typescript)
+               - Test coverage
+               - Security issues
+               - Performance concerns
+            2. Check commit messages follow conventional commits
+            3. Verify branch naming follows project standards
+            4. Post inline comments on specific issues
+            5. Provide summary with approve/request changes recommendation
+
+            Review guidelines are in .claude/rules/
+          agent: ${{ steps.agent.outputs.agent }}

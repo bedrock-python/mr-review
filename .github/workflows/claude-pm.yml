@@ -1,0 +1,92 @@
+name: Claude Product Management
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC (noon Moscow)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  backlog-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Review backlog
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Daily product management review for mr-review service.
+
+            As the product manager agent:
+
+            1. **Review Open Issues**:
+               - List all open issues
+               - Check if priorities are correctly assigned
+               - Identify issues missing labels or clear descriptions
+               - Flag issues with no activity for >30 days
+
+            2. **Review Open PRs**:
+               - List all open PRs
+               - Check for PRs waiting on review
+               - Identify stale PRs (>7 days old)
+               - Check if PRs are blocked
+
+            3. **Backlog Health**:
+               - Count issues by priority
+               - Identify missing milestones
+               - Suggest grouping related issues into epics
+
+            4. **Create Summary Issue**:
+               - Create a new issue titled "Product Review - [DATE]"
+               - Include:
+                 * Backlog health metrics
+                 * Priority recommendations
+                 * Stale issues/PRs to close or escalate
+                 * Suggested milestone assignments
+               - Tag with label "product-review"
+
+            Follow guidelines in .claude/agents/product-manager.md
+          agent: product-manager
+
+  milestone-planning:
+    runs-on: ubuntu-latest
+    needs: backlog-review
+    # Run only on Mondays
+    if: github.event.schedule == '0 9 * * 1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Plan next milestone
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Weekly milestone planning for mr-review service.
+
+            As the product manager:
+
+            1. Review current milestone progress
+            2. Identify issues that should move to next milestone
+            3. Suggest new milestone if current is >80% complete
+            4. Create milestone planning document as issue comment
+
+            Focus on:
+            - High priority bugs
+            - New VCS integrations
+            - Performance improvements
+            - User-requested features
+
+            Balance between:
+            - User value (new features, integrations)
+            - Technical health (refactoring, testing, docs)
+            - Team velocity (don't overcommit)
+          agent: product-manager
