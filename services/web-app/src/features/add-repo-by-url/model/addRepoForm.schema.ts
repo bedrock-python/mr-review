@@ -9,7 +9,7 @@ export const AddRepoFormSchema = z.object({
       (value) => {
         const normalized = value.startsWith("http") ? value : value.replace(/^\/+/, "");
         const path = normalized.includes("://")
-          ? normalized.split("://", 2)[1]?.split("/").slice(1).join("/") ?? ""
+          ? (normalized.split("://", 2)[1]?.split("/").slice(1).join("/") ?? "")
           : normalized;
         const segments = path
           .replace(/\.git$/u, "")

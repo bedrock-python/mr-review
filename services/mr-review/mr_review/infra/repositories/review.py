@@ -90,7 +90,7 @@ def _source_from_dict(data: dict[str, object], legacy_mr_iid: int) -> ReviewSour
     if raw is None:
         return MRSource(mr_iid=legacy_mr_iid)
     if not isinstance(raw, dict):
-        raise ValueError(f"Invalid review source payload: {raw!r}")
+        raise TypeError(f"Invalid review source payload: {raw!r}")
     kind = raw.get("kind")
     if kind == "mr":
         return MRSource(mr_iid=int(str(raw.get("mr_iid", legacy_mr_iid))))

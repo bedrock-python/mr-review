@@ -73,7 +73,9 @@ def make_review(**kwargs: object) -> Review:
         iterations = [make_iteration(brief_config=brief_config)]
     mr_iid = int(str(kwargs.get("mr_iid", 1)))
     raw_source = kwargs.get("source")
-    source: ReviewSource = raw_source if isinstance(raw_source, (MRSource, BranchDiffSource)) else MRSource(mr_iid=mr_iid)
+    source: ReviewSource = (
+        raw_source if isinstance(raw_source, (MRSource, BranchDiffSource)) else MRSource(mr_iid=mr_iid)
+    )
     return Review(
         id=kwargs.get("id", uuid4()),
         host_id=kwargs.get("host_id", uuid4()),

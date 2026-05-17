@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { httpClient } from "@shared/api";
 import { HostSchema, AddRepoByUrlResponseSchema } from "../model/host.schema";
-import type {
-  CreateHost,
-  UpdateHost,
-  Host,
-  AddRepoByUrlResponse,
-} from "../model/host.schema";
+import type { CreateHost, UpdateHost, Host, AddRepoByUrlResponse } from "../model/host.schema";
 
 export type TestConnectionResult = {
   ok: boolean;

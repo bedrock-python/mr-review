@@ -121,7 +121,7 @@ class FileAIProviderRepository:
 
         return await asyncio.to_thread(_sync)
 
-    def _apply_update(
+    def _apply_update(  # noqa: C901
         self,
         data: dict[str, object],
         name: str | None,

@@ -80,7 +80,7 @@ class PostReviewUseCase:
         self._host_repo = host_repo
         self._vcs_factory = vcs_factory
 
-    async def execute(
+    async def execute(  # noqa: C901
         self,
         review_id: UUID,
         diff_refs: dict[str, str] | None = None,
