@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from mr_review.api.config import Settings
 from mr_review.api.routers.health import router as health_router
 from mr_review.api.routers.v1.ai_providers import router as ai_providers_v1_router
+from mr_review.api.routers.v1.export_import import router as export_import_v1_router
 from mr_review.api.routers.v1.hosts import router as hosts_v1_router
 from mr_review.api.routers.v1.repos import router as repos_v1_router
 from mr_review.api.routers.v1.reviews import router as reviews_v1_router
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(repos_v1_router)
     app.include_router(reviews_v1_router)
     app.include_router(ai_providers_v1_router)
+    app.include_router(export_import_v1_router)
 
     container = create_api_container(settings)
     setup_dishka(container, app)

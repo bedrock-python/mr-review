@@ -33,6 +33,8 @@ import {
 } from "@entities/host";
 import type { Host, UpdateHost, HostColorId } from "@entities/host";
 
+import { ExportImportSection } from "@features/export-import";
+
 const UpdateHostFormSchema = UpdateHostSchema.extend({ colorId: z.string() });
 type UpdateHostFormValues = z.infer<typeof UpdateHostFormSchema>;
 
@@ -1852,6 +1854,14 @@ export const SettingsPage = (): React.ReactElement => {
 
           {/* Appearance section */}
           <AppearanceSection />
+
+          {/* Export/Import section */}
+          <Section
+            title="Export / Import"
+            description="Export your configuration and review history, or import from a backup file."
+          >
+            <ExportImportSection />
+          </Section>
 
           {/* Storage section */}
           <StorageSection />

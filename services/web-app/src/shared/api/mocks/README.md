@@ -7,10 +7,10 @@ MSW-based request mocking for local development, demo deployments, and tests.
 Mocks are toggled via the `VITE_USE_MOCKS` env var, read at runtime through
 `@shared/config/env`. The switch lives in `src/main.tsx::enableMocking`.
 
-| Env value | Behaviour |
-| --- | --- |
-| `VITE_USE_MOCKS=true` (`.env.development`) | MSW worker intercepts requests; no real backend needed. |
-| `VITE_USE_MOCKS=false` (default in prod) | All HTTP traffic goes to `VITE_API_BASE_URL` (real backend). |
+| Env value                                  | Behaviour                                                    |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `VITE_USE_MOCKS=true` (`.env.development`) | MSW worker intercepts requests; no real backend needed.      |
+| `VITE_USE_MOCKS=false` (default in prod)   | All HTTP traffic goes to `VITE_API_BASE_URL` (real backend). |
 
 The same toggle is honoured by `Dockerfile.demo` / `entrypoint.sh` so a demo
 image can be flipped to live data without rebuilding.
@@ -25,17 +25,17 @@ Four endpoints are mocked in `handlers/patch.ts`, branching off the
 `commentId` path parameter. Use the IDs from `PATCH_MOCK_COMMENT_IDS` to
 drive deterministic FSM scenarios.
 
-| Scenario | Comment ID key | Endpoint | Status | Error code |
-| --- | --- | --- | :-: | --- |
-| Apply happy path | `applyHappy` | apply-patch | 200 | — |
-| Stale source | `applyStale` | apply-patch | 409 | `PATCH_STALE` |
-| Invalid diff | `applyInvalidDiff` | apply-patch | 422 | `PATCH_INVALID_DIFF` |
-| Post happy path | `postHappy` | post-patch | 200 | — |
-| VCS error | `postVcsFail` | post-patch | 502 | `VCS_ERROR` |
-| Discard happy path | `discardHappy` | discard-patch | 200 | — |
-| Revert happy path | `revertHappy` | revert-patch | 200 | — |
-| Revert sha mismatch | `revertConflict` | revert-patch | 409 | `PATCH_REVERT_SHA_MISMATCH` |
-| No patch present | `noPatchPresent` | any of 4 | 404 | `PATCH_NOT_FOUND` |
+| Scenario            | Comment ID key     | Endpoint      | Status | Error code                  |
+| ------------------- | ------------------ | ------------- | :----: | --------------------------- |
+| Apply happy path    | `applyHappy`       | apply-patch   |  200   | —                           |
+| Stale source        | `applyStale`       | apply-patch   |  409   | `PATCH_STALE`               |
+| Invalid diff        | `applyInvalidDiff` | apply-patch   |  422   | `PATCH_INVALID_DIFF`        |
+| Post happy path     | `postHappy`        | post-patch    |  200   | —                           |
+| VCS error           | `postVcsFail`      | post-patch    |  502   | `VCS_ERROR`                 |
+| Discard happy path  | `discardHappy`     | discard-patch |  200   | —                           |
+| Revert happy path   | `revertHappy`      | revert-patch  |  200   | —                           |
+| Revert sha mismatch | `revertConflict`   | revert-patch  |  409   | `PATCH_REVERT_SHA_MISMATCH` |
+| No patch present    | `noPatchPresent`   | any of 4      |  404   | `PATCH_NOT_FOUND`           |
 
 Error responses follow the backend FastAPI-style envelope:
 

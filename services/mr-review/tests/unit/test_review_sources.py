@@ -61,6 +61,7 @@ def test__review__mr_source_with_iid__mr_iid_overrides_zero_default() -> None:
         updated_at=now,
     )
 
+    assert isinstance(review.source, MRSource)
     assert review.source.mr_iid == 99
     assert review.mr_iid == 99
 

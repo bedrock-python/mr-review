@@ -2,7 +2,7 @@
 
 ## 📦 Конфигурация команды
 
-**Конфигурация команды находится в JSON файле:**  
+**Конфигурация команды находится в JSON файле:**
 📄 **`.claude/mr-review-team.json`**
 
 Этот файл содержит:
@@ -127,7 +127,7 @@ Read .claude/rules/ for complete architecture documentation.
 После настройки:
 
 1. **Validate** (проверка параметров)
-2. **Create Team** 
+2. **Create Team**
 3. Агенты запустятся автоматически
 4. Откроется kanban доска
 
@@ -391,12 +391,12 @@ Agent Teams AI показывает:
 
 После успешного запуска:
 
-✅ 4 агента работают параллельно  
-✅ Kanban доска показывает прогресс  
-✅ Agent Graph визуализирует коммуникации  
-✅ Code review UI для принятия изменений  
-✅ Real-time логи действий  
-✅ Metrics и cost tracking  
+✅ 4 агента работают параллельно
+✅ Kanban доска показывает прогресс
+✅ Agent Graph визуализирует коммуникации
+✅ Code review UI для принятия изменений
+✅ Real-time логи действий
+✅ Metrics и cost tracking
 
 **mr-review проект готов к автономной разработке с Agent Teams!** 🚀
 
@@ -446,7 +446,7 @@ api/ (Layer 4) → use_cases/ (Layer 2) → core/ (Layer 1) ← infra/ (Layer 3)
 class PostgresUserRepository:
     def _to_entity(self, db_model: UserDB) -> User:
         return User(id=db_model.id, email=db_model.email, ...)
-    
+
     async def create(self, email: str) -> User:
         user_db = UserDB(email=email)
         self._session.add(user_db)
@@ -465,7 +465,7 @@ async def create(self, email: str) -> UserDB:  # NEVER DO THIS
 class CreateUserUseCase:
     def __init__(self, uow: AsyncUnitOfWork) -> None:
         self._uow = uow
-    
+
     async def execute(self, email: str) -> User:
         async with self._uow.transaction() as tx:
             user = await tx.users.create(email=email)
@@ -552,8 +552,8 @@ class RestClientsProvider(RestClientProvider):
 
 ### 2. Frontend Engineer
 
-**Role:** Frontend Development (React/TypeScript)  
-**Model:** Claude Sonnet 4.5  
+**Role:** Frontend Development (React/TypeScript)
+**Model:** Claude Sonnet 4.5
 **Autonomy Level:** High
 
 **Provisioning Instructions:**
@@ -752,8 +752,8 @@ export const userApi = {
 
 ### 3. QA Engineer
 
-**Role:** Testing & Quality Assurance  
-**Model:** Claude Sonnet 4.5  
+**Role:** Testing & Quality Assurance
+**Model:** Claude Sonnet 4.5
 **Autonomy Level:** Medium (auto test creation, review before merge)
 
 **Provisioning Instructions:**
@@ -797,12 +797,12 @@ async def test_create_user_success(mocker):
     mock_uow.transaction.return_value.__aenter__.return_value = mock_tx
     mock_tx.users.get_by_email.return_value = None
     mock_tx.users.create.return_value = User(id=uuid4(), email="test@example.com")
-    
+
     use_case = CreateUserUseCase(mock_uow)
-    
+
     # Act
     result = await use_case.execute(email="test@example.com")
-    
+
     # Assert
     assert result.email == "test@example.com"
     mock_tx.users.create.assert_called_once()
@@ -818,10 +818,10 @@ async def test_create_user_success(mocker):
 test("submits form when button clicked", async () => {
   const onSubmit = vi.fn();
   render(<Form onSubmit={onSubmit} />);
-  
+
   await userEvent.type(screen.getByLabelText("Name"), "John");
   await userEvent.click(screen.getByRole("button", { name: /submit/i }));
-  
+
   expect(onSubmit).toHaveBeenCalledWith({ name: "John" });
 });
 
@@ -902,8 +902,8 @@ pnpm test:coverage
 
 ### 4. DevOps Engineer
 
-**Role:** CI/CD, Infrastructure, Automation  
-**Model:** Claude Sonnet 4.5  
+**Role:** CI/CD, Infrastructure, Automation
+**Model:** Claude Sonnet 4.5
 **Autonomy Level:** Medium (review infrastructure changes)
 
 **Provisioning Instructions:**

@@ -120,7 +120,7 @@ async def test__acquire__exception_inside_block__releases_slot() -> None:
             raise RuntimeError("boom")
 
     # If the slot leaked, this would hang past the timeout.
-    follow_up_inside = asyncio.Event()
+    follow_up_inside = asyncio.Event()  # type: ignore[unreachable]
 
     async def follow_up() -> None:
         async with registry.acquire(provider):
