@@ -10,7 +10,12 @@ import httpx
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.entities import Comment, IterationStage, Review
 from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.core.reviews.sources import MRSource
 from mr_review.core.vcs.protocols import VCSProvider, VCSProviderFactory
+
+
+class PostNotSupportedForSourceError(ValueError):
+    """Raised when posting comments is attempted on a review whose source has no MR/PR target."""
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +92,12 @@ class PostReviewUseCase:
         if review is None:
             raise ValueError(f"Review {review_id} not found")
 
+        if not isinstance(review.source, MRSource):
+            raise PostNotSupportedForSourceError(
+                f"Review {review_id} has source kind {review.source.kind!r}; "
+                "posting comments back to the VCS is only supported for merge-request reviews."
+            )
+
         host = await self._host_repo.get_by_id(review.host_id)
         if host is None:
             raise ValueError(f"Host {review.host_id} not found")
@@ -104,12 +115,13 @@ class PostReviewUseCase:
 
         provider = self._vcs_factory(host)
 
+        mr_iid = review.source.mr_iid
         refs: dict[str, str] = diff_refs or {}
         if not refs:
-            refs = await provider.get_diff_refs(review.repo_path, review.mr_iid)
+            refs = await provider.get_diff_refs(review.repo_path, mr_iid)
 
         posted = await self._post_comments(
-            provider, kept_comments, review.repo_path, review.mr_iid, refs, fallback_to_general_note
+            provider, kept_comments, review.repo_path, mr_iid, refs, fallback_to_general_note
         )
         await self._complete_iteration(review, idx)
         return posted

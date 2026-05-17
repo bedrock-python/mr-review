@@ -6,6 +6,7 @@ from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
 from mr_review.use_cases.reviews.context_files import CONTEXT_EMBED_CHARS, collect_context_files, merge_context
+from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 
 class GetReviewContextUseCase:
@@ -33,12 +34,12 @@ class GetReviewContextUseCase:
             raise ValueError(f"Host {review.host_id} not found")
 
         provider = self._vcs_factory(host)
-        mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        resolved = await resolve_source(review, provider)
         context_contents = await collect_context_files(
             provider=provider,
             repo_path=review.repo_path,
             requested_paths=review.brief_config.context_files,
-            ref=mr.source_branch,
+            ref=resolved.ref,
         )
 
         merged = merge_context(context_contents)

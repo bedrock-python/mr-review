@@ -120,6 +120,15 @@ class CachedVCSProvider:
         self._cache.set(key, result)
         return result
 
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        key = f"branch_diff:{repo_path}:{base_ref}..{head_ref}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast(list[DiffFile], cached)
+        result = await self._provider.get_branch_diff(repo_path, base_ref, head_ref)
+        self._cache.set(key, result)
+        return result
+
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         key = f"diff_refs:{repo_path}:{mr_iid}"
         cached = self._cache.get(key)

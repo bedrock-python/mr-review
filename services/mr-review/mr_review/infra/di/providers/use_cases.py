@@ -34,6 +34,7 @@ from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
 from mr_review.use_cases.mrs.list_inbox_mrs import ListInboxMRsUseCase
 from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
+from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
@@ -203,6 +204,10 @@ class UseCaseProvider(Provider):
     @provide
     def get_create_review_use_case(self, repo: FileReviewRepository) -> CreateReviewUseCase:
         return CreateReviewUseCase(repo)
+
+    @provide
+    def get_create_code_review_use_case(self, repo: FileReviewRepository) -> CreateCodeReviewUseCase:
+        return CreateCodeReviewUseCase(repo)
 
     @provide
     def get_create_iteration_use_case(self, repo: FileReviewRepository) -> CreateIterationUseCase:

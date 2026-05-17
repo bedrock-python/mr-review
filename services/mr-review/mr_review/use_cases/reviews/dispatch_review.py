@@ -23,6 +23,7 @@ from mr_review.use_cases.reviews.context_files import (
     collect_test_files,
 )
 from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
+from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 _log = logging.getLogger(__name__)
 
@@ -76,10 +77,10 @@ class DispatchReviewUseCase:
         iteration, review = await self._resolve_iteration(review, iteration_id, ai_provider_id, model)
 
         provider = self._vcs_factory(host)
-        mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
-        diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        resolved = await resolve_source(review, provider)
+        diff_files = resolved.diff_files
         cfg = iteration.brief_config
-        ref = mr.source_branch
+        ref = resolved.ref
 
         semaphore = asyncio.Semaphore(CONCURRENCY)
 
@@ -111,8 +112,8 @@ class DispatchReviewUseCase:
         prompt = build_prompt(
             cfg,
             diff_text,
-            mr.title,
-            mr.description,
+            resolved.title,
+            resolved.description,
             context_contents,
             full_files=full_files,
             test_files=test_files,

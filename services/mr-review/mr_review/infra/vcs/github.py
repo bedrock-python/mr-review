@@ -179,6 +179,39 @@ class GitHubProvider:
             )
         return diff_files
 
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        owner, repo = _split_repo_path(repo_path)
+        files: list[dict[str, Any]] = []
+        page = 1
+        while page <= 100:
+            page_data: dict[str, Any] = await self._get(
+                f"/repos/{owner}/{repo}/compare/{base_ref}...{head_ref}",
+                params={"per_page": 100, "page": page},
+            )
+            page_files: list[dict[str, Any]] = page_data.get("files", []) or []
+            if not page_files:
+                break
+            files.extend(page_files)
+            if len(page_files) < 100:
+                break
+            page += 1
+        diff_files: list[DiffFile] = []
+        for f in files:
+            patch = f.get("patch", "")
+            hunks = _parse_patch_to_hunks(patch) if patch else []
+            filename = str(f["filename"])
+            previous_filename = f.get("previous_filename")
+            diff_files.append(
+                DiffFile(
+                    path=filename,
+                    old_path=previous_filename if previous_filename and previous_filename != filename else None,
+                    additions=int(f.get("additions", 0)),
+                    deletions=int(f.get("deletions", 0)),
+                    hunks=hunks,
+                )
+            )
+        return diff_files
+
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         owner, repo = _split_repo_path(repo_path)
         data: dict[str, Any] = await self._get(f"/repos/{owner}/{repo}/pulls/{mr_iid}")

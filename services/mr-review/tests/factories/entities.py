@@ -8,6 +8,7 @@ from uuid import uuid4
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.hosts.entities import Host
 from mr_review.core.reviews.entities import BriefConfig, BriefPreset, Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
 
 
 def make_host(**kwargs: object) -> Host:
@@ -70,14 +71,27 @@ def make_review(**kwargs: object) -> Review:
         if not isinstance(brief_config, BriefConfig):
             brief_config = BriefConfig()
         iterations = [make_iteration(brief_config=brief_config)]
+    mr_iid = int(str(kwargs.get("mr_iid", 1)))
+    raw_source = kwargs.get("source")
+    source: ReviewSource = raw_source if isinstance(raw_source, (MRSource, BranchDiffSource)) else MRSource(mr_iid=mr_iid)
     return Review(
         id=kwargs.get("id", uuid4()),
         host_id=kwargs.get("host_id", uuid4()),
         repo_path=str(kwargs.get("repo_path", "team/service")),
-        mr_iid=int(str(kwargs.get("mr_iid", 1))),
+        mr_iid=mr_iid,
+        source=source,
         iterations=iterations,
         created_at=kwargs.get("created_at", now),
         updated_at=kwargs.get("updated_at", now),
+    )
+
+
+def make_branch_diff_source(**kwargs: object) -> BranchDiffSource:
+    """Build a ``BranchDiffSource`` value object with sensible defaults."""
+    return BranchDiffSource(
+        base_ref=str(kwargs.get("base_ref", "main")),
+        head_ref=str(kwargs.get("head_ref", "feature/x")),
+        title=str(kwargs.get("title", "")),
     )
 
 

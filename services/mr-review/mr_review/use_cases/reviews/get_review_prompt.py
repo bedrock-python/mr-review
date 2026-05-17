@@ -16,6 +16,7 @@ from mr_review.use_cases.reviews.context_files import (
     collect_test_files,
 )
 from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
+from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 
 class GetReviewPromptUseCase:
@@ -47,10 +48,10 @@ class GetReviewPromptUseCase:
         brief_config = brief_config or self._resolve_brief_config(review, review_id, iteration_id)
 
         provider = self._vcs_factory(host)
-        mr = await provider.get_mr(repo_path=review.repo_path, mr_iid=review.mr_iid)
-        diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
+        resolved = await resolve_source(review, provider)
+        diff_files = resolved.diff_files
         cfg = brief_config
-        ref = mr.source_branch
+        ref = resolved.ref
 
         semaphore = asyncio.Semaphore(CONCURRENCY)
 
@@ -87,8 +88,8 @@ class GetReviewPromptUseCase:
         return build_prompt(
             brief_config,
             format_diff(diff_files),
-            mr.title,
-            mr.description,
+            resolved.title,
+            resolved.description,
             context_contents if context_contents else None,
             full_files=full_files,
             test_files=test_files,

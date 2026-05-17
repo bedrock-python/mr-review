@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import yaml
@@ -16,6 +17,7 @@ from mr_review.core.reviews.entities import (
     IterationStage,
     Review,
 )
+from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
 from mr_review.infra.utils import now_utc as _now_utc
 
 _log = logging.getLogger(__name__)
@@ -82,17 +84,45 @@ def _iteration_to_dict(iteration: Iteration) -> dict[str, object]:
     }
 
 
+def _source_from_dict(data: dict[str, object], legacy_mr_iid: int) -> ReviewSource:
+    """Build a ``ReviewSource`` from YAML, falling back to ``MRSource`` for legacy rows."""
+    raw = data.get("source")
+    if raw is None:
+        return MRSource(mr_iid=legacy_mr_iid)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid review source payload: {raw!r}")
+    kind = raw.get("kind")
+    if kind == "mr":
+        return MRSource(mr_iid=int(str(raw.get("mr_iid", legacy_mr_iid))))
+    if kind == "branch_diff":
+        return BranchDiffSource(
+            base_ref=str(raw["base_ref"]),
+            head_ref=str(raw["head_ref"]),
+            title=str(raw.get("title", "") or ""),
+        )
+    raise ValueError(f"Unknown review source kind: {kind!r}")
+
+
+def _source_to_dict(source: ReviewSource) -> dict[str, object]:
+    return cast("dict[str, object]", source.model_dump(mode="json"))
+
+
 def _review_from_dict(data: dict[str, object]) -> Review:
     iterations_raw = data.get("iterations") or []
     if not isinstance(iterations_raw, list):
         iterations_raw = []
     iterations = [_iteration_from_dict(i) for i in iterations_raw]
 
+    legacy_mr_iid = int(str(data.get("mr_iid", 0)))
+    source = _source_from_dict(data, legacy_mr_iid)
+    mr_iid = source.mr_iid if isinstance(source, MRSource) else 0
+
     return Review(
         id=UUID(str(data["id"])),
         host_id=UUID(str(data["host_id"])),
         repo_path=str(data["repo_path"]),
-        mr_iid=int(str(data["mr_iid"])),
+        mr_iid=mr_iid,
+        source=source,
         iterations=iterations,
         created_at=_aware(datetime.fromisoformat(str(data["created_at"]))),
         updated_at=_aware(datetime.fromisoformat(str(data["updated_at"]))),
@@ -105,6 +135,7 @@ def _review_to_dict(review: Review) -> dict[str, object]:
         "host_id": str(review.host_id),
         "repo_path": review.repo_path,
         "mr_iid": review.mr_iid,
+        "source": _source_to_dict(review.source),
         "iterations": [_iteration_to_dict(i) for i in review.iterations],
         "created_at": review.created_at.isoformat(),
         "updated_at": review.updated_at.isoformat(),
@@ -163,6 +194,29 @@ class FileReviewRepository:
             host_id=host_id,
             repo_path=repo_path,
             mr_iid=mr_iid,
+            source=MRSource(mr_iid=mr_iid),
+            iterations=[],
+            created_at=now,
+            updated_at=now,
+        )
+        await asyncio.to_thread(self._write_one, review)
+        return review
+
+    async def create_from_source(
+        self,
+        host_id: UUID,
+        repo_path: str,
+        source: ReviewSource,
+        brief_config: BriefConfig | None = None,
+    ) -> Review:
+        now = _now_utc()
+        mr_iid = source.mr_iid if isinstance(source, MRSource) else 0
+        review = Review(
+            id=uuid4(),
+            host_id=host_id,
+            repo_path=repo_path,
+            mr_iid=mr_iid,
+            source=source,
             iterations=[],
             created_at=now,
             updated_at=now,
@@ -176,7 +230,12 @@ class FileReviewRepository:
     async def get_by_mr(self, host_id: UUID, repo_path: str, mr_iid: int) -> Review | None:
         def _sync() -> Review | None:
             for review in self._scan_all():
-                if review.host_id == host_id and review.repo_path == repo_path and review.mr_iid == mr_iid:
+                if (
+                    review.host_id == host_id
+                    and review.repo_path == repo_path
+                    and isinstance(review.source, MRSource)
+                    and review.source.mr_iid == mr_iid
+                ):
                     return review
             return None
 
