@@ -34,7 +34,7 @@ run-api:	##@App Run API server
 
 test:	##@App Test application
 ifeq ($(OS),Windows_NT)
-	uv run pytest tests
+	uv run --all-extras pytest tests
 else
-	uv run pytest tests
+	uv run --all-extras pytest tests
 endif
