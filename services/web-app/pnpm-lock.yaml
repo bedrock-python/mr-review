@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  expect-type@1.3.0:
+    hash: qmcznpdvxpdqxci5c7bc32ewpu
+    path: patches/expect-type@1.3.0.patch
+
 importers:
 
   .:
@@ -6403,7 +6408,7 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
-  expect-type@1.3.0: {}
+  expect-type@1.3.0(patch_hash=qmcznpdvxpdqxci5c7bc32ewpu): {}
 
   extend@3.0.2: {}
 
@@ -8115,7 +8120,7 @@ snapshots:
       '@vitest/utils': 3.2.4
       chai: 5.3.3
       debug: 4.4.3
-      expect-type: 1.3.0
+      expect-type: 1.3.0(patch_hash=qmcznpdvxpdqxci5c7bc32ewpu)
       magic-string: 0.30.21
       pathe: 2.0.3
       picomatch: 4.0.4
