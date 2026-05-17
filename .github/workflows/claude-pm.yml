@@ -19,6 +19,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Cache Claude Code installation
+      - name: Cache Claude Code
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.claude
+            ~/.cache/claude
+          key: ${{ runner.os }}-claude-${{ hashFiles('.github/workflows/claude-pm.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-claude-
+
       - name: Review backlog
         uses: anthropics/claude-code-action@v1
         with:
@@ -64,6 +75,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Cache Claude Code installation
+      - name: Cache Claude Code
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.claude
+            ~/.cache/claude
+          key: ${{ runner.os }}-claude-${{ hashFiles('.github/workflows/claude-pm.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-claude-
 
       - name: Plan next milestone
         uses: anthropics/claude-code-action@v1
