@@ -6,13 +6,22 @@ export {
   HostTypeSchema,
   CreateHostSchema,
   UpdateHostSchema,
+  AddRepoByUrlResponseSchema,
   useHosts,
   useCreateHost,
   useUpdateHost,
   useDeleteHost,
   useToggleFavouriteRepo,
+  useAddRepoByUrl,
   hostKeys,
   HOST_COLORS,
   getHostColor,
 } from "./model";
-export type { Host, HostType, CreateHost, UpdateHost, HostColorId } from "./model";
+export type {
+  Host,
+  HostType,
+  CreateHost,
+  UpdateHost,
+  AddRepoByUrlResponse,
+  HostColorId,
+} from "./model";

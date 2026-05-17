@@ -7,12 +7,22 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from mr_review.core.reviews.entities import BriefConfig, IterationStage
+from mr_review.core.reviews.sources import ReviewSource
 
 
 class CreateReviewRequest(BaseModel):
     host_id: UUID
     repo_path: str
     mr_iid: int
+    brief_config: BriefConfig | None = None
+
+
+class CreateCodeReviewRequest(BaseModel):
+    host_id: UUID
+    repo_path: str
+    base_ref: str
+    head_ref: str
+    title: str = ""
     brief_config: BriefConfig | None = None
 
 
@@ -47,6 +57,7 @@ class ReviewResponse(BaseModel):
     host_id: UUID
     repo_path: str
     mr_iid: int
+    source: ReviewSource
     iterations: list[IterationResponse]
     brief_config: BriefConfig
     created_at: datetime

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -9,9 +10,17 @@ import httpx
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.entities import Comment, IterationStage, Review
 from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.core.reviews.sources import MRSource
 from mr_review.core.vcs.protocols import VCSProvider, VCSProviderFactory
 
+
+class PostNotSupportedForSourceError(ValueError):
+    """Raised when posting comments is attempted on a review whose source has no MR/PR target."""
+
+
 logger = logging.getLogger(__name__)
+
+_POST_CONCURRENCY = 5
 
 
 async def _post_one_comment(
@@ -48,10 +57,12 @@ async def _post_one_comment(
             exc.response.text[:200],
         )
         try:
+            severity_tag = f"[**{comment.severity}**] " if comment.severity else ""
+            fallback_body = f"{severity_tag}**{comment.file}:{comment.line}**\n\n{comment.body}"
             await provider.post_general_note(
                 repo_path=repo_path,
                 mr_iid=mr_iid,
-                body=f"**{comment.file}:{comment.line}**\n\n{comment.body}",
+                body=fallback_body,
             )
         except (httpx.HTTPStatusError, httpx.RequestError):
             logger.exception("Fallback general note also failed for comment %s", comment.id)
@@ -70,7 +81,7 @@ class PostReviewUseCase:
         self._host_repo = host_repo
         self._vcs_factory = vcs_factory
 
-    async def execute(
+    async def execute(  # noqa: C901
         self,
         review_id: UUID,
         diff_refs: dict[str, str] | None = None,
@@ -82,6 +93,12 @@ class PostReviewUseCase:
         if review is None:
             raise ValueError(f"Review {review_id} not found")
 
+        if not isinstance(review.source, MRSource):
+            raise PostNotSupportedForSourceError(
+                f"Review {review_id} has source kind {review.source.kind!r}; "
+                "posting comments back to the VCS is only supported for merge-request reviews."
+            )
+
         host = await self._host_repo.get_by_id(review.host_id)
         if host is None:
             raise ValueError(f"Host {review.host_id} not found")
@@ -91,18 +108,21 @@ class PostReviewUseCase:
             return 0
 
         iteration = review.iterations[idx]
+        if iteration.stage == IterationStage.post:
+            logger.warning("Iteration %s is already in 'post' stage, re-posting comments", iteration.id)
         kept_comments = [c for c in iteration.comments if c.status == "kept"]
         if not kept_comments:
             return 0
 
         provider = self._vcs_factory(host)
 
+        mr_iid = review.source.mr_iid
         refs: dict[str, str] = diff_refs or {}
         if not refs:
-            refs = await provider.get_diff_refs(review.repo_path, review.mr_iid)
+            refs = await provider.get_diff_refs(review.repo_path, mr_iid)
 
         posted = await self._post_comments(
-            provider, kept_comments, review.repo_path, review.mr_iid, refs, fallback_to_general_note
+            provider, kept_comments, review.repo_path, mr_iid, refs, fallback_to_general_note
         )
         await self._complete_iteration(review, idx)
         return posted
@@ -116,11 +136,14 @@ class PostReviewUseCase:
         refs: dict[str, str],
         fallback_to_general_note: bool,
     ) -> int:
-        posted = 0
-        for comment in comments:
-            if await _post_one_comment(provider, comment, repo_path, mr_iid, refs, fallback_to_general_note):
-                posted += 1
-        return posted
+        semaphore = asyncio.Semaphore(_POST_CONCURRENCY)
+
+        async def _guarded(comment: Comment) -> bool:
+            async with semaphore:
+                return await _post_one_comment(provider, comment, repo_path, mr_iid, refs, fallback_to_general_note)
+
+        results = await asyncio.gather(*[_guarded(c) for c in comments], return_exceptions=True)
+        return sum(1 for r in results if r is True)
 
     async def _complete_iteration(self, review: Review, idx: int) -> None:
         completed_iteration = review.iterations[idx].model_copy(

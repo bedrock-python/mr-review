@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from mr_review.infra.vcs.gitlab import _parse_diff_text
+from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_diff_text
 
 pytestmark = pytest.mark.unit
 

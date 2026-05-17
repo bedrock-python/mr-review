@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.mrs.entities import MR, Repo
 from mr_review.core.vcs.protocols import VCSProviderFactory
+from mr_review.use_cases.mrs._favourite_repos import fetch_extra_favourites
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,9 @@ class ListInboxMRsUseCase:
 
         provider = self._vcs_factory(host)
         repos: list[Repo] = await provider.list_repos()
-        top_repos = repos[:INBOX_REPO_LIMIT]
+        extras = await fetch_extra_favourites(provider, host, repos)
+        candidates = [*extras, *repos]
+        top_repos = candidates[:INBOX_REPO_LIMIT]
 
         async def fetch_mrs(repo: Repo) -> list[InboxMR]:
             try:

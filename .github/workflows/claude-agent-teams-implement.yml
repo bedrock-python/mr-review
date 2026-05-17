@@ -1,0 +1,130 @@
+name: Claude Agent Teams Implementation
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to implement"
+        required: true
+        type: number
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  multi-agent-implement:
+    runs-on: ubuntu-latest
+    # Trigger only for issues with 'implement' label or manual dispatch
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'implement')) ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get issue details
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ISSUE_NUMBER="${{ github.event.inputs.issue_number }}"
+          else
+            ISSUE_NUMBER="${{ github.event.issue.number }}"
+          fi
+
+          echo "number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+
+          ISSUE_DATA=$(gh issue view $ISSUE_NUMBER --json title,body,labels)
+          echo "title=$(echo "$ISSUE_DATA" | jq -r '.title')" >> $GITHUB_OUTPUT
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$ISSUE_DATA" | jq -r '.body' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cache Claude Code installation
+      - name: Cache Claude Code
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.claude
+            ~/.cache/claude
+          key: ${{ runner.os }}-claude-${{ hashFiles('.github/workflows/claude-agent-teams-implement.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-claude-
+
+      - name: Multi-Agent Implementation with Claude
+        uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ steps.issue.outputs.number }}
+            TITLE: ${{ steps.issue.outputs.title }}
+
+            BODY:
+            ${{ steps.issue.outputs.body }}
+
+            **AGENT TEAMS MODE: Multi-agent parallel implementation**
+
+            This issue has analysis complete (see comments above). Now implement the solution.
+
+            **Previous Analysis Summary (from Agent Teams research):**
+            - Analysis complete with recommendations
+            - Implementation plan provided
+            - Read all comments on this issue for context
+
+            **Implementation Task:**
+            Spawn specialized agents to implement the approved solution:
+
+            **Agent 1 - Core Implementation**:
+            - Read analysis comments on this issue
+            - Implement core domain/use_case changes
+            - Follow .claude/rules/ (Onion Architecture)
+            - Add type hints, proper naming
+            - NO TODOs or FIXMEs
+
+            **Agent 2 - Infrastructure & Config**:
+            - Implement infrastructure layer (infra/)
+            - Add configuration (Settings, DI providers)
+            - Follow dependency injection patterns
+            - Register in DI container
+
+            **Agent 3 - Tests & Documentation**:
+            - Write unit tests (tests/unit/)
+            - Write integration tests if needed
+            - Update relevant docs
+            - Verify all tests pass
+
+            **Coordination:**
+            - Each agent: Focus on assigned scope
+            - Communicate via mailbox (ask questions, share findings)
+            - Team lead: Ensure consistency, create PR
+
+            **Output:**
+            1. Create feature branch: `feat/ISSUE-${{ steps.issue.outputs.number }}__<description>`
+            2. Implement changes (all 3 agents in parallel)
+            3. Run tests to verify
+            4. Commit changes (conventional commits)
+            5. Push branch using `./scripts/git-push.sh origin <branch>`
+            6. Create PR with:
+               - Title: Link to issue
+               - Body: Implementation summary
+               - Link back to this issue
+
+            **Tools:**
+            - Use `./scripts/git-push.sh` for safe git push
+            - Use `gh pr create` to create pull request
+            - Read codebase extensively
+            - Write/Edit files as needed
+
+          claude_args: |
+            --model opus
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(./scripts/git-push.sh:*),Bash(gh pr:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*)"

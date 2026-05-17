@@ -51,5 +51,5 @@ def _build_system_info(settings: Settings) -> SystemInfoResponse:
 
 
 @router.get("/system/info")
-async def get_system_info(settings: Settings = Depends(_get_settings)) -> SystemInfoResponse:
+async def get_system_info(settings: FromDishka[Settings]) -> SystemInfoResponse:
     return _build_system_info(settings)

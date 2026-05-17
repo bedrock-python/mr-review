@@ -80,6 +80,23 @@ pnpm typecheck
 pnpm test
 ```
 
+> **Troubleshooting — `ERR_MODULE_NOT_FOUND` on `expect-type` when running `pnpm test`.**
+> If a fresh `pnpm install` produces a vitest run that immediately throws
+> `Cannot find package '.../expect-type/dist/index.js'`, the cache or
+> peer-graph for `vitest@3.2.4` ended up incomplete. Adding `expect-type` as
+> an explicit dev-dep and re-installing forces pnpm to re-link the package
+> deterministically:
+>
+> ```bash
+> pnpm add -D expect-type
+> pnpm install
+> pnpm test
+> ```
+>
+> `expect-type` is a transitive dep of `vitest`, but pinning it at the leaf
+> works around a known pnpm hoisting edge case on Windows. Keep it in
+> `devDependencies` for reproducibility.
+
 ### 5. Commit Changes
 
 Pre-commit hooks run automatically:

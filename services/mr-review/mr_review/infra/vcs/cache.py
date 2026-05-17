@@ -93,6 +93,15 @@ class CachedVCSProvider:
             self._repos_cache.set(key, result)
         return result
 
+    async def get_repo(self, repo_path: str) -> Repo:
+        key = f"repo:{repo_path}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast(Repo, cached)
+        result = await self._provider.get_repo(repo_path)
+        self._cache.set(key, result)
+        return result
+
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
         key = f"mrs:{repo_path}:{state}"
         cached = self._cache.get(key)
@@ -117,6 +126,15 @@ class CachedVCSProvider:
         if not isinstance(cached, _Miss):
             return cast(list[DiffFile], cached)
         result = await self._provider.get_diff(repo_path, mr_iid)
+        self._cache.set(key, result)
+        return result
+
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        key = f"branch_diff:{repo_path}:{base_ref}..{head_ref}"
+        cached = self._cache.get(key)
+        if not isinstance(cached, _Miss):
+            return cast(list[DiffFile], cached)
+        result = await self._provider.get_branch_diff(repo_path, base_ref, head_ref)
         self._cache.set(key, result)
         return result
 

@@ -5,6 +5,7 @@ from uuid import UUID
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.mrs.entities import Repo
 from mr_review.core.vcs.protocols import VCSProviderFactory
+from mr_review.use_cases.mrs._favourite_repos import fetch_extra_favourites
 
 
 class ListReposUseCase:
@@ -17,4 +18,8 @@ class ListReposUseCase:
         if host is None:
             raise ValueError(f"Host {host_id} not found")
         provider = self._vcs_factory(host)
-        return await provider.list_repos(query=query)
+        listed = await provider.list_repos(query=query)
+        extras = await fetch_extra_favourites(provider, host, listed, query)
+        if not extras:
+            return listed
+        return [*extras, *listed]

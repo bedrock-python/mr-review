@@ -29,6 +29,7 @@ def _provider_to_response(provider: AIProvider) -> AIProviderResponse:
         models=provider.models,
         ssl_verify=provider.ssl_verify,
         timeout=provider.timeout,
+        max_concurrent=provider.max_concurrent,
         created_at=provider.created_at,
     )
 
@@ -52,6 +53,7 @@ async def create_ai_provider(
         models=body.models,
         ssl_verify=body.ssl_verify,
         timeout=body.timeout,
+        max_concurrent=body.max_concurrent,
     )
     return _provider_to_response(provider)
 
@@ -70,6 +72,8 @@ async def update_ai_provider(
         models=body.models,
         ssl_verify=body.ssl_verify,
         timeout=body.timeout,
+        max_concurrent=body.max_concurrent,
+        clear_max_concurrent=body.clear_max_concurrent,
     )
     if provider is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI provider not found")

@@ -107,3 +107,68 @@ async def test__delete_host__host_not_found__returns_404(client: AsyncClient) ->
 
     # Assert
     assert response.status_code == 404
+
+
+async def test__add_repo_by_url__host_not_found__returns_404(client: AsyncClient) -> None:
+    """POST /api/v1/hosts/{id}/repos/add-by-url returns 404 when the host is unknown."""
+    # Arrange
+    import uuid
+
+    missing_id = uuid.uuid4()
+
+    # Act
+    response = await client.post(
+        f"/api/v1/hosts/{missing_id}/repos/add-by-url",
+        json={"url": "torvalds/linux"},
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+async def test__add_repo_by_url__invalid_path__returns_400(client: AsyncClient) -> None:
+    """POST /api/v1/hosts/{id}/repos/add-by-url returns 400 for an unparseable input."""
+    # Arrange
+    create_resp = await client.post(
+        "/api/v1/hosts",
+        json={
+            "name": "BadURL",
+            "type": "github",
+            "base_url": "https://api.github.com",
+            "token": _TOKEN,
+        },
+    )
+    host_id = create_resp.json()["id"]
+
+    # Act
+    response = await client.post(
+        f"/api/v1/hosts/{host_id}/repos/add-by-url",
+        json={"url": "just-one-segment"},
+    )
+
+    # Assert
+    assert response.status_code == 400
+
+
+async def test__add_repo_by_url__empty_body__returns_422(client: AsyncClient) -> None:
+    """POST /api/v1/hosts/{id}/repos/add-by-url returns 422 when 'url' is missing/empty."""
+    # Arrange
+    create_resp = await client.post(
+        "/api/v1/hosts",
+        json={
+            "name": "Empty",
+            "type": "github",
+            "base_url": "https://api.github.com",
+            "token": _TOKEN,
+        },
+    )
+    host_id = create_resp.json()["id"]
+
+    # Act
+    response = await client.post(
+        f"/api/v1/hosts/{host_id}/repos/add-by-url",
+        json={"url": ""},
+    )
+
+    # Assert
+    assert response.status_code == 422

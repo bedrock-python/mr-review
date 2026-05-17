@@ -6,6 +6,7 @@ import { useHosts, useToggleFavouriteRepo } from "@entities/host";
 import { Skeleton } from "@shared/ui";
 import { getVcsErrorMessage } from "@shared/lib";
 import { useCheckUpdate, updateKeys } from "@features/check-update";
+import { AddRepoByUrlModal } from "@features/add-repo-by-url";
 import type { Repo } from "@entities/mr";
 
 const MIN_QUERY_LENGTH = 2;
@@ -454,6 +455,7 @@ const RepoRow = ({
 
 export const ReposPane = (): React.ReactElement => {
   const [search, setSearch] = useState("");
+  const [isAddRepoOpen, setIsAddRepoOpen] = useState(false);
   const { selectedHostId, selectedRepoPath, isInbox, setRepo, setInbox } = useNav();
   const { data: hosts } = useHosts();
   const { mutate: toggleFavourite } = useToggleFavouriteRepo();
@@ -543,50 +545,90 @@ export const ReposPane = (): React.ReactElement => {
           )}
         </div>
 
-        {/* Search */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "5px 8px",
-          }}
-        >
-          <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>
-            <SearchIcon />
-          </span>
-          <input
-            type="search"
-            placeholder="Search repos…"
-            value={search}
-            onChange={handleSearchChange}
-            aria-label="Search repositories"
+        {/* Search + add-by-url */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div
             style={{
               flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 12,
-              color: "var(--fg-0)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--bg-2)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              padding: "5px 8px",
               minWidth: 0,
             }}
-          />
-          {isLoading && activeQuery !== undefined && (
-            <span
+          >
+            <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>
+              <SearchIcon />
+            </span>
+            <input
+              type="search"
+              placeholder="Search repos…"
+              value={search}
+              onChange={handleSearchChange}
+              aria-label="Search repositories"
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                border: "1.5px solid var(--fg-3)",
-                borderTopColor: "transparent",
-                animation: "spin 0.6s linear infinite",
-                flexShrink: 0,
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontSize: 12,
+                color: "var(--fg-0)",
+                minWidth: 0,
               }}
             />
-          )}
+            {isLoading && activeQuery !== undefined && (
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  border: "1.5px solid var(--fg-3)",
+                  borderTopColor: "transparent",
+                  animation: "spin 0.6s linear infinite",
+                  flexShrink: 0,
+                }}
+              />
+            )}
+          </div>
+          <button
+            type="button"
+            title="Add repository by URL"
+            aria-label="Add repository by URL"
+            disabled={!selectedHostId}
+            onClick={() => {
+              setIsAddRepoOpen(true);
+            }}
+            style={{
+              flexShrink: 0,
+              width: 28,
+              height: 28,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--bg-2)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              cursor: selectedHostId ? "pointer" : "not-allowed",
+              color: selectedHostId ? "var(--fg-0)" : "var(--fg-3)",
+              opacity: selectedHostId ? 1 : 0.5,
+              padding: 0,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -787,6 +829,13 @@ export const ReposPane = (): React.ReactElement => {
         </span>
         <VersionBadge />
       </div>
+      <AddRepoByUrlModal
+        isOpen={isAddRepoOpen}
+        hostId={selectedHostId}
+        onClose={() => {
+          setIsAddRepoOpen(false);
+        }}
+      />
     </aside>
   );
 };

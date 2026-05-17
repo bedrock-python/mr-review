@@ -8,11 +8,14 @@ from uuid import uuid4
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.hosts.entities import Host
 from mr_review.core.reviews.entities import BriefConfig, BriefPreset, Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
 
 
 def make_host(**kwargs: object) -> Host:
     """Build a Host domain entity with sensible defaults."""
     now = datetime.now(timezone.utc)
+    raw_favourites = kwargs.get("favourite_repos", [])
+    favourites: list[str] = list(raw_favourites) if isinstance(raw_favourites, list) else []
     return Host(
         id=kwargs.get("id", uuid4()),
         name=str(kwargs.get("name", "test-host")),
@@ -20,6 +23,7 @@ def make_host(**kwargs: object) -> Host:
         base_url=str(kwargs.get("base_url", "https://gitlab.example.com")),
         token=str(kwargs.get("token", "secret-token")),
         created_at=kwargs.get("created_at", now),
+        favourite_repos=favourites,
     )
 
 
@@ -70,14 +74,29 @@ def make_review(**kwargs: object) -> Review:
         if not isinstance(brief_config, BriefConfig):
             brief_config = BriefConfig()
         iterations = [make_iteration(brief_config=brief_config)]
+    mr_iid = int(str(kwargs.get("mr_iid", 1)))
+    raw_source = kwargs.get("source")
+    source: ReviewSource = (
+        raw_source if isinstance(raw_source, (MRSource, BranchDiffSource)) else MRSource(mr_iid=mr_iid)
+    )
     return Review(
         id=kwargs.get("id", uuid4()),
         host_id=kwargs.get("host_id", uuid4()),
         repo_path=str(kwargs.get("repo_path", "team/service")),
-        mr_iid=int(str(kwargs.get("mr_iid", 1))),
+        mr_iid=mr_iid,
+        source=source,
         iterations=iterations,
         created_at=kwargs.get("created_at", now),
         updated_at=kwargs.get("updated_at", now),
+    )
+
+
+def make_branch_diff_source(**kwargs: object) -> BranchDiffSource:
+    """Build a ``BranchDiffSource`` value object with sensible defaults."""
+    return BranchDiffSource(
+        base_ref=str(kwargs.get("base_ref", "main")),
+        head_ref=str(kwargs.get("head_ref", "feature/x")),
+        title=str(kwargs.get("title", "")),
     )
 
 
@@ -86,6 +105,8 @@ def make_ai_provider(**kwargs: object) -> AIProvider:
     now = datetime.now(timezone.utc)
     raw_models = kwargs.get("models", ["claude-haiku-4-5"])
     models: list[str] = list(raw_models) if isinstance(raw_models, list) else ["claude-haiku-4-5"]
+    raw_max_concurrent = kwargs.get("max_concurrent")
+    max_concurrent: int | None = int(str(raw_max_concurrent)) if raw_max_concurrent is not None else None
     return AIProvider(
         id=kwargs.get("id", uuid4()),
         name=str(kwargs.get("name", "test-provider")),
@@ -96,6 +117,7 @@ def make_ai_provider(**kwargs: object) -> AIProvider:
         ssl_verify=bool(kwargs.get("ssl_verify", True)),
         timeout=int(str(kwargs.get("timeout", 60))),
         created_at=kwargs.get("created_at", now),
+        max_concurrent=max_concurrent,
     )
 
 

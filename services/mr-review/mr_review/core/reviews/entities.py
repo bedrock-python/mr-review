@@ -5,7 +5,9 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
+
+from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
 
 
 class BriefPreset(str, Enum):
@@ -61,10 +63,28 @@ class Review(BaseModel):
     id: UUID
     host_id: UUID
     repo_path: str
-    mr_iid: int
+    # mr_iid is retained for backward-compatible YAML storage and APIs that
+    # predate ReviewSource. For BranchDiffSource reviews it is 0.
+    mr_iid: int = 0
+    source: ReviewSource = Field(default_factory=lambda: MRSource(mr_iid=0))
     iterations: list[Iteration] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def _sync_mr_iid_with_source(self) -> Review:
+        """Keep ``mr_iid`` and ``source`` consistent.
+
+        Historical reviews persisted only ``mr_iid``; new reviews may set
+        ``source`` directly. After construction we make sure both agree so
+        downstream code can read either field without surprises.
+        """
+        if isinstance(self.source, MRSource):
+            if self.source.mr_iid == 0 and self.mr_iid != 0:
+                object.__setattr__(self, "source", MRSource(mr_iid=self.mr_iid))
+            elif self.mr_iid != self.source.mr_iid:
+                object.__setattr__(self, "mr_iid", self.source.mr_iid)
+        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -72,3 +92,16 @@ class Review(BaseModel):
         if self.iterations:
             return self.iterations[-1].brief_config
         return BriefConfig()
+
+
+__all__ = [
+    "BranchDiffSource",
+    "BriefConfig",
+    "BriefPreset",
+    "Comment",
+    "Iteration",
+    "IterationStage",
+    "MRSource",
+    "Review",
+    "ReviewSource",
+]

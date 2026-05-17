@@ -1,0 +1,21 @@
+diff --git a/package.json b/package.json
+index 8cc48b4765abaab89342a788af735086bd8f15e6..3d3cba8dc13c0c1f4163cfa7fcd7e1691e7091b5 100644
+--- a/package.json
++++ b/package.json	
+@@ -19,8 +19,16 @@
+     "url": "https://github.com/mmkal/expect-type.git"
+   },
+   "license": "Apache-2.0",
++  "type": "commonjs",
+   "main": "dist/index.js",
+   "types": "dist/index.d.ts",
++  "exports": {
++    ".": {
++      "types": "./dist/index.d.ts",
++      "default": "./dist/index.js"
++    },
++    "./package.json": "./package.json"
++  },
+   "files": [
+     "dist",
+     "*.md"

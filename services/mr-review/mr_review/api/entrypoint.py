@@ -23,10 +23,14 @@ from mr_review.infra.di.containers.api import create_api_container
 
 logger = structlog.get_logger(__name__)
 
+# Mutable container so main() can pre-load Settings for the factory
+# without a global assignment (avoids PLW0603).
+_settings_cache: list[Settings] = []
+
 
 def create_app() -> FastAPI:
     """Factory function for uvicorn to create the app instance."""
-    settings = Settings()
+    settings = _settings_cache[0] if _settings_cache else Settings()
 
     configure_logging(
         log_level=settings.logging.level,
@@ -110,6 +114,7 @@ def main() -> None:
         uvloop.install()
 
     settings = Settings()
+    _settings_cache.append(settings)
 
     import uvicorn  # noqa: PLC0415
 

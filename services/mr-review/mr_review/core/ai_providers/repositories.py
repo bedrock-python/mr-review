@@ -16,6 +16,7 @@ class AIProviderRepository(Protocol):
         models: list[str],
         ssl_verify: bool = True,
         timeout: int = 60,
+        max_concurrent: int | None = None,
     ) -> AIProvider: ...
 
     async def get_by_id(self, provider_id: UUID) -> AIProvider | None: ...
@@ -31,6 +32,8 @@ class AIProviderRepository(Protocol):
         models: list[str] | None = None,
         ssl_verify: bool | None = None,
         timeout: int | None = None,
+        max_concurrent: int | None = None,
+        clear_max_concurrent: bool = False,
     ) -> AIProvider | None: ...
 
     async def delete(self, provider_id: UUID) -> bool: ...

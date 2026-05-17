@@ -1,8 +1,9 @@
 import { http, HttpResponse } from "msw";
+import { patchHandlers } from "./handlers/patch";
 
 const MOCK_HOST_ID = "00000000-0000-0000-0000-000000000001";
 
-export const handlers = [
+const reviewHandlers = [
   // Hosts
   http.get("/api/v1/hosts", () => {
     return HttpResponse.json([
@@ -208,3 +209,5 @@ export const handlers = [
     return HttpResponse.json({ posted: 0 });
   }),
 ];
+
+export const handlers = [...reviewHandlers, ...patchHandlers];

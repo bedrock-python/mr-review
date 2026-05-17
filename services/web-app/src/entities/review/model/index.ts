@@ -22,6 +22,22 @@ export type {
   Review,
 } from "./review.schema";
 export {
+  PatchStatusSchema,
+  PatchStatsSchema,
+  SuggestedPatchSchema,
+  AppliedPatchSchema,
+  PatchErrorCodeSchema,
+  PatchErrorEnvelopeSchema,
+} from "./patch.schema";
+export type {
+  PatchStatus,
+  PatchStats,
+  SuggestedPatch,
+  AppliedPatch,
+  PatchErrorCode,
+  PatchErrorEnvelope,
+} from "./patch.schema";
+export {
   useReviews,
   useReview,
   useCreateReview,

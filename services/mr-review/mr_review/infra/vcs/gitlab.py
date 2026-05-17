@@ -1,77 +1,17 @@
 from __future__ import annotations
 
-import re
-from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
-
-
-def _parse_datetime(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
+from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_diff_text
 
 
 def _encode_path(repo_path: str) -> str:
     return quote(repo_path, safe="")
-
-
-_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
-
-def _apply_diff_line(
-    hunk: DiffHunk,
-    raw_line: str,
-    old_line: int,
-    new_line: int,
-) -> tuple[int, int]:
-    if raw_line.startswith("+") and not raw_line.startswith("+++"):
-        hunk.lines.append(DiffLine(type="added", new_line=new_line, content=raw_line[1:]))
-        return old_line, new_line + 1
-    if raw_line.startswith("-") and not raw_line.startswith("---"):
-        hunk.lines.append(DiffLine(type="removed", old_line=old_line, content=raw_line[1:]))
-        return old_line + 1, new_line
-    content = raw_line[1:] if raw_line.startswith(" ") else raw_line
-    hunk.lines.append(DiffLine(type="context", old_line=old_line, new_line=new_line, content=content))
-    return old_line + 1, new_line + 1
-
-
-def _parse_diff_text(diff_text: str) -> list[DiffHunk]:
-    """Parse raw unified diff text into DiffHunk/DiffLine objects."""
-    hunks: list[DiffHunk] = []
-    current_hunk: DiffHunk | None = None
-    old_line = 0
-    new_line = 0
-
-    for raw_line in diff_text.splitlines():
-        m = _HUNK_HEADER_RE.match(raw_line)
-        if m:
-            if current_hunk is not None:
-                hunks.append(current_hunk)
-            old_start = int(m.group(1))
-            new_start = int(m.group(3))
-            current_hunk = DiffHunk(
-                old_start=old_start,
-                new_start=new_start,
-                old_count=int(m.group(2)) if m.group(2) is not None else 1,
-                new_count=int(m.group(4)) if m.group(4) is not None else 1,
-                lines=[],
-            )
-            old_line, new_line = old_start, new_start
-            continue
-
-        if current_hunk is not None:
-            old_line, new_line = _apply_diff_line(current_hunk, raw_line, old_line, new_line)
-
-    if current_hunk is not None:
-        hunks.append(current_hunk)
-
-    return hunks
 
 
 def _pipeline_status(mr_data: dict[str, Any]) -> str | None:
@@ -125,7 +65,7 @@ class GitLabProvider:
         base_params: dict[str, Any] = {"membership": "true", "per_page": 100, "order_by": "last_activity_at"}
         if query:
             base_params["search"] = query
-        while True:
+        while page <= 100:
             data: list[dict[str, Any]] = await self._get(
                 "/projects",
                 params={**base_params, "page": page},
@@ -146,11 +86,21 @@ class GitLabProvider:
             page += 1
         return repos
 
+    async def get_repo(self, repo_path: str) -> Repo:
+        encoded = _encode_path(repo_path)
+        data: dict[str, Any] = await self._get(f"/projects/{encoded}")
+        return Repo(
+            id=str(data["id"]),
+            path=str(data["path_with_namespace"]),
+            name=str(data["name"]),
+            description=data.get("description"),
+        )
+
     async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
         encoded = _encode_path(repo_path)
         mrs: list[MR] = []
         page = 1
-        while True:
+        while page <= 100:
             data: list[dict[str, Any]] = await self._get(
                 f"/projects/{encoded}/merge_requests",
                 params={"state": state, "per_page": 100, "page": page, "with_merge_status_recheck": "false"},
@@ -212,6 +162,31 @@ class GitLabProvider:
         )
         diff_files: list[DiffFile] = []
         for change in data.get("changes", []):
+            diff_text: str = change.get("diff", "")
+            hunks = _parse_diff_text(diff_text)
+            additions = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))
+            deletions = sum(1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---"))
+            old_path = change.get("old_path")
+            new_path = str(change["new_path"])
+            diff_files.append(
+                DiffFile(
+                    path=new_path,
+                    old_path=old_path if old_path != new_path else None,
+                    additions=additions,
+                    deletions=deletions,
+                    hunks=hunks,
+                )
+            )
+        return diff_files
+
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        encoded = _encode_path(repo_path)
+        data: dict[str, Any] = await self._get(
+            f"/projects/{encoded}/repository/compare",
+            params={"from": base_ref, "to": head_ref, "straight": "false"},
+        )
+        diff_files: list[DiffFile] = []
+        for change in data.get("diffs", []):
             diff_text: str = change.get("diff", "")
             hunks = _parse_diff_text(diff_text)
             additions = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))
@@ -301,7 +276,7 @@ class GitLabProvider:
         encoded = _encode_path(repo_path)
         page = 1
         paths: list[str] = []
-        while True:
+        while page <= 100:
             url = f"{self._base_url}/api/v4/projects/{encoded}/repository/tree"
             response = await self._client.get(
                 url,

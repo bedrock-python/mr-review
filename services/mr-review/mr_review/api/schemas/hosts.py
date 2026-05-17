@@ -51,3 +51,12 @@ class TestConnectionResponse(BaseModel):
     username: str
     name: str
     email: str
+
+
+class AddRepoByUrlRequest(BaseModel):
+    url: str = Field(min_length=1, description="Repo URL or 'owner/repo' path")
+
+
+class AddRepoByUrlResponse(BaseModel):
+    host: HostResponse
+    repo_path: str

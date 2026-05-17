@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { hostApi } from "../api/hostApi";
-import type { CreateHost, Host, UpdateHost } from "./host.schema";
+import type { AddRepoByUrlResponse, CreateHost, Host, UpdateHost } from "./host.schema";
 
 export const hostKeys = {
   all: ["hosts"] as const,
@@ -79,6 +79,23 @@ export const useToggleFavouriteRepo = (): ReturnType<
     },
     onError: (err) => {
       toast.error("Failed to update favourites", { description: err.message });
+    },
+  });
+};
+
+export const useAddRepoByUrl = (): ReturnType<
+  typeof useMutation<AddRepoByUrlResponse, Error, { hostId: string; url: string }>
+> => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ hostId, url }) => hostApi.addRepoByUrl(hostId, url),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: hostKeys.lists() });
+      void qc.invalidateQueries({ queryKey: ["mrs", "repos"] });
+      toast.success(`Pinned ${result.repo_path}`);
+    },
+    onError: (err) => {
+      toast.error("Failed to add repository", { description: err.message });
     },
   });
 };

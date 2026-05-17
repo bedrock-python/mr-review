@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview, reviewApi, reviewKeys } from "@entities/review";
 import type { Comment, CommentSeverity } from "@entities/review";
+import { DiffViewer } from "@shared/ui";
+import type { DiffLineWithFile } from "@shared/ui";
 
 type ViewMode = "pinned" | "list" | "thread";
 
@@ -220,44 +222,11 @@ const CommentEditor = ({
   );
 };
 
-// ── DiffViewer ────────────────────────────────────────────────────────────────
+// ── ReviewDiffViewer ──────────────────────────────────────────────────────────
+// Thin wrapper around shared DiffViewer: fetches review diff and renders
+// severity-coloured markers for inline comments.
 
-type DiffLine = {
-  type: "header" | "added" | "removed" | "context" | "file";
-  content: string;
-  newLine: number | null;
-  oldLine: number | null;
-};
-
-function parseDiff(raw: string): DiffLine[] {
-  const lines: DiffLine[] = [];
-  let newLine = 0;
-  let oldLine = 0;
-
-  for (const rawLine of raw.split("\n")) {
-    if (rawLine.startsWith("--- ") || rawLine.startsWith("+++ ")) {
-      lines.push({ type: "file", content: rawLine, newLine: null, oldLine: null });
-    } else if (rawLine.startsWith("@@ ")) {
-      // Parse hunk header: @@ -old,count +new,count @@
-      const m = /@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(rawLine);
-      if (m) {
-        oldLine = parseInt(m[1] ?? "0", 10);
-        newLine = parseInt(m[2] ?? "0", 10);
-      }
-      lines.push({ type: "header", content: rawLine, newLine: null, oldLine: null });
-    } else if (rawLine.startsWith("+")) {
-      lines.push({ type: "added", content: rawLine.slice(1), newLine: newLine++, oldLine: null });
-    } else if (rawLine.startsWith("-")) {
-      lines.push({ type: "removed", content: rawLine.slice(1), newLine: null, oldLine: oldLine++ });
-    } else {
-      const content = rawLine.startsWith(" ") ? rawLine.slice(1) : rawLine;
-      lines.push({ type: "context", content, newLine: newLine++, oldLine: oldLine++ });
-    }
-  }
-  return lines;
-}
-
-type DiffViewerProps = {
+type ReviewDiffViewerProps = {
   reviewId: string;
   targetFile: string | null;
   targetLine: number | null;
@@ -265,47 +234,18 @@ type DiffViewerProps = {
   onCommentClick: (id: string) => void;
 };
 
-const DiffViewer = ({
+const ReviewDiffViewer = ({
   reviewId,
   targetFile,
   targetLine,
   commentsOnLines,
   onCommentClick,
-}: DiffViewerProps): React.ReactElement => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const highlightRef = useRef<HTMLDivElement>(null);
-
+}: ReviewDiffViewerProps): React.ReactElement => {
   const { data: rawDiff, isLoading } = useQuery({
     queryKey: ["review-diff", reviewId],
     queryFn: () => reviewApi.getDiff(reviewId),
     staleTime: 5 * 60 * 1000,
   });
-
-  const lines = useMemo(() => (rawDiff ? parseDiff(rawDiff) : []), [rawDiff]);
-
-  // Track which file each line belongs to
-  const linesWithFile = useMemo((): (DiffLine & { file: string })[] => {
-    let currentFile = "";
-    return lines.map((l) => {
-      if (l.type === "file" && l.content.startsWith("+++ ")) {
-        // "+++ b/src/auth/login.py" → "src/auth/login.py"
-        currentFile = l.content.replace(/^\+\+\+ (b\/)?/, "").trim();
-      }
-      return { ...l, file: currentFile };
-    });
-  }, [lines]);
-
-  // Scroll to highlighted line when target changes
-  useEffect(() => {
-    if (highlightRef.current && containerRef.current) {
-      const container = containerRef.current;
-      const el = highlightRef.current;
-      const elTop = el.offsetTop;
-      const elHeight = el.offsetHeight;
-      const containerHeight = container.clientHeight;
-      container.scrollTo({ top: elTop - containerHeight / 2 + elHeight / 2, behavior: "smooth" });
-    }
-  }, [targetFile, targetLine]);
 
   if (isLoading) {
     return (
@@ -327,171 +267,52 @@ const DiffViewer = ({
             borderTopColor: "var(--accent)",
             borderRadius: "50%",
           }}
-          className="animate-spin"
+          className="animate-spin motion-reduce:animate-none"
         />
         <span style={{ fontSize: 12 }}>Loading diff…</span>
       </div>
     );
   }
 
-  if (!rawDiff) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--fg-3)",
-          fontSize: 12,
-        }}
-      >
-        No diff available
-      </div>
-    );
-  }
-
   return (
-    <div
-      ref={containerRef}
-      style={{ overflow: "auto", height: "100%", fontFamily: "var(--font-mono)", fontSize: 11 }}
-    >
-      {linesWithFile.map((line, idx) => {
-        const isHighlighted =
-          targetFile !== null &&
-          targetLine !== null &&
-          line.file === targetFile &&
-          line.newLine === targetLine;
-
-        const lineComments =
-          (line.type === "added" || line.type === "context") && line.newLine !== null
-            ? (commentsOnLines.get(line.newLine) ?? []).filter((c) => c.file === line.file)
-            : [];
-
-        let bg = "transparent";
-        let color = "var(--fg-1)";
-        if (line.type === "file") {
-          bg = "var(--bg-2)";
-          color = "var(--accent)";
-        } else if (line.type === "header") {
-          bg = "var(--bg-2)";
-          color = "var(--fg-3)";
-        } else if (line.type === "added") {
-          bg = "color-mix(in oklch, #4ade80 8%, transparent)";
-          color = "#86efac";
-        } else if (line.type === "removed") {
-          bg = "color-mix(in oklch, #f87171 8%, transparent)";
-          color = "#fca5a5";
-        }
-
-        if (isHighlighted) {
-          bg = "color-mix(in oklch, var(--accent) 18%, transparent)";
-        }
-
-        return (
-          <div key={idx}>
-            <div
-              ref={isHighlighted ? highlightRef : undefined}
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                background: bg,
-                outline: isHighlighted
-                  ? "1px solid color-mix(in oklch, var(--accent) 60%, transparent)"
-                  : "none",
-                outlineOffset: -1,
-                minHeight: 20,
-              }}
-            >
-              {/* Old line number */}
-              <span
-                style={{
-                  width: 40,
-                  flexShrink: 0,
-                  padding: "1px 6px 1px 0",
-                  textAlign: "right",
-                  color: "var(--fg-3)",
-                  userSelect: "none",
-                  lineHeight: "18px",
-                }}
-              >
-                {line.oldLine ?? ""}
-              </span>
-              {/* New line number */}
-              <span
-                style={{
-                  width: 40,
-                  flexShrink: 0,
-                  padding: "1px 8px 1px 0",
-                  textAlign: "right",
-                  color: "var(--fg-3)",
-                  userSelect: "none",
-                  lineHeight: "18px",
-                }}
-              >
-                {line.newLine ?? ""}
-              </span>
-              {/* Sign */}
-              <span
-                style={{
-                  width: 14,
-                  flexShrink: 0,
-                  color:
-                    line.type === "added"
-                      ? "#86efac"
-                      : line.type === "removed"
-                        ? "#fca5a5"
-                        : "var(--fg-3)",
-                  lineHeight: "18px",
-                  userSelect: "none",
-                }}
-              >
-                {line.type === "added" ? "+" : line.type === "removed" ? "−" : " "}
-              </span>
-              {/* Content */}
-              <span
-                style={{
-                  flex: 1,
-                  padding: "1px 8px 1px 0",
-                  color,
-                  lineHeight: "18px",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                }}
-              >
-                {line.content}
-              </span>
-              {/* Comment indicators */}
-              {lineComments.length > 0 && (
-                <div style={{ display: "flex", gap: 2, padding: "1px 6px", flexShrink: 0 }}>
-                  {lineComments.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        onCommentClick(c.id);
-                      }}
-                      title={c.body.slice(0, 80)}
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        flexShrink: 0,
-                        background: SEV_COLOR[c.severity],
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        opacity: c.status === "dismissed" ? 0.4 : 1,
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <DiffViewer<Comment>
+      diff={rawDiff ?? ""}
+      mode="full"
+      highlightFile={targetFile}
+      highlightLine={targetLine}
+      commentsOnLines={commentsOnLines}
+      ariaLabel="Review diff"
+      renderLineDecoration={({
+        line,
+        comments,
+      }: {
+        line: DiffLineWithFile;
+        comments: readonly Comment[];
+      }) =>
+        comments.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => {
+              onCommentClick(c.id);
+            }}
+            title={c.body.slice(0, 80)}
+            aria-label={`${c.severity} comment on ${line.file}:${String(line.newLine ?? "")}`}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              flexShrink: 0,
+              background: SEV_COLOR[c.severity],
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              opacity: c.status === "dismissed" ? 0.4 : 1,
+            }}
+          />
+        ))
+      }
+    />
   );
 };
 
@@ -571,7 +392,7 @@ const PolishPinned = ({
               )}
             </div>
           )}
-          <DiffViewer
+          <ReviewDiffViewer
             reviewId={reviewId}
             targetFile={active?.file ?? null}
             targetLine={active?.line ?? null}
