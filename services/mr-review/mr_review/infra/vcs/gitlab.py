@@ -179,6 +179,35 @@ class GitLabProvider:
             )
         return diff_files
 
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        encoded = _encode_path(repo_path)
+        data: dict[str, Any] = await self._get(
+            f"/projects/{encoded}/repository/compare",
+            params={"from": base_ref, "to": head_ref, "straight": "false"},
+        )
+        diff_files: list[DiffFile] = []
+        for change in data.get("diffs", []):
+            diff_text: str = change.get("diff", "")
+            hunks = _parse_diff_text(diff_text)
+            additions = sum(
+                1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++")
+            )
+            deletions = sum(
+                1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---")
+            )
+            old_path = change.get("old_path")
+            new_path = str(change["new_path"])
+            diff_files.append(
+                DiffFile(
+                    path=new_path,
+                    old_path=old_path if old_path != new_path else None,
+                    additions=additions,
+                    deletions=deletions,
+                    hunks=hunks,
+                )
+            )
+        return diff_files
+
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         encoded = _encode_path(repo_path)
         data: dict[str, Any] = await self._get(f"/projects/{encoded}/merge_requests/{mr_iid}/changes")

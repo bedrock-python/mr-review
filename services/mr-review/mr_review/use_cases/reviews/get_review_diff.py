@@ -6,6 +6,7 @@ from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
 from mr_review.use_cases.reviews.prompt_builder import format_diff
+from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 
 class GetReviewDiffUseCase:
@@ -29,5 +30,5 @@ class GetReviewDiffUseCase:
             raise ValueError(f"Host {review.host_id} not found")
 
         provider = self._vcs_factory(host)
-        diff_files = await provider.get_diff(repo_path=review.repo_path, mr_iid=review.mr_iid)
-        return format_diff(diff_files)
+        resolved = await resolve_source(review, provider)
+        return format_diff(resolved.diff_files)

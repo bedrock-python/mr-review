@@ -4,6 +4,7 @@ from typing import Protocol
 from uuid import UUID
 
 from mr_review.core.reviews.entities import BriefConfig, Review
+from mr_review.core.reviews.sources import ReviewSource
 
 
 class ReviewRepository(Protocol):
@@ -12,6 +13,14 @@ class ReviewRepository(Protocol):
         host_id: UUID,
         repo_path: str,
         mr_iid: int,
+        brief_config: BriefConfig | None = None,
+    ) -> Review: ...
+
+    async def create_from_source(
+        self,
+        host_id: UUID,
+        repo_path: str,
+        source: ReviewSource,
         brief_config: BriefConfig | None = None,
     ) -> Review: ...
 

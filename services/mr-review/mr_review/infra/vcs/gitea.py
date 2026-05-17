@@ -7,6 +7,7 @@ import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, Repo
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
+from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 
 
@@ -130,6 +131,19 @@ class GiteaProvider:
                 )
             )
         return diff_files
+
+    async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        owner, repo = _split_repo_path(repo_path)
+        # Gitea exposes branch comparison as a unified diff at
+        # /repos/{owner}/{repo}/compare/{base}...{head}.diff
+        encoded_base = quote(base_ref, safe="")
+        encoded_head = quote(head_ref, safe="")
+        url = f"{self._base_url}/api/v1/repos/{owner}/{repo}/compare/{encoded_base}...{encoded_head}.diff"
+        response = await self._client.get(url, headers=self._headers)
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        return _parse_full_diff(response.text)
 
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         owner, repo = _split_repo_path(repo_path)

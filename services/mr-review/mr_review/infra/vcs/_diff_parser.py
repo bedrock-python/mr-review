@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from mr_review.core.mrs.entities import DiffHunk, DiffLine
+from mr_review.core.mrs.entities import DiffFile, DiffHunk, DiffLine
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+_FILE_HEADER_RE = re.compile(r"^diff --git a/(.+) b/(.+)$")
+_OLD_FILE_RE = re.compile(r"^--- a/(.+)$")
+_NEW_FILE_RE = re.compile(r"^\+\+\+ b/(.+)$")
 
 
 def parse_datetime(value: str) -> datetime:
@@ -66,3 +71,66 @@ def parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
         hunks.append(current_hunk)
 
     return hunks
+
+
+def _build_diff_file(path: str, old_path: str | None, diff_lines: list[str]) -> DiffFile:
+    diff_text = "\n".join(diff_lines)
+    hunks = parse_patch_to_hunks(diff_text)
+    additions = sum(1 for ln in diff_lines if ln.startswith("+") and not ln.startswith("+++"))
+    deletions = sum(1 for ln in diff_lines if ln.startswith("-") and not ln.startswith("---"))
+    return DiffFile(
+        path=path,
+        old_path=old_path if old_path and old_path != path else None,
+        additions=additions,
+        deletions=deletions,
+        hunks=hunks,
+    )
+
+
+@dataclass
+class _DiffState:
+    diff_files: list[DiffFile] = field(default_factory=list)
+    current_path: str | None = None
+    current_old_path: str | None = None
+    current_diff: list[str] = field(default_factory=list)
+    old_path: str | None = None
+    new_path: str | None = None
+
+    def flush(self) -> None:
+        if self.current_path is not None:
+            self.diff_files.append(_build_diff_file(self.current_path, self.current_old_path, self.current_diff))
+
+    def handle_file_header(self, m: re.Match[str]) -> None:
+        self.flush()
+        self.current_path = None
+        self.current_old_path = None
+        self.current_diff = []
+        self.old_path = m.group(1)
+        self.new_path = m.group(2)
+
+
+def parse_full_diff(raw: str) -> list[DiffFile]:
+    """Parse a full multi-file unified diff string into DiffFile objects."""
+    state = _DiffState()
+
+    for line in raw.splitlines():
+        m = _FILE_HEADER_RE.match(line)
+        if m:
+            state.handle_file_header(m)
+            continue
+
+        m2 = _OLD_FILE_RE.match(line)
+        if m2 and state.old_path:
+            state.current_old_path = m2.group(1) if m2.group(1) != "/dev/null" else None
+            continue
+
+        m3 = _NEW_FILE_RE.match(line)
+        if m3 and state.new_path:
+            state.current_path = m3.group(1) if m3.group(1) != "/dev/null" else state.old_path
+            continue
+
+        if state.current_path is not None:
+            state.current_diff.append(line)
+
+    state.flush()
+    return state.diff_files

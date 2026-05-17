@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from mr_review.api.schemas.reviews import (
     CommentParseErrorResponse,
     CommentResponse,
+    CreateCodeReviewRequest,
     CreateIterationRequest,
     CreateReviewRequest,
     DispatchReviewRequest,
@@ -24,6 +25,7 @@ from mr_review.api.schemas.reviews import (
     UpdateReviewRequest,
 )
 from mr_review.core.reviews.entities import Comment, Iteration, Review
+from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
@@ -34,7 +36,7 @@ from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
-from mr_review.use_cases.reviews.post_review import PostReviewUseCase
+from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 logger = structlog.get_logger(__name__)
@@ -74,6 +76,7 @@ def _review_to_response(review: Review) -> ReviewResponse:
         host_id=review.host_id,
         repo_path=review.repo_path,
         mr_iid=review.mr_iid,
+        source=review.source,
         iterations=[_iteration_to_response(it) for it in review.iterations],
         brief_config=review.brief_config,
         created_at=review.created_at,
@@ -90,6 +93,27 @@ async def create_review(
         host_id=body.host_id,
         repo_path=body.repo_path,
         mr_iid=body.mr_iid,
+        brief_config=body.brief_config,
+    )
+    return _review_to_response(review)
+
+
+@router.post("/code", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+async def create_code_review(
+    body: CreateCodeReviewRequest,
+    use_case: FromDishka[CreateCodeReviewUseCase],
+) -> ReviewResponse:
+    """Create a review backed by an ad-hoc branch/commit diff (no MR required).
+
+    Phase 1: in-app review only. Comments cannot be posted back to the VCS for
+    this review kind — ``POST /reviews/{id}/post`` will return 409.
+    """
+    review = await use_case.execute(
+        host_id=body.host_id,
+        repo_path=body.repo_path,
+        base_ref=body.base_ref,
+        head_ref=body.head_ref,
+        title=body.title,
         brief_config=body.brief_config,
     )
     return _review_to_response(review)
@@ -308,6 +332,8 @@ async def post_review(
             iteration_id=body.iteration_id,
             fallback_to_general_note=body.fallback_to_general_note,
         )
+    except PostNotSupportedForSourceError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
