@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import suppress
 
@@ -22,10 +23,14 @@ from mr_review.infra.di.containers.api import create_api_container
 
 logger = structlog.get_logger(__name__)
 
+# Mutable container so main() can pre-load Settings for the factory
+# without a global assignment (avoids PLW0603).
+_settings_cache: list[Settings] = []
+
 
 def create_app() -> FastAPI:
     """Factory function for uvicorn to create the app instance."""
-    settings = Settings()
+    settings = _settings_cache[0] if _settings_cache else Settings()
 
     configure_logging(
         log_level=settings.logging.level,
@@ -83,10 +88,10 @@ def _mount_spa(app: FastAPI, settings: Settings) -> None:
     api_base_url = os.environ.get("MR_REVIEW__API_BASE_URL", "")
     config_js_content = (
         f"window.__APP_CONFIG__ = {{\n"
-        f'  API_BASE_URL: "{api_base_url}",\n'
+        f"  API_BASE_URL: {json.dumps(api_base_url)},\n"
         f'  APP_ENV: "production",\n'
         f"  BUILD_TIME: new Date().toISOString(),\n"
-        f'  VERSION: "{settings.get_app_version()}",\n'
+        f"  VERSION: {json.dumps(settings.get_app_version())},\n"
         f"}};\n"
     )
 
@@ -109,6 +114,7 @@ def main() -> None:
         uvloop.install()
 
     settings = Settings()
+    _settings_cache.append(settings)
 
     import uvicorn  # noqa: PLC0415
 

@@ -9,10 +9,7 @@ from uuid import UUID, uuid4
 import yaml
 
 from mr_review.core.ai_providers.entities import AIProvider, AIProviderType
-
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+from mr_review.infra.utils import now_utc as _now_utc
 
 
 def _ai_provider_from_dict(data: dict[str, object]) -> AIProvider:
@@ -40,7 +37,7 @@ def _ai_provider_to_dict(provider: AIProvider) -> dict[str, object]:
         "id": str(provider.id),
         "name": provider.name,
         "type": provider.type,
-        "api_key": provider.api_key,
+        "api_key": provider.api_key.get_secret_value(),
         "base_url": provider.base_url,
         "models": list(provider.models),
         "ssl_verify": provider.ssl_verify,

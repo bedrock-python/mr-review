@@ -66,24 +66,23 @@ async def _resolve_path(
     repo_path: str,
     path: str,
     ref: str,
-    resolved: list[str],
     semaphore: asyncio.Semaphore,
-) -> None:
+) -> list[str]:
     ext = os.path.splitext(path)[1].lower()
     if ext in _READABLE_EXTENSIONS or not ext:
         async with semaphore:
             content = await provider.get_file(repo_path, path, ref)
         if content is not None:
-            resolved.append(path)
-            return
+            return [path]
         async with semaphore:
             dir_files = await provider.list_directory(repo_path, path, ref)
-        resolved.extend(f for f in dir_files if os.path.splitext(f)[1].lower() in _READABLE_EXTENSIONS)
+        return [f for f in dir_files if os.path.splitext(f)[1].lower() in _READABLE_EXTENSIONS]
     else:
         async with semaphore:
             content = await provider.get_file(repo_path, path, ref)
         if content is not None:
-            resolved.append(path)
+            return [path]
+        return []
 
 
 def _deduplicate(items: list[str], limit: int) -> list[str]:
@@ -135,9 +134,12 @@ async def collect_context_files(
     paths_to_resolve = requested_paths if requested_paths else _DEFAULT_CONTEXT_PATHS
     semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
+    resolve_coros = [_resolve_path(provider, repo_path, p, ref, semaphore) for p in paths_to_resolve]
+    resolve_results = await _rate_limited_gather(resolve_coros, semaphore)
     resolved: list[str] = []
-    for path in paths_to_resolve:
-        await _resolve_path(provider, repo_path, path, ref, resolved, semaphore)
+    for item in resolve_results:
+        if isinstance(item, list):
+            resolved.extend(item)
 
     unique = _deduplicate(resolved, _MAX_FILES)
     return await _fetch_contents(provider, repo_path, unique, ref, semaphore)

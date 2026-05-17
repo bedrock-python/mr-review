@@ -7,6 +7,7 @@ from collections.abc import AsyncIterable
 import httpx
 from dishka import Provider, Scope, provide
 
+from mr_review.api.config import Settings
 from mr_review.infra.vcs.cache import VCSCache
 
 
@@ -19,7 +20,7 @@ class VCSInfraProvider(Provider):
         return VCSCache()
 
     @provide(scope=Scope.REQUEST)
-    async def get_vcs_client(self) -> AsyncIterable[httpx.AsyncClient]:
+    async def get_vcs_client(self, settings: Settings) -> AsyncIterable[httpx.AsyncClient]:
         """Per-request httpx client for VCS API calls."""
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=settings.vcs_timeout) as client:
             yield client

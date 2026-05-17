@@ -56,10 +56,11 @@ async def _ai_dispatcher_factory(
     reasoning_effort: str | None,
 ) -> AsyncIterator[str]:
     """Resolve the correct AI backend and return a streaming iterator of text chunks."""
+    api_key = ai_provider.api_key.get_secret_value()
     if ai_provider.type == "claude":
         resolved_model = model or (ai_provider.models[0] if ai_provider.models else "claude-opus-4-5")
         ai: ClaudeProvider | OpenAICompatProvider = ClaudeProvider(
-            api_key=ai_provider.api_key,
+            api_key=api_key,
             model=resolved_model,
             ssl_verify=ai_provider.ssl_verify,
             timeout=ai_provider.timeout,
@@ -69,7 +70,7 @@ async def _ai_dispatcher_factory(
     else:
         resolved_model = model or (ai_provider.models[0] if ai_provider.models else "gpt-4o")
         ai = OpenAICompatProvider(
-            api_key=ai_provider.api_key,
+            api_key=api_key,
             model=resolved_model,
             base_url=ai_provider.base_url or None,
             ssl_verify=ai_provider.ssl_verify,
@@ -78,20 +79,21 @@ async def _ai_dispatcher_factory(
             reasoning_budget=reasoning_budget,
             reasoning_effort=reasoning_effort,
         )
-    return await ai.dispatch(prompt)
+    return ai.dispatch(prompt)
 
 
 async def _model_lister(ai_provider: AIProviderEntity) -> list[str]:
     """Resolve the correct AI backend and list its available models."""
+    api_key = ai_provider.api_key.get_secret_value()
     if ai_provider.type == "claude":
         ai: ClaudeProvider | OpenAICompatProvider = ClaudeProvider(
-            api_key=ai_provider.api_key,
+            api_key=api_key,
             ssl_verify=ai_provider.ssl_verify,
             timeout=ai_provider.timeout,
         )
     else:
         ai = OpenAICompatProvider(
-            api_key=ai_provider.api_key,
+            api_key=api_key,
             base_url=ai_provider.base_url or None,
             ssl_verify=ai_provider.ssl_verify,
             timeout=ai_provider.timeout,

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import ssl
-from collections.abc import AsyncIterator
-from typing import Any
+from collections.abc import AsyncGenerator, AsyncIterator
 
 import httpx
 import openai
@@ -51,10 +50,12 @@ class OpenAICompatProvider:
         page = await self._client.models.list()
         return sorted(m.id for m in page.data)
 
-    async def dispatch(self, prompt: str) -> AsyncIterator[str]:
+    def dispatch(self, prompt: str) -> AsyncIterator[str]:
         return self._stream(prompt)
 
-    async def _stream(self, prompt: str) -> AsyncIterator[str]:
+    async def _stream(self, prompt: str) -> AsyncGenerator[str, None]:
+        from typing import Any  # noqa: PLC0415
+
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": [
