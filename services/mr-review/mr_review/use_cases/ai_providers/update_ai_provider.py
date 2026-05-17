@@ -17,6 +17,8 @@ class UpdateAIProviderUseCase:
         models: list[str] | None = None,
         ssl_verify: bool | None = None,
         timeout: int | None = None,
+        max_concurrent: int | None = None,
+        clear_max_concurrent: bool = False,
     ) -> AIProvider | None:
         return await self._repo.update(
             provider_id,
@@ -26,4 +28,6 @@ class UpdateAIProviderUseCase:
             models=models,
             ssl_verify=ssl_verify,
             timeout=timeout,
+            max_concurrent=max_concurrent,
+            clear_max_concurrent=clear_max_concurrent,
         )
