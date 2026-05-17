@@ -2,7 +2,7 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - develop
@@ -60,27 +60,30 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
           prompt: |
-            Review this pull request:
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
 
-            **PR #${{ github.event.pull_request.number }}**: ${{ github.event.pull_request.title }}
-            **Author**: ${{ github.event.pull_request.user.login }}
-            **Base**: ${{ github.event.pull_request.base.ref }} ← **Head**: ${{ github.event.pull_request.head.ref }}
+            Review this pull request as ${{ steps.agent.outputs.agent }}.
 
-            **Description**:
-            ${{ github.event.pull_request.body }}
+            Focus areas:
+            1. Architecture violations (check .claude/rules/ for standards)
+               - Backend: Onion Architecture, no ORM in domain/use_cases
+               - Frontend: FSD architecture, layer dependencies
+            2. Naming conventions (repositories, use cases, components)
+            3. Type safety (no `any` in TS, type hints in Python)
+            4. Test coverage
+            5. Security vulnerabilities
+            6. Performance concerns
+            7. Commit message style (conventional commits)
+            8. Branch naming (feat/fix/chore/...)
 
-            As the code reviewer (${{ steps.agent.outputs.agent }}):
-            1. Review all changed files for:
-               - Architecture violations (layer dependencies)
-               - Naming convention compliance
-               - Type safety (mypy/typescript)
-               - Test coverage
-               - Security issues
-               - Performance concerns
-            2. Check commit messages follow conventional commits
-            3. Verify branch naming follows project standards
-            4. Post inline comments on specific issues
-            5. Provide summary with approve/request changes recommendation
+            **IMPORTANT**:
+            - Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for code-specific issues
+            - Use `gh pr comment` for summary and general feedback
+            - Post only GitHub comments, not text responses
+            - Review guidelines are in .claude/rules/
 
-            Review guidelines are in .claude/rules/
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr:*),Bash(git:*),Bash(./scripts/git-push.sh:*)"
