@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { httpClient } from "@shared/api";
-import { HostSchema } from "../model/host.schema";
-import type { CreateHost, UpdateHost, Host } from "../model/host.schema";
+import { HostSchema, AddRepoByUrlResponseSchema } from "../model/host.schema";
+import type {
+  CreateHost,
+  UpdateHost,
+  Host,
+  AddRepoByUrlResponse,
+} from "../model/host.schema";
 
 export type TestConnectionResult = {
   ok: boolean;
@@ -37,5 +42,10 @@ export const hostApi = {
     const encoded = encodeURIComponent(repoPath);
     const res = await httpClient.post<unknown>(`/api/v1/hosts/${id}/favourite-repos/${encoded}`);
     return HostSchema.parse(res.data);
+  },
+
+  addRepoByUrl: async (id: string, url: string): Promise<AddRepoByUrlResponse> => {
+    const res = await httpClient.post<unknown>(`/api/v1/hosts/${id}/repos/add-by-url`, { url });
+    return AddRepoByUrlResponseSchema.parse(res.data);
   },
 };

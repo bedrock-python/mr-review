@@ -2,11 +2,21 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import httpx
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, HTTPException, status
 
-from mr_review.api.schemas.hosts import CreateHostRequest, HostResponse, TestConnectionResponse, UpdateHostRequest
+from mr_review.api.schemas.hosts import (
+    AddRepoByUrlRequest,
+    AddRepoByUrlResponse,
+    CreateHostRequest,
+    HostResponse,
+    TestConnectionResponse,
+    UpdateHostRequest,
+)
 from mr_review.core.hosts.entities import Host
+from mr_review.core.vcs.url_parser import InvalidRepoUrlError
+from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
@@ -92,6 +102,41 @@ async def toggle_favourite_repo(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _host_to_response(host)
+
+
+@router.post(
+    "/{host_id}/repos/add-by-url",
+    response_model=AddRepoByUrlResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_repo_by_url(
+    host_id: UUID,
+    body: AddRepoByUrlRequest,
+    use_case: FromDishka[AddRepoByUrlUseCase],
+) -> AddRepoByUrlResponse:
+    try:
+        host, repo = await use_case.execute(host_id=host_id, url_or_path=body.url)
+    except InvalidRepoUrlError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        sc = exc.response.status_code
+        if sc == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Repository not found on host: {body.url!r}",
+            ) from exc
+        if sc in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Host token cannot access repository: {body.url!r}",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"VCS request failed ({sc})",
+        ) from exc
+    return AddRepoByUrlResponse(host=_host_to_response(host), repo_path=repo.path)
 
 
 @router.get("/{host_id}/test", response_model=TestConnectionResponse)

@@ -30,7 +30,13 @@ export const UpdateHostSchema = z.object({
   timeout: z.number().int().min(1, "Must be at least 1").max(600, "Max 600s").optional(),
 });
 
+export const AddRepoByUrlResponseSchema = z.object({
+  host: HostSchema,
+  repo_path: z.string(),
+});
+
 export type HostType = z.infer<typeof HostTypeSchema>;
 export type Host = z.infer<typeof HostSchema>;
 export type CreateHost = z.infer<typeof CreateHostSchema>;
 export type UpdateHost = z.infer<typeof UpdateHostSchema>;
+export type AddRepoByUrlResponse = z.infer<typeof AddRepoByUrlResponseSchema>;
