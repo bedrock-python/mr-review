@@ -1,5 +1,6 @@
 import { githubApi, extractVersion, systemApi } from "@shared/api";
 import type { GithubRelease, SystemInfo } from "@shared/api";
+import { isNewerVersion } from "@shared/lib";
 
 export type ComponentUpdateInfo = {
   current: string;
@@ -28,7 +29,7 @@ export const checkUpdateApi = {
     const backend: ComponentUpdateInfo = {
       current: systemInfo.backend_version,
       latest: latestBackend,
-      isUpdateAvailable: latestBackend !== systemInfo.backend_version,
+      isUpdateAvailable: isNewerVersion(latestBackend, systemInfo.backend_version),
       release: releases.backend,
     };
 
@@ -38,7 +39,7 @@ export const checkUpdateApi = {
       frontend = {
         current: systemInfo.frontend_version,
         latest: latestFrontend,
-        isUpdateAvailable: latestFrontend !== systemInfo.frontend_version,
+        isUpdateAvailable: isNewerVersion(latestFrontend, systemInfo.frontend_version),
         release: releases.frontend,
       };
     }

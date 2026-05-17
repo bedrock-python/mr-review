@@ -23,6 +23,7 @@ from mr_review.use_cases.ai_providers.delete_ai_provider import DeleteAIProvider
 from mr_review.use_cases.ai_providers.list_ai_providers import ListAIProvidersUseCase
 from mr_review.use_cases.ai_providers.list_provider_models import ListProviderModelsUseCase
 from mr_review.use_cases.ai_providers.update_ai_provider import UpdateAIProviderUseCase
+from mr_review.use_cases.export_data import ExportDataUseCase
 from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
@@ -30,6 +31,7 @@ from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
 from mr_review.use_cases.hosts.list_hosts import ListHostsUseCase
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
 from mr_review.use_cases.hosts.update_host import UpdateHostUseCase
+from mr_review.use_cases.import_data import ImportDataUseCase
 from mr_review.use_cases.mrs.get_mr import GetMRUseCase
 from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
 from mr_review.use_cases.mrs.list_inbox_mrs import ListInboxMRsUseCase
@@ -333,3 +335,29 @@ class UseCaseProvider(Provider):
     @provide
     def get_list_provider_models_use_case(self, repo: FileAIProviderRepository) -> ListProviderModelsUseCase:
         return ListProviderModelsUseCase(repo=repo, model_lister=_model_lister)
+
+    @provide
+    def get_export_data_use_case(
+        self,
+        host_repo: FileHostRepository,
+        ai_provider_repo: FileAIProviderRepository,
+        review_repo: FileReviewRepository,
+    ) -> ExportDataUseCase:
+        return ExportDataUseCase(
+            host_repo=host_repo,
+            ai_provider_repo=ai_provider_repo,
+            review_repo=review_repo,
+        )
+
+    @provide
+    def get_import_data_use_case(
+        self,
+        host_repo: FileHostRepository,
+        ai_provider_repo: FileAIProviderRepository,
+        review_repo: FileReviewRepository,
+    ) -> ImportDataUseCase:
+        return ImportDataUseCase(
+            host_repo=host_repo,
+            ai_provider_repo=ai_provider_repo,
+            review_repo=review_repo,
+        )
