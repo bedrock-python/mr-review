@@ -56,8 +56,10 @@ jobs:
             echo "agent=backend-reviewer" >> $GITHUB_OUTPUT
           fi
 
-      - name: Review PR with Claude
+      - name: Review PR with Claude (Agent Teams)
         uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true
@@ -65,25 +67,38 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            Review this pull request as ${{ steps.agent.outputs.agent }}.
+            **AGENT TEAMS MODE: Multi-layer parallel review**
 
-            Focus areas:
-            1. Architecture violations (check .claude/rules/ for standards)
-               - Backend: Onion Architecture, no ORM in domain/use_cases
-               - Frontend: FSD architecture, layer dependencies
-            2. Naming conventions (repositories, use cases, components)
-            3. Type safety (no `any` in TS, type hints in Python)
-            4. Test coverage
-            5. Security vulnerabilities
-            6. Performance concerns
-            7. Commit message style (conventional commits)
-            8. Branch naming (feat/fix/chore/...)
+            Spawn specialized agents for comprehensive review:
 
-            **IMPORTANT**:
+            **Agent 1 - Architecture & Design** (${{ steps.agent.outputs.agent }}):
+            - Check .claude/rules/ compliance (Onion/FSD architecture)
+            - Layer dependencies (core → use_cases → infra → api)
+            - Naming conventions (repositories, use cases, components)
+            - Domain purity (no ORM in domain/use_cases)
+
+            **Agent 2 - Security & Quality**:
+            - Security vulnerabilities (OWASP, injection, XSS)
+            - Type safety (no `any` in TS, type hints in Python)
+            - Error handling at system boundaries
+            - Input validation
+
+            **Agent 3 - Testing & Style**:
+            - Test coverage (unit + integration)
+            - Commit message style (conventional commits)
+            - Branch naming (feat/fix/chore/...)
+            - Code style consistency
+
+            **Coordination**:
+            - Each agent: Focus on assigned scope, use inline comments for issues
+            - Team lead: Synthesize findings, provide unified summary
+            - Communication: Agents can message each other via mailbox
+
+            **Tools**:
             - Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for code-specific issues
             - Use `gh pr comment` for summary and general feedback
             - Post only GitHub comments, not text responses
-            - Review guidelines are in .claude/rules/
 
           claude_args: |
+            --model opus
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr:*),Bash(git:*),Bash(./scripts/git-push.sh:*)"
