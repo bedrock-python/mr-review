@@ -2,6 +2,13 @@
 
 <!-- version list -->
 
+## [0.2.1](https://github.com/bedrock-python/mr-review/compare/mr-review-v0.2.0...mr-review-v0.2.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **deps:** refresh uv.lock so it records the released version ([17b43ad](https://github.com/bedrock-python/mr-review/commit/17b43adb64a83392c93566daccf96df9df7859eb))
+
 ## [0.2.0](https://github.com/bedrock-python/mr-review/compare/mr-review-v0.1.1...mr-review-v0.2.0) (2026-05-17)
 
 
