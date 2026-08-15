@@ -1,7 +1,7 @@
 diff --git a/package.json b/package.json
-index 8cc48b4765abaab89342a788af735086bd8f15e6..3d3cba8dc13c0c1f4163cfa7fcd7e1691e7091b5 100644
+index 48ea215542ccca4a1183bbca24b3661eaedafe8a..a91df7811cd9e669326a7784760b1182ee32df0e 100644
 --- a/package.json
-+++ b/package.json
++++ b/package.json	
 @@ -19,8 +19,16 @@
      "url": "https://github.com/mmkal/expect-type.git"
    },
