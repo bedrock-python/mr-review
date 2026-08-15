@@ -478,6 +478,50 @@
     background: var(--bg-hover);
     color: var(--fg-0);
   }
+  .icon-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .icon-btn:disabled:hover {
+    background: transparent;
+    color: var(--fg-2);
+  }
+  /* press feedback: without it a click on the nav arrows looks like nothing happened */
+  .icon-btn:not(:disabled):active {
+    background: var(--bg-3);
+    color: var(--fg-0);
+    transform: scale(0.88);
+    transition: transform 0.04s;
+  }
+  .icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+
+  /* diff: active row and the pin being edited */
+  tr.diff-row-highlight {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+    outline: 1px solid color-mix(in oklch, var(--accent) 60%, transparent);
+    outline-offset: -1px;
+  }
+  .diff-pin-active {
+    box-shadow:
+      0 0 0 2px var(--bg-0),
+      0 0 0 3.5px var(--accent);
+  }
+
+  /* comment editor swaps per comment — a short fade makes the switch legible */
+  .comment-editor {
+    animation: fadeSlideIn 0.13s ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .comment-editor {
+      animation: none;
+    }
+    .icon-btn:not(:disabled):active {
+      transform: none;
+    }
+  }
 
   /* card */
   .card {

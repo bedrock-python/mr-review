@@ -56,6 +56,40 @@ describe("DiffViewer", () => {
     expect(highlighted?.getAttribute("aria-label")).toMatch(/^Added line 2:/);
   });
 
+  it("moves the highlight when the target line changes", () => {
+    const { rerender } = render(
+      <DiffViewer diff={SAMPLE} highlightFile="src/foo.py" highlightLine={2} />
+    );
+
+    rerender(<DiffViewer diff={SAMPLE} highlightFile="src/foo.py" highlightLine={3} />);
+
+    const highlighted = screen
+      .getAllByRole("row")
+      .filter((row) => row.getAttribute("aria-current") === "true");
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0]?.getAttribute("aria-label")).toMatch(/^Context line 3:/);
+  });
+
+  it("marks the active decoration", () => {
+    type DummyComment = { id: string; file: string | null };
+    const commentsOnLines = new Map<number, readonly DummyComment[]>([
+      [2, [{ id: "c1", file: "src/foo.py" }]],
+    ]);
+
+    render(
+      <DiffViewer<DummyComment>
+        diff={SAMPLE}
+        commentsOnLines={commentsOnLines}
+        activeDecorationId="c1"
+        renderLineDecoration={({ comments }) =>
+          comments.map((c) => <span key={c.id} data-decoration-id={c.id} data-testid={c.id} />)
+        }
+      />
+    );
+
+    expect(screen.getByTestId("c1")).toHaveClass("diff-pin-active");
+  });
+
   it("hides the old-line gutter in hunk mode", () => {
     render(<DiffViewer diff={SAMPLE} mode="hunk" />);
     expect(screen.queryByText("Old line")).not.toBeInTheDocument();
