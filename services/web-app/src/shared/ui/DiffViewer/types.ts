@@ -21,6 +21,8 @@ export type DiffViewerProps<T = unknown> = {
   mode?: DiffViewerMode;
   highlightFile?: string | null;
   highlightLine?: number | null;
+  /** Id of the decoration to mark as active; match it with `data-decoration-id`. */
+  activeDecorationId?: string | null;
   commentsOnLines?: Map<number, readonly T[]>;
   renderLineDecoration?: LineDecorationRenderer<T>;
   className?: string;
