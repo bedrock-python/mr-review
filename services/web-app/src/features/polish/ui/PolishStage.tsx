@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
@@ -25,6 +25,8 @@ type CommentEditorProps = {
   comment: Comment;
   onPrev: () => void;
   onNext: () => void;
+  canGoPrev: boolean;
+  canGoNext: boolean;
   position: number;
   total: number;
   onUpdate: (id: string, patch: Partial<Comment>) => void;
@@ -35,6 +37,8 @@ const CommentEditor = ({
   comment,
   onPrev,
   onNext,
+  canGoPrev,
+  canGoNext,
   position,
   total,
   onUpdate,
@@ -54,6 +58,7 @@ const CommentEditor = ({
 
   return (
     <div
+      className="comment-editor"
       style={{
         padding: 16,
         display: "flex",
@@ -74,7 +79,13 @@ const CommentEditor = ({
           </span>
         </div>
         <div style={{ display: "flex", gap: 2 }}>
-          <button type="button" className="icon-btn" onClick={onPrev} aria-label="Previous comment">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onPrev}
+            disabled={!canGoPrev}
+            aria-label="Previous comment"
+          >
             <svg
               width="12"
               height="12"
@@ -86,7 +97,13 @@ const CommentEditor = ({
               <polyline points="18 15 12 9 6 15" />
             </svg>
           </button>
-          <button type="button" className="icon-btn" onClick={onNext} aria-label="Next comment">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onNext}
+            disabled={!canGoNext}
+            aria-label="Next comment"
+          >
             <svg
               width="12"
               height="12"
@@ -230,6 +247,7 @@ type ReviewDiffViewerProps = {
   reviewId: string;
   targetFile: string | null;
   targetLine: number | null;
+  activeCommentId: string | null;
   commentsOnLines: Map<number, Comment[]>;
   onCommentClick: (id: string) => void;
 };
@@ -238,6 +256,7 @@ const ReviewDiffViewer = ({
   reviewId,
   targetFile,
   targetLine,
+  activeCommentId,
   commentsOnLines,
   onCommentClick,
 }: ReviewDiffViewerProps): React.ReactElement => {
@@ -246,6 +265,35 @@ const ReviewDiffViewer = ({
     queryFn: () => reviewApi.getDiff(reviewId),
     staleTime: 5 * 60 * 1000,
   });
+
+  // Must stay referentially stable: the diff rows are memoised on this prop.
+  const renderLineDecoration = useCallback(
+    ({ line, comments }: { line: DiffLineWithFile; comments: readonly Comment[] }) =>
+      comments.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          data-decoration-id={c.id}
+          onClick={() => {
+            onCommentClick(c.id);
+          }}
+          title={c.body.slice(0, 80)}
+          aria-label={`${c.severity} comment on ${line.file}:${String(line.newLine ?? "")}`}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            flexShrink: 0,
+            background: SEV_COLOR[c.severity],
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            opacity: c.status === "dismissed" ? 0.4 : 1,
+          }}
+        />
+      )),
+    [onCommentClick]
+  );
 
   if (isLoading) {
     return (
@@ -280,38 +328,10 @@ const ReviewDiffViewer = ({
       mode="full"
       highlightFile={targetFile}
       highlightLine={targetLine}
+      activeDecorationId={activeCommentId}
       commentsOnLines={commentsOnLines}
       ariaLabel="Review diff"
-      renderLineDecoration={({
-        line,
-        comments,
-      }: {
-        line: DiffLineWithFile;
-        comments: readonly Comment[];
-      }) =>
-        comments.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => {
-              onCommentClick(c.id);
-            }}
-            title={c.body.slice(0, 80)}
-            aria-label={`${c.severity} comment on ${line.file}:${String(line.newLine ?? "")}`}
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              flexShrink: 0,
-              background: SEV_COLOR[c.severity],
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              opacity: c.status === "dismissed" ? 0.4 : 1,
-            }}
-          />
-        ))
-      }
+      renderLineDecoration={renderLineDecoration}
     />
   );
 };
@@ -338,6 +358,13 @@ const PolishPinned = ({
   const inlineComments = comments.filter((c) => c.file !== null && c.status !== "dismissed");
   const generalComments = comments.filter((c) => c.file === null);
   const active = comments.find((c) => c.id === activeCommentId) ?? null;
+
+  // Navigation spans every inline comment, dismissed ones included: dismissing the
+  // open comment must not drop it out of the sequence and strand the arrows.
+  const navComments = comments.filter((c) => c.file !== null);
+  const activeIndex = active === null ? -1 : navComments.findIndex((c) => c.id === active.id);
+  const prevComment = activeIndex > 0 ? navComments[activeIndex - 1] : undefined;
+  const nextComment = activeIndex >= 0 ? navComments[activeIndex + 1] : undefined;
 
   // Map new-line → comments for diff markers
   const commentsOnLines = useMemo((): Map<number, Comment[]> => {
@@ -396,6 +423,7 @@ const PolishPinned = ({
             reviewId={reviewId}
             targetFile={active?.file ?? null}
             targetLine={active?.line ?? null}
+            activeCommentId={activeCommentId}
             commentsOnLines={commentsOnLines}
             onCommentClick={setActiveCommentId}
           />
@@ -405,19 +433,20 @@ const PolishPinned = ({
         <div style={{ display: "flex", flexDirection: "column", overflow: "auto" }}>
           {active !== null && active.file !== null ? (
             <CommentEditor
+              // Remount per comment: body/severity live in local state, so without a
+              // fresh instance the editor keeps showing (and saving) the previous one.
+              key={active.id}
               comment={active}
               onPrev={() => {
-                const idx = inlineComments.findIndex((c) => c.id === active.id);
-                const prev = inlineComments[idx - 1];
-                if (idx > 0 && prev) setActiveCommentId(prev.id);
+                if (prevComment) setActiveCommentId(prevComment.id);
               }}
               onNext={() => {
-                const idx = inlineComments.findIndex((c) => c.id === active.id);
-                const next = inlineComments[idx + 1];
-                if (idx < inlineComments.length - 1 && next) setActiveCommentId(next.id);
+                if (nextComment) setActiveCommentId(nextComment.id);
               }}
-              position={inlineComments.findIndex((c) => c.id === active.id)}
-              total={inlineComments.length}
+              canGoPrev={prevComment !== undefined}
+              canGoNext={nextComment !== undefined}
+              position={activeIndex}
+              total={navComments.length}
               onUpdate={onUpdate}
               isPending={isPending}
             />
