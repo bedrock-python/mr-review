@@ -1,7 +1,9 @@
 ############################
 # Stage 1: build frontend
 ############################
-FROM node:20-alpine AS frontend-builder
+# Static assets are platform-independent, so the JS build always runs on the
+# build host instead of under QEMU for each target architecture.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
