@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/0.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/bedrock-python/mr-review/compare/web-app-v0.2.0...web-app-v0.2.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **deps:** clear all security advisories in web-app ([2f4cde5](https://github.com/bedrock-python/mr-review/commit/2f4cde525b5e2ffe5b52a0f7e892d101d9ee33a6))
+* **deps:** update web-app dependencies to clear all security advisories ([17b43ad](https://github.com/bedrock-python/mr-review/commit/17b43adb64a83392c93566daccf96df9df7859eb))
+* **polish:** repair comment navigation and stop full diff re-renders ([6440046](https://github.com/bedrock-python/mr-review/commit/64400464dfb350f16886de3cf3da6ca563ea0474))
+* **polish:** reset the comment editor when navigating between comments ([9203f3d](https://github.com/bedrock-python/mr-review/commit/9203f3da4a23727f0fee06a32c3a4938eeb740a1))
+* **web-app:** copy patches directory before pnpm install in Dockerfile ([7c197c4](https://github.com/bedrock-python/mr-review/commit/7c197c4d14e5fdc04a72a49274e04f08fd92624b))
+
+
+### Performance Improvements
+
+* **diff-viewer:** memoise rows and apply the highlight imperatively ([b522564](https://github.com/bedrock-python/mr-review/commit/b522564ff165d2fb26513b3fbabe489215c53e3c))
+
 ## [0.2.0](https://github.com/bedrock-python/mr-review/compare/web-app-v0.1.0...web-app-v0.2.0) (2026-05-17)
 
 

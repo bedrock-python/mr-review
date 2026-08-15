@@ -2,6 +2,13 @@
 
 <!-- version list -->
 
+## [0.2.1](https://github.com/bedrock-python/mr-review/compare/mr-review-v0.2.0...mr-review-v0.2.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **deps:** clear all security advisories in web-app ([2f4cde5](https://github.com/bedrock-python/mr-review/commit/2f4cde525b5e2ffe5b52a0f7e892d101d9ee33a6))
+
 ## [0.2.0](https://github.com/bedrock-python/mr-review/compare/mr-review-v0.1.1...mr-review-v0.2.0) (2026-05-17)
 
 
