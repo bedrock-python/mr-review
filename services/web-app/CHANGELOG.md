@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/0.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/bedrock-python/mr-review/compare/web-app-v0.2.1...web-app-v0.2.2) (2026-08-15)
+
+
+### Performance Improvements
+
+* **docker:** build web assets on the native platform ([9b061a6](https://github.com/bedrock-python/mr-review/commit/9b061a6bbab5588cc8ff4026ad936ba8985e5cee))
+* **docker:** build web assets on the native platform instead of under QEMU ([7fcf8ef](https://github.com/bedrock-python/mr-review/commit/7fcf8efa10f6ace97115f2f64d69d9d68826c8c3))
+
 ## [0.2.1](https://github.com/bedrock-python/mr-review/compare/web-app-v0.2.0...web-app-v0.2.1) (2026-08-15)
 
 
