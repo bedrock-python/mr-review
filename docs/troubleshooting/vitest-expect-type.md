@@ -30,7 +30,7 @@ This affects:
 
 ## Fix in this repo
 
-`services/web-app/patches/expect-type@1.3.0.patch` patches the dependency's `package.json` to add:
+`services/web-app/patches/expect-type@1.4.0.patch` patches the dependency's `package.json` to add:
 
 ```json
 {
@@ -60,7 +60,7 @@ Existing tests `src/shared/ui/Badge.test.tsx` and `src/shared/lib/cn.test.ts` sh
 You can also inspect the patched manifest:
 
 ```bash
-cat node_modules/.pnpm/expect-type@1.3.0_patch_hash=*/node_modules/expect-type/package.json
+cat node_modules/.pnpm/expect-type@1.4.0_patch_hash=*/node_modules/expect-type/package.json
 # must contain "exports" and "type": "commonjs"
 ```
 
@@ -68,7 +68,7 @@ cat node_modules/.pnpm/expect-type@1.3.0_patch_hash=*/node_modules/expect-type/p
 
 The most likely triggers for regression:
 
-1. **`expect-type` is bumped to a new minor/patch version** by pnpm (e.g. via `pnpm update`). The patch is pinned to `expect-type@1.3.0` and **will silently fail to apply** if a different version is resolved — pnpm prints `WARN  Patch for expect-type@1.3.0 was not used` and proceeds without it.
+1. **`expect-type` is bumped to a new minor/patch version** by pnpm (e.g. via `pnpm update`). The patch is pinned to `expect-type@1.4.0` and **will silently fail to apply** if a different version is resolved — pnpm prints `WARN  Patch for expect-type@1.4.0 was not used` and proceeds without it.
 2. **Vitest changes its expect-type peer range** (currently `^1.2.1`). A new vitest could resolve a different version.
 3. **Upstream finally ships `exports`** — at that point the patch becomes a no-op or fails to apply cleanly.
 
