@@ -7,7 +7,7 @@
 
 ### Bug Fixes
 
-* **deps:** clear all security advisories in web-app ([2f4cde5](https://github.com/bedrock-python/mr-review/commit/2f4cde525b5e2ffe5b52a0f7e892d101d9ee33a6))
+* **deps:** refresh uv.lock so it records the released version ([17b43ad](https://github.com/bedrock-python/mr-review/commit/17b43adb64a83392c93566daccf96df9df7859eb))
 
 ## [0.2.0](https://github.com/bedrock-python/mr-review/compare/mr-review-v0.1.1...mr-review-v0.2.0) (2026-05-17)
 
