@@ -2,7 +2,9 @@
 # Demo image: production nginx bundle includes MSW (VITE_ENABLE_MSW_BUNDLE).
 # Runtime mocks toggled via VITE_USE_MOCKS in entrypoint / K8s env.
 ############################
-FROM node:20-alpine AS builder
+# Static assets are platform-independent, so the JS build always runs on the
+# build host instead of under QEMU for each target architecture.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 

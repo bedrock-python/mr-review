@@ -1,7 +1,10 @@
 ############################
 # Builder (deps + build)
 ############################
-FROM node:20-alpine AS builder
+# Pinned to the build host's platform: the build output is platform-independent
+# static assets, so running pnpm/vite under QEMU for every target architecture
+# only costs time (the arm64 leg took ~25min against ~2min native).
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
