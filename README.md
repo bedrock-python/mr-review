@@ -23,7 +23,7 @@ curl -O https://raw.githubusercontent.com/bedrock-python/mr-review/master/deploy
 docker compose up -d
 ```
 
-Open **http://localhost:8000**, add an AI provider and a VCS host, then pick an MR to review.
+Open **http://localhost:17240**, add an AI provider and a VCS host, then pick an MR to review.
 
 That's it — no accounts, no cloud, no data leaves your machine.
 
@@ -52,7 +52,7 @@ Single container, single port. Easiest way to get started.
 mkdir mr-review && cd mr-review
 curl -O https://raw.githubusercontent.com/bedrock-python/mr-review/master/deploy/all-in-one/docker-compose.yml
 docker compose up -d
-# → http://localhost:8000
+# → http://localhost:17240
 ```
 
 ### Standard (separate services)
@@ -63,8 +63,8 @@ API and UI run as separate containers — useful if you want more control over n
 mkdir mr-review && cd mr-review
 curl -O https://raw.githubusercontent.com/bedrock-python/mr-review/master/deploy/standard/docker-compose.yml
 docker compose up -d
-# API → http://localhost:8000
-# UI  → http://localhost:8080
+# API → http://localhost:17241
+# UI  → http://localhost:17242
 ```
 
 Docker images are published to GitHub Container Registry:
@@ -85,7 +85,7 @@ All configuration is done through the UI after first launch:
 2. **Add a VCS host** — GitLab, GitHub, Gitea, Forgejo, or Bitbucket with a personal access token
 3. **Pick a repository and MR** — start reviewing
 
-See the [configuration guide](https://bedrock-python.github.io/mr-review/configuration/) for environment variables and advanced options.
+See the [configuration guide](https://bedrock-python.github.io/mr-review/getting-started/configuration/) for environment variables and advanced options.
 
 ---
 
@@ -94,10 +94,10 @@ See the [configuration guide](https://bedrock-python.github.io/mr-review/configu
 | | |
 |---|---|
 | [For AI agents](https://bedrock-python.github.io/mr-review/agents/) | The whole tool on one page, written for a coding assistant |
-| [Quick start](https://bedrock-python.github.io/mr-review/quick-start/) | Get up and running in 2 minutes |
-| [Configuration](https://bedrock-python.github.io/mr-review/configuration/) | AI providers, VCS hosts, environment variables |
-| [Deployment](https://bedrock-python.github.io/mr-review/deployment/) | Docker options, reverse proxy, TLS |
-| [Development](https://bedrock-python.github.io/mr-review/development/) | Running locally, contributing |
+| [Installation](https://bedrock-python.github.io/mr-review/getting-started/installation/) | Docker options, ports, data persistence |
+| [Quick start](https://bedrock-python.github.io/mr-review/getting-started/quickstart/) | Get up and running in 2 minutes |
+| [Configuration](https://bedrock-python.github.io/mr-review/getting-started/configuration/) | AI providers, VCS hosts, environment variables |
+| [Contributing](CONTRIBUTING.md) | Running the services locally, checks, releases |
 
 ---
 

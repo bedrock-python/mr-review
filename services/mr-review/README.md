@@ -1,19 +1,19 @@
 # MR Review — Backend
 
-FastAPI backend for the MR Review tool. Stores host configuration and review history in SQLite. Integrates with GitLab/GitHub via REST and dispatches AI reviews via Anthropic/OpenAI-compatible APIs.
+FastAPI backend for the MR Review tool. Stores hosts, AI providers and review history as YAML files under the data directory — there is no database. Integrates with GitLab, GitHub, Gitea, Forgejo and Bitbucket via REST, and dispatches AI reviews to the Anthropic Messages API or any OpenAI-compatible endpoint.
 
 ## Architecture
 
 - **`mr_review/core/`**: Entities (`Host`, `Review`, `MR`), repository protocols, VCS/AI protocols.
 - **`mr_review/use_cases/`**: Business logic for host management, MR browsing, and review lifecycle.
-- **`mr_review/infra/`**: SQLite (SQLAlchemy), VCS clients (GitLab/GitHub), AI providers (Claude/OpenAI), Dishka DI.
-- **`api/`**: FastAPI routers and Pydantic schemas.
+- **`mr_review/infra/`**: YAML-file repositories, VCS clients, AI providers (Claude/OpenAI), Dishka DI.
+- **`mr_review/api/`**: FastAPI routers and Pydantic schemas.
 
 ## Quick Start
 
 ```bash
-make install  # uv sync
-make dev      # uvicorn on :8000
+make install  # uv sync --all-extras
+make run-api  # uvicorn on :8000
 ```
 
 ## Testing

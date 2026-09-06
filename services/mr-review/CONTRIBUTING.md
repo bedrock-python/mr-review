@@ -13,11 +13,13 @@
 make install
 ```
 
-### Run development server
+### Run the API
 
 ```bash
-make dev
+make run-api
 ```
+
+`make dev` from the repository root starts this and the frontend dev server together.
 
 ## Code Style
 
@@ -48,5 +50,5 @@ fix(vcs): handle gitlab pagination
 
 - `mr_review/core/` — Domain entities and protocols (no external deps)
 - `mr_review/use_cases/` — Application business logic
-- `mr_review/infra/` — SQLite, VCS clients, AI providers, DI
-- `api/` — FastAPI routers and schemas
+- `mr_review/infra/` — YAML-file repositories, VCS clients, AI providers, DI
+- `mr_review/api/` — FastAPI routers and schemas

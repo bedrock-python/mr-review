@@ -18,10 +18,15 @@ endif
 # Targets
 # ============================================================
 
-.PHONY: fmt install reinstall-custom-libs run-api test
+.PHONY: check fmt install reinstall-custom-libs run-api test test-unit
 
 fmt:  ##@Code Check code with pre-commit
 	uv run --extra dev python -m pre_commit run --all-files
+
+check:  ##@Code Lint, format check and type check
+	uv run --all-extras ruff check
+	uv run --all-extras ruff format --check
+	uv run --all-extras mypy mr_review
 
 install: ##@App Install raw dependencies
 	uv sync --all-extras
@@ -38,3 +43,6 @@ ifeq ($(OS),Windows_NT)
 else
 	uv run --all-extras pytest tests
 endif
+
+test-unit:	##@App Test application (unit tests only)
+	uv run --all-extras pytest -m unit

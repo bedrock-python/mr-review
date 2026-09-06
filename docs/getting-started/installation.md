@@ -13,6 +13,10 @@ That's the only requirement.
 
 Single container, everything on one port. Good for trying it out.
 
+The all-in-one image is built for `linux/amd64` only, so on Apple Silicon it runs under
+emulation — use the standard deployment below if that matters; its two images are built for
+`arm64` as well.
+
 ```bash
 # 1. Create a working directory
 mkdir mr-review && cd mr-review
@@ -94,7 +98,7 @@ docker compose down
 
 ## Data persistence
 
-All application data (SQLite database, settings) is stored in `DATA_DIR`, which defaults to `./data` relative to the compose file. This directory is mounted as a volume, so data survives container restarts and image updates.
+All application data — `hosts.yaml`, `ai_providers.yaml` and one YAML file per review — is stored in `DATA_DIR`, which defaults to `./data` relative to the compose file. There is no database. The directory is mounted as a volume, so data survives container restarts and image updates. It holds host tokens and provider API keys in plain text, so keep it private.
 
 To use a different location, set `DATA_DIR` in your `.env` file:
 
