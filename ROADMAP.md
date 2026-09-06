@@ -160,7 +160,7 @@
 - **Sprint 1–3 (headline):** **C1 Inline fix suggestions** как #1 для детальной спеки и инженерной валидации. Это стратегически важнее: устраняет основной gap vs CodeRabbit/Copilot, использует существующий "Polish"-этап как natural extension point, усиливает позиционирование "local AI does the work" (даже Ollama умеет писать diff).
 
 **#1 фича для детальной спеки: C1 — Inline fix suggestions.**
-Полная спецификация — `docs/specs/inline-fix-suggestions.md`.
+Полная спецификация — `specs/inline-fix-suggestions.md`.
 
 ---
 

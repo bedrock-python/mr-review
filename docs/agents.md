@@ -445,7 +445,10 @@ Fetch a page when the task is the one named beside it.
 | [Review pipeline](features/pipeline.md) | what each stage does from the UI's side |
 | [VCS hosts](features/hosts.md) | creating a token with the right scope, verifying a connection |
 | [AI providers](features/ai-providers.md) | choosing a model, pointing at Ollama or another compatible endpoint |
-| [Roadmap](ROADMAP.md) | what is planned and what is deliberately not — in Russian |
-| [Inline fix suggestions](specs/inline-fix-suggestions.md) | the design of the patch-suggestion feature — in Russian |
 | [vitest and expect-type](troubleshooting/vitest-expect-type.md) | the frontend test suite refuses to start |
 | [Changelog](changelog.md) | what changed between versions |
+
+Two planning documents are not part of this site: `ROADMAP.md` and
+`specs/inline-fix-suggestions.md` in the repository. They are drafts, they are written in
+Russian, and they describe intent rather than what is deployed — read the pages above for
+the tool as it is.
