@@ -67,6 +67,6 @@ USER app
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+  CMD curl -f http://localhost:8000/system/health/livez || exit 1
 
 CMD ["python", "-m", "mr_review.api.entrypoint"]
