@@ -923,7 +923,6 @@ Infrastructure:
 ## CI/CD Workflows
 
 Current workflows in `.github/workflows/`:
-- `claude-review.yml` - Agent Teams PR review
 - `claude-agent-teams-research.yml` - Feature analysis
 - `claude-agent-teams-implement.yml` - Feature implementation
 - `release-please.yml` - Automated releases
