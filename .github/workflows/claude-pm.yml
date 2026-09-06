@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Cache Claude Code installation
       - name: Cache Claude Code
@@ -74,7 +74,7 @@ jobs:
     if: github.event.schedule == '0 9 * * 1'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Cache Claude Code installation
       - name: Cache Claude Code
