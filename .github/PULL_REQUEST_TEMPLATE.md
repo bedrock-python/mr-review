@@ -15,7 +15,7 @@
 - [ ] Tests added or updated
 - [ ] `make fmt-services` passes locally (ruff + ESLint)
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
-- [ ] Documentation updated (if the public API changed)
+- [ ] Documentation updated (if the public API changed), `docs/agents.md` included
 
 ## Related issues
 

@@ -1,0 +1,184 @@
+/* The "Copy page" control above every page: a split button and its menu.
+   Everything is drawn from the theme's own custom properties, so both palettes
+   and both font variants are covered without a second set of rules. */
+
+.md-copy-page {
+  position: relative;
+  z-index: 2;
+  float: right;
+  margin: 0.2rem 0 0.4rem 0.8rem;
+}
+
+.md-copy-page__group {
+  display: flex;
+  align-items: stretch;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  background-color: var(--md-default-bg-color);
+}
+
+.md-copy-page__button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  font-family: inherit;
+  font-size: 0.65rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 125ms, background-color 125ms;
+}
+
+.md-copy-page__button:hover,
+.md-copy-page__button:focus-visible {
+  color: var(--md-accent-fg-color);
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-copy-page__button--main {
+  border-radius: 0.15rem 0 0 0.15rem;
+}
+
+.md-copy-page__button--toggle {
+  padding-inline: 0.4rem;
+  border-inline-start: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0 0.15rem 0.15rem 0;
+}
+
+.md-copy-page__button--toggle .md-copy-page__icon {
+  transition: transform 125ms;
+}
+
+.md-copy-page__button--toggle[aria-expanded="true"] .md-copy-page__icon {
+  transform: rotate(180deg);
+}
+
+/* Icons are sized here: the bundled SVGs carry no width or height. */
+.md-copy-page__icon svg,
+.md-copy-page__item-icon svg,
+.md-copy-page__item-arrow svg {
+  display: block;
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.md-copy-page__icon {
+  display: flex;
+}
+
+/* The tick replaces the clipboard for as long as the copy is fresh. */
+.md-copy-page__icon--done,
+.md-copy-page[data-copy-state="copied"] .md-copy-page__icon--idle {
+  display: none;
+}
+
+.md-copy-page[data-copy-state="copied"] .md-copy-page__icon--done {
+  display: flex;
+}
+
+.md-copy-page[data-copy-state="copied"] .md-copy-page__button--main {
+  color: var(--md-accent-fg-color);
+}
+
+.md-copy-page__menu {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 0.25rem);
+  min-width: 15rem;
+  padding: 0.25rem;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.25rem;
+  background-color: var(--md-default-bg-color);
+  box-shadow: var(--md-shadow-z2);
+}
+
+.md-copy-page__menu[hidden] {
+  display: none;
+}
+
+/* The menu entries are anchors inside the typeset article, so the theme's own
+   `.md-typeset a` rules outrank a single class -- hence the prefix. */
+.md-typeset .md-copy-page__item,
+.md-copy-page__item {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 0.15rem;
+  background: transparent;
+  color: var(--md-default-fg-color);
+  font-family: inherit;
+  font-size: 0.65rem;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 125ms;
+}
+
+.md-typeset .md-copy-page__item:hover,
+.md-typeset .md-copy-page__item:focus-visible,
+.md-copy-page__item:hover,
+.md-copy-page__item:focus-visible {
+  background-color: var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color);
+  text-decoration: none;
+}
+
+.md-copy-page__item-icon {
+  display: flex;
+  padding-top: 0.1rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-copy-page__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.md-copy-page__item-title {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.md-copy-page__item-arrow {
+  display: flex;
+  color: var(--md-default-fg-color--lighter);
+}
+
+.md-copy-page__item-arrow svg {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.md-copy-page__item-hint {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.6rem;
+  line-height: 1.3;
+}
+
+/* Narrow screens keep the icons and drop the words. */
+@media screen and (max-width: 44.9375em) {
+  .md-copy-page__label {
+    display: none;
+  }
+
+  .md-copy-page__menu {
+    min-width: 13rem;
+  }
+}
+
+@media print {
+  .md-copy-page {
+    display: none;
+  }
+}

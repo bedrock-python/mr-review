@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{#-
+  Adds the "Copy page" control above every page: the Markdown of the page for a
+  language model, and the handful of places one is usually pasted into. The
+  Markdown itself is written next to the page by scripts/emit_markdown.py after
+  the build; the two data attributes are all the script needs to find it.
+-#}
+{% block content %}
+  {#- A page whose Markdown would not read as the page declines the control
+     with `copy_page: false` in its front matter. -#}
+  {% if page.meta.copy_page != false %}
+  <div class="md-copy-page" data-copy-base="{{ base_url }}" data-copy-page="{{ page.url }}"
+       data-copy-title="{{ page.title }}" data-copy-site="{{ config.site_name }}">
+    <div class="md-copy-page__group">
+      <button type="button" class="md-copy-page__button md-copy-page__button--main" data-copy-action>
+        <span class="md-copy-page__icon md-copy-page__icon--idle">
+          {% include ".icons/lucide/copy.svg" %}
+        </span>
+        <span class="md-copy-page__icon md-copy-page__icon--done">
+          {% include ".icons/lucide/check.svg" %}
+        </span>
+        <span class="md-copy-page__label" data-copy-label>Copy page</span>
+      </button>
+      <button type="button" class="md-copy-page__button md-copy-page__button--toggle"
+              aria-expanded="false" aria-label="More ways to read this page" data-copy-toggle>
+        <span class="md-copy-page__icon">
+          {% include ".icons/lucide/chevron-down.svg" %}
+        </span>
+      </button>
+    </div>
+    <div class="md-copy-page__menu" data-copy-menu hidden>
+      <button type="button" class="md-copy-page__item" data-copy-action>
+        <span class="md-copy-page__item-icon">{% include ".icons/lucide/copy.svg" %}</span>
+        <span class="md-copy-page__item-text">
+          <span class="md-copy-page__item-title">Copy page</span>
+          <span class="md-copy-page__item-hint">Copy this page as Markdown for LLMs</span>
+        </span>
+      </button>
+      <a class="md-copy-page__item" target="_blank" rel="noopener" data-copy-open="markdown">
+        <span class="md-copy-page__item-icon">{% include ".icons/lucide/file-text.svg" %}</span>
+        <span class="md-copy-page__item-text">
+          <span class="md-copy-page__item-title">
+            View as Markdown
+            <span class="md-copy-page__item-arrow">{% include ".icons/lucide/external-link.svg" %}</span>
+          </span>
+          <span class="md-copy-page__item-hint">View this page as plain text</span>
+        </span>
+      </a>
+      <a class="md-copy-page__item" target="_blank" rel="noopener" data-copy-open="chatgpt">
+        <span class="md-copy-page__item-icon">{% include ".icons/lucide/sparkles.svg" %}</span>
+        <span class="md-copy-page__item-text">
+          <span class="md-copy-page__item-title">
+            Open in ChatGPT
+            <span class="md-copy-page__item-arrow">{% include ".icons/lucide/external-link.svg" %}</span>
+          </span>
+          <span class="md-copy-page__item-hint">Ask questions about this page</span>
+        </span>
+      </a>
+      <a class="md-copy-page__item" target="_blank" rel="noopener" data-copy-open="claude">
+        <span class="md-copy-page__item-icon">{% include ".icons/lucide/asterisk.svg" %}</span>
+        <span class="md-copy-page__item-text">
+          <span class="md-copy-page__item-title">
+            Open in Claude
+            <span class="md-copy-page__item-arrow">{% include ".icons/lucide/external-link.svg" %}</span>
+          </span>
+          <span class="md-copy-page__item-hint">Ask questions about this page</span>
+        </span>
+      </a>
+      <a class="md-copy-page__item" target="_blank" rel="noopener" data-copy-open="perplexity">
+        <span class="md-copy-page__item-icon">{% include ".icons/lucide/search.svg" %}</span>
+        <span class="md-copy-page__item-text">
+          <span class="md-copy-page__item-title">
+            Open in Perplexity
+            <span class="md-copy-page__item-arrow">{% include ".icons/lucide/external-link.svg" %}</span>
+          </span>
+          <span class="md-copy-page__item-hint">Ask questions about this page</span>
+        </span>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+  {% include "partials/content.html" %}
+{% endblock %}
