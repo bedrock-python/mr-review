@@ -18,6 +18,7 @@ jobs:
       - run: uv sync --no-dev --group docs
       - run: cp CHANGELOG.md docs/changelog.md
       - run: uv run zensical build --clean
+      - run: uv run python scripts/emit_markdown.py
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

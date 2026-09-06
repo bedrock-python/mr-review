@@ -55,6 +55,21 @@ Breaking changes: add `!` after the type (`feat!:`) or include a `BREAKING CHANG
 
 Update `CHANGELOG.md` under `[Unreleased]` for any user-visible change.
 
+## The agents page
+
+`docs/agents.md` is the whole tool on one page, written for a coding assistant: the
+configuration surface, the rules that break a deployment when they are broken, the
+mistakes models make in a compose file, and a map of which page to fetch for the rest.
+People hand it to an assistant instead of the site, which is what makes a stale one worse
+than none — it teaches a model a deployment that no longer works.
+
+It is part of the public surface, so it changes in the same pull request that surface
+does: an environment variable added, renamed or removed, a changed default, a new port,
+image, volume, host type or route, a new rule an operator has to obey. A new docs page
+means a new row in the documentation map. The review check is mechanical — if the diff
+changes what an operator has to configure and `docs/agents.md` is untouched, the pull
+request is not finished.
+
 ## Architecture principles
 
 This project follows Onion Architecture — dependency direction always points inward:
