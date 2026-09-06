@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes
+
+- All-in-one image: the container health check now probes `/system/health/livez`. The
+  previous `/health` probe was answered by the SPA fallback, so the container reported
+  healthy whatever state the application was in
+
 ## v0.1.0 (2026-05-14)
 
 ### Features
