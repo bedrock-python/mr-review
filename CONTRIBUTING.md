@@ -92,7 +92,7 @@ The default branch is `master`.
    `services/mr-review`, `make lint && make typecheck && make test` in `services/web-app`)
 5. Open a PR against `master`
 
-Update `CHANGELOG.md` under `[Unreleased]` for any user-visible change.
+Update `CHANGELOG.md` under `Unreleased` for any user-visible change — it is the changelog the documentation site publishes.
 
 ## The agents page
 
