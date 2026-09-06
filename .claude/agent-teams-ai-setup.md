@@ -925,7 +925,7 @@ Infrastructure:
 The Claude workflows this document described have been removed: they ran on a credential that
 no longer buys a model call, so every trigger was a red check that reviewed nothing. What is
 left in `.github/workflows/` is ordinary automation — `ci.yml`, `docs.yml`, `publish.yml`,
-`release.yml`, `release-please.yml`.
+`release.yml`.
 
 The agent definitions, rules, skills and commands under `.claude/` are unaffected: they are for
 local Claude Code sessions and never needed CI.
