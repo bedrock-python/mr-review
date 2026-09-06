@@ -4,20 +4,56 @@ Thank you for your interest in contributing! This document covers everything you
 
 ## Development setup
 
+The repository holds two services, each with its own toolchain. The repository root only
+builds the documentation site.
+
 ```bash
 git clone https://github.com/bedrock-python/mr-review.git
 cd mr-review
-uv sync --group dev
-uv run pre-commit install --hook-type commit-msg
+```
+
+Backend — Python 3.12+ and [uv](https://docs.astral.sh/uv/):
+
+```bash
+cd services/mr-review
+uv sync --all-extras
+uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+```
+
+Frontend — Node 22 and pnpm:
+
+```bash
+cd services/web-app
+pnpm install --frozen-lockfile
 ```
 
 ## Running checks
 
+Backend, from `services/mr-review`:
+
 ```bash
-make fmt          # ruff format + fix
-make check        # ruff lint + format check + mypy
-make test-unit    # unit tests, no Docker required
-make test         # full suite
+make fmt          # pre-commit over the tree: ruff fix, ruff format, mypy
+make check        # ruff lint + format check + mypy, as CI runs them
+make test-unit    # unit tests
+make test         # unit and integration tests; neither needs Docker
+```
+
+Frontend, from `services/web-app`:
+
+```bash
+make fmt          # eslint --fix + prettier
+make lint
+make typecheck
+make test         # vitest with coverage
+```
+
+From the repository root:
+
+```bash
+make dev             # backend and frontend dev servers, no Docker
+make run-services    # both services in Docker
+make fmt-services    # format both services
+make docs-serve      # the documentation site on http://localhost:8080
 ```
 
 ## Code style
@@ -47,11 +83,14 @@ Breaking changes: add `!` after the type (`feat!:`) or include a `BREAKING CHANG
 
 ## Pull requests
 
+The default branch is `master`.
+
 1. Fork the repository
-2. Create a branch from `main`: `git checkout -b feat/MR-REVIEW-42__my-feature`
+2. Create a branch from `master`: `git checkout -b feat/MR-REVIEW-42__my-feature`
 3. Make your changes with tests
-4. Run `make check && make test-unit` locally
-5. Open a PR against `main`
+4. Run the checks for the service you touched (`make check && make test-unit` in
+   `services/mr-review`, `make lint && make typecheck && make test` in `services/web-app`)
+5. Open a PR against `master`
 
 Update `CHANGELOG.md` under `[Unreleased]` for any user-visible change.
 
@@ -72,22 +111,22 @@ request is not finished.
 
 ## Architecture principles
 
-This project follows Onion Architecture — dependency direction always points inward:
+The backend follows Onion Architecture — dependency direction always points inward:
 `api` → `use_cases` → `core`.
 
-- **No SQLAlchemy in domain/application**: `core/` and `use_cases/` must not import `sqlalchemy`
-- **Repositories return domain entities**: never return ORM models from repositories
-- **Use cases accept `AsyncUnitOfWork`**: never accept `AsyncSession` directly
+- **`core/` depends on nothing**: entities and protocols only, no infrastructure imports
+- **`use_cases/` depends on protocols**: never on `infra/`
+- **Repositories return domain entities**: the three of them are file-backed
+  (`hosts.yaml`, `ai_providers.yaml`, `reviews/<uuid>.yaml`) — there is no database and no
+  ORM in this project
 
-See the `.claude/rules/` directory for detailed architecture and naming conventions.
+The frontend follows Feature-Sliced Design. The `.claude/rules/` directory holds the
+organisation-wide conventions; the persistence rules there assume a SQL service and do not
+apply here.
 
 ## Releasing (maintainers only)
 
-1. Move `[Unreleased]` section in `CHANGELOG.md` to `[x.y.z] - YYYY-MM-DD`
-2. Commit: `chore(release): v0.x.y`
-3. Tag and push:
-
-```bash
-git tag v0.x.y
-git push origin main --tags
-```
+Releases are automated. release-please watches `master` and keeps a release pull request per
+service; merging it writes `services/<service>/CHANGELOG.md`, bumps the version and pushes a
+`mr-review-v*` or `web-app-v*` tag. That tag triggers `publish.yml`, which builds and pushes
+the `api`, `web-app` and `all-in-one` images to ghcr.io.
