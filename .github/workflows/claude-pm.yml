@@ -21,7 +21,7 @@ jobs:
 
       # Cache Claude Code installation
       - name: Cache Claude Code
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.claude
@@ -78,7 +78,7 @@ jobs:
 
       # Cache Claude Code installation
       - name: Cache Claude Code
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.claude
