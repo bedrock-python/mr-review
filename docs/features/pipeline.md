@@ -38,4 +38,4 @@ Review the generated comments one by one:
 
 ## POST — publish to the MR
 
-Click **Post to MR**. Approved comments are submitted as inline review comments on the MR in GitLab or GitHub.
+Click **Post to MR**. Approved comments are submitted as inline review comments on the merge request, on whichever host it came from.
