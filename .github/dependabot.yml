@@ -1,28 +1,40 @@
+# One grouped pull request a week per ecosystem. Majors of the frontend tooling
+# come one at a time (a breaking one must not block the other twenty), the
+# @tanstack packages move together (react-query and query-core have to match),
+# and TypeScript stays on the major typescript-eslint supports.
 version: 2
 updates:
-  - package-ecosystem: "pip"
-    directory: "/services/mr-review"
+  - package-ecosystem: uv
+    directory: /services/mr-review
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     groups:
-      dev-dependencies:
-        dependency-type: "development"
-    open-pull-requests-limit: 5
+      dev:
+        dependency-type: development
 
-  - package-ecosystem: "npm"
-    directory: "/services/web-app"
+  - package-ecosystem: npm
+    directory: /services/web-app
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     groups:
+      tanstack:
+        patterns: ["@tanstack/*"]
       dev-dependencies:
-        dependency-type: "development"
-    open-pull-requests-limit: 5
+        dependency-type: development
+        update-types: ["minor", "patch"]
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet
+      # (https://github.com/typescript-eslint/typescript-eslint/issues/10940).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
