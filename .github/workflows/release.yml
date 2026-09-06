@@ -18,7 +18,7 @@ jobs:
       web-released: ${{ steps.release.outputs['services/web-app--release_created'] }}
       web-version: ${{ steps.release.outputs['services/web-app--major'] }}.${{ steps.release.outputs['services/web-app--minor'] }}.${{ steps.release.outputs['services/web-app--patch'] }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
