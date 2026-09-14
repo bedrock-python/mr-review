@@ -1,19 +1,8 @@
 from __future__ import annotations
 
-import ssl
 from collections.abc import AsyncGenerator, AsyncIterator
 
 import anthropic
-import httpx
-
-
-def _make_httpx_client(ssl_verify: bool, timeout: int) -> httpx.AsyncClient:
-    if ssl_verify:
-        verify: bool | ssl.SSLContext = ssl.create_default_context()
-    else:
-        verify = False
-    return httpx.AsyncClient(verify=verify, timeout=float(timeout))
-
 
 _SYSTEM_PROMPT = (
     "You are an expert code reviewer. Your task is to analyse a merge request diff and "
@@ -34,7 +23,7 @@ class ClaudeProvider:
     ) -> None:
         self._client = anthropic.AsyncAnthropic(
             api_key=api_key,
-            http_client=_make_httpx_client(ssl_verify=ssl_verify, timeout=timeout),
+            http_client=anthropic.DefaultAsyncHttpxClient(verify=ssl_verify, timeout=float(timeout)),
         )
         self._model = model
         self._temperature = temperature
@@ -58,14 +47,15 @@ class ClaudeProvider:
         }
 
         if self._reasoning_budget is not None:
-            # Extended thinking — temperature must be 1 per Anthropic spec
+            # Extended thinking — the API only accepts its default temperature of 1, so none is sent
             kwargs["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": max(1024, self._reasoning_budget),
             }
-            kwargs["temperature"] = 1
         elif self._temperature is not None:
-            kwargs["temperature"] = self._temperature
+            # anthropic 1.x dropped the sampling parameters from the method signatures; the API still
+            # honours them for models that predate the change, so the setting goes through extra_body.
+            kwargs["extra_body"] = {"temperature": self._temperature}
 
         async with self._client.messages.stream(**kwargs) as stream:
             async for text in stream.text_stream:

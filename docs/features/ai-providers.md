@@ -63,7 +63,7 @@ message and review brief all go into one prompt — large MRs can exceed 20k tok
 optional context toggles add more.
 
 A dispatch may also carry `temperature`, `reasoning_budget` (extended thinking on Claude,
-which forces `temperature=1`) and `reasoning_effort` (`low`, `medium` or `high`, for OpenAI
+which ignores `temperature`) and `reasoning_effort` (`low`, `medium` or `high`, for OpenAI
 reasoning models).
 
 ## Concurrency
