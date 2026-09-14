@@ -1,21 +1,8 @@
 from __future__ import annotations
 
-import ssl
 from collections.abc import AsyncGenerator, AsyncIterator
 
-import httpx
 import openai
-
-
-def _make_httpx_client(ssl_verify: bool, timeout: int) -> httpx.AsyncClient:
-    if ssl_verify:
-        # Use the OS/system certificate store instead of certifi's bundle so that
-        # corporate/self-signed CAs installed in the system trust store are respected.
-        verify: bool | ssl.SSLContext = ssl.create_default_context()
-    else:
-        verify = False
-    return httpx.AsyncClient(verify=verify, timeout=float(timeout))
-
 
 _SYSTEM_PROMPT = (
     "You are an expert code reviewer. Your task is to analyse a merge request diff and "
@@ -39,7 +26,9 @@ class OpenAICompatProvider:
         self._client = openai.AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_make_httpx_client(ssl_verify=ssl_verify, timeout=timeout),
+            # httpx2 verifies against the OS trust store (truststore), not certifi's bundle,
+            # so corporate/self-signed CAs installed in the system trust store are respected.
+            http_client=openai.DefaultAsyncHttpx2Client(verify=ssl_verify, timeout=float(timeout)),
         )
         self._model = model
         self._temperature = temperature

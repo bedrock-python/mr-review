@@ -226,7 +226,7 @@ than two path segments.
 
 `GET /api/v1/ai-providers/{id}/models` asks the endpoint itself for its model list.
 Per-dispatch, the request may also carry `temperature`, `reasoning_budget` (extended
-thinking on Claude, which forces `temperature=1`) and `reasoning_effort` (`low`, `medium`,
+thinking on Claude, which ignores `temperature`) and `reasoning_effort` (`low`, `medium`,
 `high`, OpenAI reasoning models only).
 
 ### HTTP API
