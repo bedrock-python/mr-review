@@ -22,6 +22,7 @@ export default defineConfig({
       reporter: ["text", "json", "html", "lcov", "json-summary", "cobertura"],
       reportsDirectory: process.env.VITEST_REPORTS_DIR ?? "coverage",
       clean: true,
+      include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "node_modules/",
         "dist/",
