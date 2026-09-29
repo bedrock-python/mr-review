@@ -1,7 +1,8 @@
 # One grouped pull request a week per ecosystem. Majors of the frontend tooling
 # come one at a time (a breaking one must not block the other twenty), the
 # @tanstack packages move together (react-query and query-core have to match),
-# and TypeScript stays on the major typescript-eslint supports.
+# so do react and react-dom (React refuses to render when their versions
+# differ), and TypeScript stays on the major typescript-eslint supports.
 version: 2
 updates:
   - package-ecosystem: uv
@@ -21,6 +22,8 @@ updates:
     groups:
       tanstack:
         patterns: ["@tanstack/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       dev-dependencies:
         dependency-type: development
         update-types: ["minor", "patch"]
