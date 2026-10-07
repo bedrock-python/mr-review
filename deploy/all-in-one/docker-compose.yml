@@ -11,5 +11,9 @@ services:
       MR_REVIEW__HOST_DATA_DIR: "${DATA_DIR:-./data}"
       MR_REVIEW__STATIC_DIR: "/app/static"
       MR_REVIEW__LOGGING__USE_JSON: "true"
+      # The container starts as root, gives the data directory to PUID:PGID
+      # and runs the application as that user.
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/data
