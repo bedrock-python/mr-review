@@ -11,6 +11,8 @@ export {
   queryRetryDelay,
   MAX_QUERY_RETRIES,
 } from "./retryPolicy";
+export { parseListItems, parseListOrWarn } from "./parseList";
+export type { ParsedList } from "./parseList";
 export {
   FIRST_PAGE,
   PageMetaSchema,

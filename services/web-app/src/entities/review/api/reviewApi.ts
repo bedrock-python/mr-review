@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, LONG_REQUEST_TIMEOUT_MS, httpClient } from "@shared/api";
+import { ApiError, LONG_REQUEST_TIMEOUT_MS, httpClient, parseListOrWarn } from "@shared/api";
 import { env } from "@shared/config";
 import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
@@ -65,7 +65,7 @@ export type NewCommentInput = {
 export const reviewApi = {
   list: async (): Promise<Review[]> => {
     const res = await httpClient.get<unknown>("/api/v1/reviews");
-    return z.array(ReviewSchema).parse(res.data);
+    return parseListOrWarn(ReviewSchema, res.data, "reviews");
   },
 
   get: async (reviewId: string): Promise<Review> => {

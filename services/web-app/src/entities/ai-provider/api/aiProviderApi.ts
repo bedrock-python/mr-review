@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { httpClient } from "@shared/api";
+import { httpClient, parseListOrWarn } from "@shared/api";
 
 import { AIProviderSchema, ModelCapabilitiesSchema } from "../model/aiProvider.schema";
 import type {
@@ -16,7 +16,7 @@ const ModelListSchema = z.array(z.string());
 export const aiProviderApi = {
   list: async (): Promise<AIProvider[]> => {
     const res = await httpClient.get<unknown>("/api/v1/ai-providers");
-    return z.array(AIProviderSchema).parse(res.data);
+    return parseListOrWarn(AIProviderSchema, res.data, "AI providers");
   },
 
   create: async (data: CreateAIProvider): Promise<AIProvider> => {
