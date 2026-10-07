@@ -9,7 +9,7 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    # Пути для временных файлов (необходимы для запуска от non-root)
+    # Temp paths under /tmp, writable by the non-root user
     client_body_temp_path /tmp/client_temp;
     proxy_temp_path       /tmp/proxy_temp;
     fastcgi_temp_path    /tmp/fastcgi_temp;
@@ -44,41 +44,33 @@ http {
         root /usr/share/nginx/html;
         index index.html;
 
-        # Security Headers
-        add_header X-Frame-Options "DENY" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-
-        # Content Security Policy
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${API_URL};" always;
-
-        # HSTS (only for HTTPS)
-        ${HSTS_HEADER}
+        # Security headers, CSP and HSTS. A location that declares an add_header
+        # of its own inherits none of these, so each such location below
+        # includes the file again.
+        include /tmp/nginx-security-headers.conf;
 
         location / {
             try_files $uri $uri/ /index.html;
-            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+            include /tmp/nginx-security-headers.conf;
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
         }
 
         location /assets/ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
+            include /tmp/nginx-security-headers.conf;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
             access_log off;
         }
 
         location /health {
             access_log off;
+            default_type text/plain;
             return 200 "healthy\n";
-            add_header Content-Type text/plain;
         }
 
         location /metrics {
             stub_status on;
             access_log off;
-            # В облаке доступ ограничен через NetworkPolicy,
-            # здесь разрешаем всем внутри пода
+            # Restricted by NetworkPolicy in a cluster; open inside the pod
             allow all;
         }
 

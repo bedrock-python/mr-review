@@ -22,8 +22,14 @@ window.__APP_CONFIG__ = {
 EOF
 
 # Nginx config generation from template
-# Default API_URL for CSP if not provided
-export API_URL="${API_URL:-$API_BASE_URL}"
+# CSP connect-src gets the API's origin — scheme://host[:port], since a CSP
+# source with a path matches that exact path only. A relative or empty
+# API_BASE_URL is same-origin, which 'self' already allows.
+case "$API_BASE_URL" in
+  *://*) API_ORIGIN=$(printf '%s\n' "$API_BASE_URL" | sed -E 's#^([^:/]+://[^/]+).*#\1#') ;;
+  *) API_ORIGIN="" ;;
+esac
+export API_URL="${API_URL:-$API_ORIGIN}"
 
 # HSTS header for production-like environments
 if [ "$APP_ENV" = "production" ] || [ "$APP_ENV" = "staging" ] || [ "$APP_ENV" = "pre" ]; then
@@ -35,7 +41,8 @@ fi
 echo "Generating nginx.conf from template..."
 # Writable under K8s runAsUser 1000 even when /etc/nginx is root-owned.
 NGINX_RUNTIME_CONF="/tmp/nginx-runtime.conf"
-envsubst '${API_URL} ${HSTS_HEADER}' < /etc/nginx/nginx.conf.template > "$NGINX_RUNTIME_CONF"
+envsubst '${API_URL} ${HSTS_HEADER}' < /etc/nginx/security-headers.conf.template > /tmp/nginx-security-headers.conf
+cp /etc/nginx/nginx.conf.template "$NGINX_RUNTIME_CONF"
 
 echo "Runtime config generated successfully"
 

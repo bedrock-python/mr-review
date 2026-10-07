@@ -41,7 +41,7 @@ RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app \
  && chown -R app:app /var/cache/nginx
 
 COPY --from=builder --chown=app:app /app/dist /usr/share/nginx/html
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
+COPY nginx.conf.template security-headers.conf.template /etc/nginx/
 
 USER app
 EXPOSE 8080
