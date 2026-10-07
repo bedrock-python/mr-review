@@ -51,6 +51,11 @@ const reviewHandlers = [
     return HttpResponse.json({ ok: true, user: "mock-user" });
   }),
 
+  // Matches any origin, like the list handlers in handlers/mrs.ts.
+  http.post(/\/api\/v1\/hosts\/[^/]+\/cache\/invalidate$/, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // Reviews
   http.get("/api/v1/reviews", () => {
     return HttpResponse.json([]);
