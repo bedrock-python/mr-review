@@ -55,6 +55,7 @@ from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCa
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
+from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
@@ -258,6 +259,19 @@ class UseCaseProvider(Provider):
         vcs_cache: VCSCache,
     ) -> GetReviewPromptUseCase:
         return GetReviewPromptUseCase(
+            review_repo=review_repo,
+            host_repo=host_repo,
+            vcs_factory=_make_vcs_factory(vcs_cache),
+        )
+
+    @provide
+    def get_list_excluded_files_use_case(
+        self,
+        review_repo: FileReviewRepository,
+        host_repo: FileHostRepository,
+        vcs_cache: VCSCache,
+    ) -> ListExcludedFilesUseCase:
+        return ListExcludedFilesUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
             vcs_factory=_make_vcs_factory(vcs_cache),

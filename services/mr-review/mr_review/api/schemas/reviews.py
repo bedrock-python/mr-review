@@ -184,6 +184,8 @@ class DispatchDoneEvent(BaseModel):
     json_error: str | None
     truncated: bool
     kept_previous: bool
+    # Parsed comments dropped by the brief's minimum severity or comment cap (not in ``comments``).
+    filtered: int = 0
 
 
 class DispatchErrorEvent(BaseModel):
@@ -198,6 +200,63 @@ class DispatchErrorEvent(BaseModel):
 class GetPromptRequest(BaseModel):
     brief_config: BriefConfig | None = None
     iteration_id: UUID | None = None
+
+
+class PromptSectionResponse(BaseModel):
+    """One part of the prompt: how much of it went in and what the budget cut or left out."""
+
+    key: Literal[
+        "instructions",
+        "diff",
+        "description",
+        "previous_comments",
+        "context_files",
+        "full_files",
+        "test_files",
+        "related_code",
+        "commit_history",
+    ]
+    label: str
+    # Characters this part takes in the prompt, and what it would have taken uncut.
+    chars: int
+    source_chars: int
+    # Files (or comments) in this part, and how many of them are in the prompt.
+    items: int
+    included: int
+    truncated: list[str]
+    omitted: list[str]
+    # Files skipped because their content looks binary.
+    skipped: list[str]
+
+
+class ExcludedFileResponse(BaseModel):
+    path: str
+    # The exclude pattern that matched, or "(not matched by the include patterns)".
+    reason: str
+
+
+class PromptPreviewResponse(BaseModel):
+    prompt: str
+    total_chars: int
+    # A rough guide: about four characters per token.
+    estimated_tokens: int
+    budget_chars: int
+    sections: list[PromptSectionResponse]
+    files_total: int
+    excluded_files: list[ExcludedFileResponse]
+    # The saved preset whose instructions the prompt uses; ``preset_missing`` when the brief names
+    # one that no longer exists and the built-in preset stood in.
+    preset_name: str | None
+    preset_missing: bool
+
+
+class ExcludedFilesRequest(BaseModel):
+    brief_config: BriefConfig | None = None
+
+
+class ExcludedFilesResponse(BaseModel):
+    total: int
+    excluded: list[ExcludedFileResponse]
 
 
 class PostReviewRequest(BaseModel):
@@ -227,6 +286,8 @@ class ImportResponseResponse(BaseModel):
     json_error: str | None = None
     # The answer stops mid-JSON (the model most likely hit its token limit); complete comments were kept.
     truncated: bool = False
+    # Parsed comments dropped by the brief's minimum severity or comment cap (not in ``imported``).
+    filtered: int = 0
 
 
 class CreateCommentRequest(BaseModel):

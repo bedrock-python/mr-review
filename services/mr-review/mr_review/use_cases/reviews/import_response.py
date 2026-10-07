@@ -1,27 +1,37 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage
 from mr_review.core.reviews.repositories import ReviewRepository
-from mr_review.use_cases.reviews._answer_settlement import bounded_raw_response
+from mr_review.use_cases.reviews._answer_settlement import bounded_raw_response, within_brief
 from mr_review.use_cases.reviews.ai_response_parser import ParseResult, parse_ai_response
+
+
+@dataclass(frozen=True, slots=True)
+class ImportOutcome:
+    result: ParseResult
+    # Comments stored on the iteration; 0 when nothing parsed (the iteration is left alone then).
+    stored: int
+    # Parsed comments dropped by the brief's minimum severity or comment cap.
+    filtered: int
 
 
 class ImportResponseUseCase:
     def __init__(self, review_repo: ReviewRepository) -> None:
         self._review_repo = review_repo
 
-    async def execute(self, review_id: UUID, raw: str, iteration_id: UUID | None = None) -> ParseResult:
+    async def execute(self, review_id: UUID, raw: str, iteration_id: UUID | None = None) -> ImportOutcome:
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
             raise ValueError(f"Review {review_id} not found")
 
         result = await asyncio.to_thread(parse_ai_response, raw)
         if not result.comments:
-            return result
+            return ImportOutcome(result=result, stored=0, filtered=0)
 
         # Resolve or create the target iteration
         if iteration_id is not None:
@@ -47,10 +57,12 @@ class ImportResponseUseCase:
             review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
             idx = 0
 
-        updated_iteration = review.iterations[idx].model_copy(
+        target = review.iterations[idx]
+        limited = within_brief(target, result.comments)
+        updated_iteration = target.model_copy(
             update={
                 "stage": IterationStage.polish,
-                "comments": result.comments,
+                "comments": limited.comments,
                 "raw_response": bounded_raw_response(raw),
             }
         )
@@ -58,4 +70,4 @@ class ImportResponseUseCase:
         new_iterations[idx] = updated_iteration
         await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
 
-        return result
+        return ImportOutcome(result=result, stored=len(limited.comments), filtered=limited.filtered)

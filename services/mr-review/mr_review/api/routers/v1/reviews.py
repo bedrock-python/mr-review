@@ -20,16 +20,22 @@ from mr_review.api.schemas.reviews import (
     DispatchDoneEvent,
     DispatchErrorEvent,
     DispatchReviewRequest,
+    ExcludedFileResponse,
+    ExcludedFilesRequest,
+    ExcludedFilesResponse,
     GetPromptRequest,
     ImportResponseRequest,
     ImportResponseResponse,
     IterationResponse,
     PostReviewRequest,
     PostReviewResponse,
+    PromptPreviewResponse,
+    PromptSectionResponse,
     ReviewResponse,
     UpdateReviewRequest,
 )
 from mr_review.core.reviews.entities import Comment, Iteration, Review
+from mr_review.core.reviews.path_filter import ExcludedFile
 from mr_review.use_cases.reviews.ai_response_parser import ParseResult
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
@@ -51,8 +57,10 @@ from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
+from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
+from mr_review.use_cases.reviews.prompt_assembly import AssembledPrompt
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
@@ -232,15 +240,86 @@ async def get_review_prompt(
     body: GetPromptRequest,
     use_case: FromDishka[GetReviewPromptUseCase],
 ) -> Response:
+    """The exact prompt a dispatch would send, as text."""
     try:
-        prompt = await use_case.execute(
+        assembled = await use_case.execute(
             review_id,
             brief_config=body.brief_config,
             iteration_id=body.iteration_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return Response(content=prompt, media_type="text/plain")
+    return Response(content=assembled.prompt.text, media_type="text/plain")
+
+
+_CHARS_PER_TOKEN = 4
+
+
+def _excluded_to_response(excluded: tuple[ExcludedFile, ...]) -> list[ExcludedFileResponse]:
+    return [ExcludedFileResponse(path=item.path, reason=item.reason) for item in excluded]
+
+
+def _preview_to_response(assembled: AssembledPrompt) -> PromptPreviewResponse:
+    prompt = assembled.prompt
+    return PromptPreviewResponse(
+        prompt=prompt.text,
+        total_chars=prompt.total_chars,
+        estimated_tokens=-(-prompt.total_chars // _CHARS_PER_TOKEN),
+        budget_chars=prompt.budget_chars,
+        sections=[
+            PromptSectionResponse.model_validate(
+                {
+                    "key": s.key,
+                    "label": s.label,
+                    "chars": s.chars,
+                    "source_chars": s.source_chars,
+                    "items": s.items,
+                    "included": s.included,
+                    "truncated": list(s.truncated),
+                    "omitted": list(s.omitted),
+                    "skipped": list(s.skipped),
+                }
+            )
+            for s in prompt.sections
+        ],
+        files_total=assembled.files_total,
+        excluded_files=_excluded_to_response(assembled.excluded),
+        preset_name=assembled.intent.preset_name,
+        preset_missing=assembled.intent.preset_missing,
+    )
+
+
+@router.post("/{review_id}/prompt/preview", response_model=PromptPreviewResponse)
+async def preview_review_prompt(
+    review_id: UUID,
+    body: GetPromptRequest,
+    use_case: FromDishka[GetReviewPromptUseCase],
+) -> PromptPreviewResponse:
+    """The prompt with a breakdown of its size: what each part takes, and what the budget, the
+    path filters or a binary check left out."""
+    try:
+        assembled = await use_case.execute(
+            review_id,
+            brief_config=body.brief_config,
+            iteration_id=body.iteration_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _preview_to_response(assembled)
+
+
+@router.post("/{review_id}/excluded-files", response_model=ExcludedFilesResponse)
+async def list_excluded_files(
+    review_id: UUID,
+    body: ExcludedFilesRequest,
+    use_case: FromDishka[ListExcludedFilesUseCase],
+) -> ExcludedFilesResponse:
+    """The changed files a brief's path filters leave out (the review's saved brief without one)."""
+    try:
+        selection = await use_case.execute(review_id, body.brief_config)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ExcludedFilesResponse(total=selection.total, excluded=_excluded_to_response(selection.excluded))
 
 
 def _dispatch_event_to_sse(event: DispatchEvent) -> ServerSentEvent:
@@ -263,6 +342,7 @@ def _dispatch_event_to_sse(event: DispatchEvent) -> ServerSentEvent:
         json_error=event.json_error,
         truncated=event.truncated,
         kept_previous=event.kept_previous,
+        filtered=event.filtered,
     )
     return ServerSentEvent(event="done", data=done.model_dump_json())
 
@@ -310,9 +390,10 @@ def _preview(raw: object) -> str:
         return f"<a {type(raw).__name__} nested too deeply to show>"
 
 
-def _parse_result_to_response(result: ParseResult, imported: int) -> ImportResponseResponse:
+def _parse_result_to_response(result: ParseResult, imported: int, filtered: int) -> ImportResponseResponse:
     return ImportResponseResponse(
         imported=imported,
+        filtered=filtered,
         errors=[
             CommentParseErrorResponse(
                 index=e.index,
@@ -333,7 +414,7 @@ async def import_response(
     use_case: FromDishka[ImportResponseUseCase],
 ) -> ImportResponseResponse:
     try:
-        result = await use_case.execute(
+        outcome = await use_case.execute(
             review_id=review_id,
             raw=body.raw,
             iteration_id=body.iteration_id,
@@ -341,7 +422,7 @@ async def import_response(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return _parse_result_to_response(result, imported=len(result.comments))
+    return _parse_result_to_response(outcome.result, imported=outcome.stored, filtered=outcome.filtered)
 
 
 @router.get("/{review_id}/iterations/{iteration_id}/raw-response", response_class=Response)
@@ -371,7 +452,7 @@ async def reparse_iteration(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _parse_result_to_response(outcome.result, imported=outcome.stored)
+    return _parse_result_to_response(outcome.result, imported=outcome.stored, filtered=outcome.filtered)
 
 
 @router.post("/{review_id}/post", response_model=PostReviewResponse)

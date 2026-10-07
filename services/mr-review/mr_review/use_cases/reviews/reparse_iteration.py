@@ -23,6 +23,8 @@ class ReparseOutcome:
     # Comments the re-parse wrote: the parsed ones, or the general comment holding the answer;
     # 0 when the answer still could not be read and the iteration kept its comments.
     stored: int
+    # Parsed comments the brief's minimum severity or comment cap left out of what was written.
+    filtered: int = 0
 
 
 def _stored_answer(review: Review, iteration_id: UUID) -> str:
@@ -61,4 +63,8 @@ class ReparseIterationUseCase:
         change = partial(_apply_reparse, iteration_id=iteration_id, result=result, settled=settled)
         await apply_review_change(self._review_repo, review_id, change)
         outcome = settled[-1]
-        return ReparseOutcome(result=result, stored=len(outcome.iteration.comments) if outcome.applied else 0)
+        return ReparseOutcome(
+            result=result,
+            stored=len(outcome.iteration.comments) if outcome.applied else 0,
+            filtered=outcome.filtered,
+        )
