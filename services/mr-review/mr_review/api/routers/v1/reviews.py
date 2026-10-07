@@ -1,11 +1,12 @@
+import json
 from collections.abc import AsyncIterator
-from typing import Any
 from uuid import UUID
 
 import structlog
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
+from sse_starlette import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
 
 from mr_review.api.schemas.reviews import (
@@ -15,6 +16,9 @@ from mr_review.api.schemas.reviews import (
     CreateCommentRequest,
     CreateIterationRequest,
     CreateReviewRequest,
+    DispatchCommentEvent,
+    DispatchDoneEvent,
+    DispatchErrorEvent,
     DispatchReviewRequest,
     GetPromptRequest,
     ImportResponseRequest,
@@ -33,7 +37,12 @@ from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
-from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.dispatch_review import (
+    DispatchChunk,
+    DispatchCommentPreview,
+    DispatchEvent,
+    DispatchReviewUseCase,
+)
 from mr_review.use_cases.reviews.get_iteration_raw_response import GetIterationRawResponseUseCase
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
@@ -231,12 +240,38 @@ async def get_review_prompt(
     return Response(content=prompt, media_type="text/plain")
 
 
+def _dispatch_event_to_sse(event: DispatchEvent) -> ServerSentEvent:
+    # Every payload is single-line JSON, so splitting the SSE frame into lines can never cut it.
+    if isinstance(event, DispatchChunk):
+        return ServerSentEvent(event="chunk", data=json.dumps(event.text, ensure_ascii=False))
+    if isinstance(event, DispatchCommentPreview):
+        comment = DispatchCommentEvent(
+            index=event.index,
+            file=event.comment.file,
+            line=event.comment.line,
+            severity=event.comment.severity,
+            body=event.comment.body,
+        )
+        return ServerSentEvent(event="comment", data=comment.model_dump_json())
+    done = DispatchDoneEvent(
+        iteration_id=event.iteration_id,
+        comments=event.comments,
+        errors=event.errors,
+        json_error=event.json_error,
+        truncated=event.truncated,
+    )
+    return ServerSentEvent(event="done", data=done.model_dump_json())
+
+
 @router.post("/{review_id}/dispatch", response_class=EventSourceResponse)
 async def dispatch_review(
     review_id: UUID,
     body: DispatchReviewRequest,
     use_case: FromDishka[DispatchReviewUseCase],
 ) -> Response:
+    """Stream the review as SSE: ``chunk`` events with the raw text, a ``comment`` event per
+    completed comment, then ``done`` once the iteration is stored — or ``error``, which ends
+    the stream without ``done``."""
     try:
         stream = await use_case.execute(
             review_id=review_id,
@@ -250,13 +285,14 @@ async def dispatch_review(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    async def event_generator() -> AsyncIterator[dict[str, Any]]:
+    async def event_generator() -> AsyncIterator[ServerSentEvent]:
         try:
-            async for chunk in stream:
-                yield {"data": chunk}
+            async for event in stream:
+                yield _dispatch_event_to_sse(event)
         except Exception as exc:
             logger.exception("Error during dispatch stream", review_id=str(review_id))
-            yield {"event": "error", "data": str(exc)}
+            error = DispatchErrorEvent(message=str(exc) or type(exc).__name__)
+            yield ServerSentEvent(event="error", data=error.model_dump_json())
 
     return EventSourceResponse(event_generator())
 

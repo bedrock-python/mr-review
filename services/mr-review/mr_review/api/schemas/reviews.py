@@ -114,6 +114,32 @@ class DispatchReviewRequest(BaseModel):
     iteration_id: UUID | None = None
 
 
+class DispatchCommentEvent(BaseModel):
+    """``event: comment`` — a comment that just completed in the stream (a preview, without an id)."""
+
+    index: int
+    file: str | None
+    line: int | None
+    severity: Literal["critical", "major", "minor", "suggestion"]
+    body: str
+
+
+class DispatchDoneEvent(BaseModel):
+    """``event: done`` — sent once, after the iteration has been stored with stage ``polish``."""
+
+    iteration_id: UUID
+    comments: int
+    errors: int
+    json_error: str | None
+    truncated: bool
+
+
+class DispatchErrorEvent(BaseModel):
+    """``event: error`` — the stream ends after it; whatever arrived was still stored."""
+
+    message: str
+
+
 class GetPromptRequest(BaseModel):
     brief_config: BriefConfig | None = None
     iteration_id: UUID | None = None

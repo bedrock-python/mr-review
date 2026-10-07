@@ -12,7 +12,12 @@ import pytest
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.mrs.entities import MR
 from mr_review.core.reviews.entities import IterationStage, Review
-from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.dispatch_review import (
+    DispatchChunk,
+    DispatchCompleted,
+    DispatchEvent,
+    DispatchReviewUseCase,
+)
 
 from tests.factories.entities import make_ai_provider, make_host, make_iteration, make_review
 
@@ -48,6 +53,11 @@ _AIDispatcherFactory = Callable[
     [AIProvider, str, str | None, float | None, int | None, str | None],
     Awaitable[AsyncIterator[str]],
 ]
+
+
+async def _drain(stream: AsyncIterator[DispatchEvent], into: list[DispatchEvent]) -> None:
+    async for event in stream:
+        into.append(event)
 
 
 def _make_use_case(
@@ -158,9 +168,10 @@ async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> 
     use_case, _ = _make_use_case(review_repo, host_repo, ai_provider_repo, mock_vcs, _factory)
 
     result = await use_case.execute(review.id, ai_provider.id)
-    chunks = [c async for c in result]
+    events = [e async for e in result]
 
-    assert chunks == dispatched_chunks
+    assert [e.text for e in events if isinstance(e, DispatchChunk)] == dispatched_chunks
+    assert isinstance(events[-1], DispatchCompleted)
     review_repo.update.assert_awaited()
     first_call: Review = review_repo.update.call_args_list[0][0][0]
     assert any(it.stage == IterationStage.dispatch for it in first_call.iterations)
@@ -194,11 +205,13 @@ async def test__stream_and_save__streams_chunks_and_persists() -> None:
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
 
-    chunks = [  # noqa: SLF001
-        c async for c in use_case._stream_and_save(review.id, iteration.id, "my_prompt", ai_provider)
+    events = [  # noqa: SLF001
+        e async for e in use_case._stream_and_save(review.id, iteration.id, "my_prompt", ai_provider)
     ]
 
-    assert "".join(chunks) == ai_response
+    assert "".join(e.text for e in events if isinstance(e, DispatchChunk)) == ai_response
+    assert isinstance(events[-1], DispatchCompleted)
+    assert events[-1].comments == 1
     assert len(received) == 1
     assert received[0][0] is ai_provider
     assert received[0][1] == "my_prompt"
@@ -238,8 +251,8 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
     assert received_model == ["claude-opus-4-7"]
 
 
-async def test__stream_and_save__review_gone_after_stream__no_persist_error() -> None:
-    """When the review is gone after streaming, _persist_ai_response is a no-op."""
+async def test__stream_and_save__review_gone_after_stream__raises_instead_of_done() -> None:
+    """When the review is gone after streaming nothing is written and the stream ends in an error, not done."""
     review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
     review = make_review(iterations=[iteration])
@@ -260,7 +273,11 @@ async def test__stream_and_save__review_gone_after_stream__no_persist_error() ->
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
 
-    # Should not raise
-    _ = [c async for c in use_case._stream_and_save(review.id, iteration.id, "prompt", ai_provider)]
+    events: list[DispatchEvent] = []
+    stream = use_case._stream_and_save(review.id, iteration.id, "prompt", ai_provider)  # noqa: SLF001
 
+    with pytest.raises(ValueError, match="deleted while the answer was streaming"):
+        await _drain(stream, events)
+
+    assert [type(e) for e in events] == [DispatchChunk]
     review_repo.update.assert_not_awaited()
