@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
@@ -145,17 +145,20 @@ const makeReview = (comments: Comment[], completedAt: string | null = null): Rev
   updated_at: "2026-05-16T10:00:00+00:00",
 });
 
-const renderStage = (review: Review): QueryClient => {
+type RenderedStage = { queryClient: QueryClient; unmountStage: () => void };
+
+const renderStage = (review: Review): RenderedStage => {
   fake.review = structuredClone(review);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(reviewKeys.detail(REVIEW_ID), structuredClone(review));
-  render(
-    <QueryClientProvider client={queryClient}>
-      <PolishStage />
-      <Toaster />
-    </QueryClientProvider>
-  );
-  return queryClient;
+  const stage = render(<PolishStage />, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+  // The toaster outlives the stage, as in the app: toasts fired while leaving stay visible.
+  render(<Toaster />);
+  return { queryClient, unmountStage: stage.unmount };
 };
 
 const cards = (): HTMLElement[] => screen.queryAllByRole("article");
@@ -301,6 +304,18 @@ describe("PolishStage list — keyboard triage", () => {
       expect(serverComments().find((c) => c.id === "c1")?.status).toBe("kept");
     });
   });
+
+  it("the toast that confirms an undo offers no Undo of its own", async () => {
+    const user = userEvent.setup();
+    renderStage(threeComments());
+
+    await user.keyboard("d");
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    await user.keyboard("u");
+
+    expect(await screen.findByText("Undone: Comment dismissed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
 });
 
 // ── editing ──────────────────────────────────────────────────────────────────
@@ -334,13 +349,25 @@ describe("PolishStage list — editing", () => {
     });
   });
 
-  it("Esc cancels the edit and keeps the original text", async () => {
+  it("Esc closes an unchanged editor at once", async () => {
+    const user = userEvent.setup();
+    renderStage(twoComments());
+
+    await user.keyboard("e");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: "Comment body" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Esc then Discard drops the draft and keeps the original text", async () => {
     const user = userEvent.setup();
     renderStage(twoComments());
 
     await user.keyboard("e");
     await user.type(bodyField(), " plus a draft");
     await user.keyboard("{Escape}");
+    await user.click(await screen.findByRole("button", { name: "Discard" }));
 
     expect(screen.queryByRole("textbox", { name: "Comment body" })).not.toBeInTheDocument();
     expect(within(card("c1")).getByText("body of c1")).toBeInTheDocument();
@@ -872,5 +899,356 @@ describe("PolishStage pinned view — comment navigation", () => {
         iteration_comments: [{ id: "c1", body: "pinned edit" }],
       });
     });
+  });
+});
+
+// ── regressions from review of #124 ──────────────────────────────────────────
+
+describe("PolishStage list — editing next to other changes", () => {
+  const bodyField = (): HTMLTextAreaElement =>
+    screen.getByRole("textbox", { name: "Comment body" });
+
+  it("saving an edit sends only what the user changed, not a stale severity", async () => {
+    const user = userEvent.setup();
+    renderStage(
+      makeReview([
+        makeComment("c1", { severity: "major" }),
+        makeComment("c2", { severity: "major" }),
+      ])
+    );
+
+    await user.keyboard("e");
+    await user.click(screen.getByRole("button", { name: "Set all comments to minor" }));
+    await waitFor(() => {
+      expect(serverComments().map((c) => c.severity)).toEqual(["minor", "minor"]);
+    });
+    await user.type(bodyField(), " more");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(lastUpdatePayload()).toEqual({
+        iteration_id: ITERATION_ID,
+        iteration_comments: [{ id: "c1", body: "body of c1 more" }],
+      });
+    });
+    expect(serverComments().map((c) => c.severity)).toEqual(["minor", "minor"]);
+  });
+
+  it("an untouched editor is not dirty after a bulk change", async () => {
+    const user = userEvent.setup();
+    renderStage(
+      makeReview([
+        makeComment("c1", { severity: "major" }),
+        makeComment("c2", { severity: "major" }),
+      ])
+    );
+
+    await user.keyboard("e");
+    await user.click(screen.getByRole("button", { name: "Set all comments to minor" }));
+    await user.click(card("c2"));
+
+    expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
+    expect(focusedId()).toBe("c2");
+  });
+
+  it("saves a file-level comment that has no line", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1", { file: "src/app.ts", line: null })]));
+
+    await user.keyboard("e");
+    await user.type(bodyField(), " fixed typo");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(lastUpdatePayload()).toEqual({
+        iteration_id: ITERATION_ID,
+        iteration_comments: [{ id: "c1", body: "body of c1 fixed typo" }],
+      });
+    });
+  });
+
+  it("adds a file-level comment when the line is left empty", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("n");
+    await user.type(bodyField(), "About the whole file");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Anchor file" }), "src/app.ts");
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+
+    await waitFor(() => {
+      expect(fake.addComment).toHaveBeenCalledWith(REVIEW_ID, ITERATION_ID, {
+        file: "src/app.ts",
+        line: null,
+        severity: "minor",
+        body: "About the whole file",
+      });
+    });
+  });
+
+  it("creates one comment however often save is pressed while it is being added", async () => {
+    const user = userEvent.setup();
+    const releases: (() => void)[] = [];
+    fake.addComment.mockImplementation(
+      (_reviewId: string, _iterationId: string, input: NewCommentInput) =>
+        new Promise((resolve) => {
+          releases.push(() => {
+            createdCount += 1;
+            const created = makeComment(`new-${String(createdCount)}`, input);
+            resolve(setServerComments([...serverComments(), created]));
+          });
+        })
+    );
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("n");
+    await user.type(bodyField(), "hello");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await user.click(screen.getByRole("button", { name: "Adding…" }));
+    act(() => {
+      releases.forEach((release) => {
+        release();
+      });
+    });
+
+    await waitFor(() => {
+      expect(cards()).toHaveLength(2);
+    });
+    expect(fake.addComment).toHaveBeenCalledTimes(1);
+  });
+
+  it("Esc on a changed draft asks before throwing it away", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("e");
+    await user.type(bodyField(), " lots of text");
+    await user.keyboard("{Escape}");
+
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
+    expect(bodyField()).toHaveValue("body of c1 lots of text");
+  });
+
+  it("Esc that only ends an IME composition leaves the editor alone", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("e");
+    fireEvent.keyDown(bodyField(), { key: "Escape", isComposing: true });
+
+    expect(bodyField()).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the new-comment draft when the last comment is deleted", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("n");
+    await user.type(bodyField(), "a long draft");
+    await user.click(within(card("c1")).getByRole("button", { name: "Delete comment" }));
+
+    expect(cards()).toHaveLength(0);
+    expect(bodyField()).toHaveValue("a long draft");
+  });
+});
+
+describe("PolishStage list — leaving with unsaved work", () => {
+  const unload = (): boolean => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+
+  it("warns before the page unloads with a changed draft", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    expect(unload()).toBe(false);
+    await user.keyboard("e");
+    expect(unload()).toBe(false);
+    await user.type(screen.getByRole("textbox", { name: "Comment body" }), " draft");
+    expect(unload()).toBe(true);
+  });
+
+  it("warns before the page unloads while changes are still being saved", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("d");
+    expect(unload()).toBe(true);
+    await waitFor(() => {
+      expect(fake.update).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(unload()).toBe(false);
+    });
+  });
+
+  it("saves a changed draft when the stage goes away under it", async () => {
+    const user = userEvent.setup();
+    const { unmountStage } = renderStage(makeReview([makeComment("c1")]));
+
+    await user.keyboard("e");
+    await user.type(screen.getByRole("textbox", { name: "Comment body" }), " kept anyway");
+    unmountStage();
+
+    await waitFor(() => {
+      expect(lastUpdatePayload()).toEqual({
+        iteration_id: ITERATION_ID,
+        iteration_comments: [{ id: "c1", body: "body of c1 kept anyway" }],
+      });
+    });
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+});
+
+describe("PolishStage list — keys, bulk scope and undo", () => {
+  it("ignores triage keys while another dialog is open", async () => {
+    const user = userEvent.setup();
+    renderStage(makeReview([makeComment("c1")]));
+    render(
+      <div role="dialog" aria-modal="true" aria-label="Elsewhere">
+        <button type="button">Inside</button>
+      </div>
+    );
+
+    screen.getByRole("button", { name: "Inside" }).focus();
+    await user.keyboard("d");
+    await waitPastCoalescing();
+
+    expect(isDismissed("c1")).toBe(false);
+    expect(fake.update).not.toHaveBeenCalled();
+  });
+
+  it("/ opens search by the typed character, whatever key produces it", () => {
+    renderStage(makeReview([makeComment("c1")]));
+
+    // German layout: "/" is Shift+7.
+    fireEvent.keyDown(document.body, { key: "/", code: "Digit7", shiftKey: true });
+
+    expect(screen.getByRole("searchbox", { name: "Search comments" })).toHaveFocus();
+  });
+
+  it("bulk actions skip comments hidden in collapsed groups", async () => {
+    const user = userEvent.setup();
+    renderStage(
+      makeReview([
+        makeComment("a1", { file: "src/a.ts" }),
+        makeComment("a2", { file: "src/a.ts", line: 11 }),
+        makeComment("b1", { file: "src/b.ts" }),
+      ])
+    );
+
+    await user.click(screen.getByRole("button", { name: "Group by file" }));
+    await user.click(screen.getByRole("button", { name: "src/a.ts, 2 comments" }));
+    expect(screen.getByText("1 of 3 shown")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Dismiss shown comments" }));
+
+    await waitFor(() => {
+      expect(lastUpdatePayload()).toEqual({
+        iteration_id: ITERATION_ID,
+        iteration_comments: [{ id: "b1", status: "dismissed" }],
+      });
+    });
+  });
+
+  it("undo after restoring a deleted comment applies to the restored copy", async () => {
+    const user = userEvent.setup();
+    renderStage(
+      makeReview([
+        makeComment("c1", { severity: "major" }),
+        makeComment("c2", { severity: "minor" }),
+      ])
+    );
+
+    await user.keyboard("1");
+    await waitPastCoalescing();
+    await user.click(within(card("c1")).getByRole("button", { name: "Delete comment" }));
+    await waitPastCoalescing();
+    await user.keyboard("u");
+    await waitFor(() => {
+      expect(serverComments().map((c) => c.id)).toEqual(["c2", "new-1"]);
+    });
+    await user.keyboard("u");
+
+    await waitFor(() => {
+      expect(serverComments().find((c) => c.id === "new-1")?.severity).toBe("major");
+    });
+  });
+});
+
+describe("PolishStage list — virtualised list behaviour", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  });
+
+  const tallLayout = (): void => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+  };
+  const many = (): Review =>
+    makeReview(Array.from({ length: 120 }, (_, i) => makeComment(`c${String(i)}`)));
+
+  it("does not scroll back to the focused card when the data changes", async () => {
+    tallLayout();
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    const user = userEvent.setup();
+    const { queryClient } = renderStage(many());
+
+    await user.keyboard("jjj");
+    await waitPastCoalescing();
+    scrollTo.mockClear();
+    // Another comment changes — e.g. a save elsewhere coming back from the server.
+    act(() => {
+      queryClient.setQueryData<Review>(reviewKeys.detail(REVIEW_ID), (review) =>
+        review === undefined
+          ? review
+          : makeReview(
+              (review.iterations[0]?.comments ?? []).map((c) =>
+                c.id === "c100" ? { ...c, body: "changed elsewhere" } : c
+              )
+            )
+      );
+    });
+    await waitPastCoalescing();
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("keeps the card being edited mounted when it scrolls out of view", async () => {
+    tallLayout();
+    const user = userEvent.setup();
+    renderStage(many());
+
+    await user.keyboard("e");
+    await user.type(screen.getByRole("textbox", { name: "Comment body" }), " draft");
+    const list = screen.getByLabelText("Comments");
+    act(() => {
+      list.scrollTop = 600 * 60;
+      fireEvent.scroll(list);
+    });
+
+    expect(screen.getByRole("textbox", { name: "Comment body" })).toHaveValue("body of c0 draft");
+  });
+});
+
+describe("PolishStage pinned view — blank bodies", () => {
+  it("does not let an empty body be saved", async () => {
+    const user = userEvent.setup();
+    usePolishViewStore.setState({ viewMode: "pinned" });
+    renderStage(makeReview([makeComment("c1")]));
+
+    await user.clear(screen.getByRole("textbox", { name: "Edit comment body" }));
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });

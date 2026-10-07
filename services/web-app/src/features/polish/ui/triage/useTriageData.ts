@@ -19,8 +19,11 @@ type UseTriageDataArgs = {
 };
 
 export type TriageData = {
-  /** Comments matching the filters — what bulk actions apply to. */
-  matching: Comment[];
+  /**
+   * Comments matching the filters and not folded away in a collapsed group — what is on
+   * screen, and so what bulk actions apply to.
+   */
+  actionable: Comment[];
   rows: TriageRow[];
   /** Comment ids in on-screen order, for keyboard navigation. */
   visibleIds: string[];
@@ -80,5 +83,13 @@ export const useTriageData = ({
 
   const fileOptions = useMemo(() => buildFileOptions(comments), [comments]);
 
-  return { matching, rows, visibleIds, severityCounts, fileOptions };
+  const actionable = useMemo(
+    () =>
+      isGrouped
+        ? matching.filter((c) => !collapsedGroups.has(c.file ?? GENERAL_FILE_KEY))
+        : matching,
+    [matching, isGrouped, collapsedGroups]
+  );
+
+  return { actionable, rows, visibleIds, severityCounts, fileOptions };
 };

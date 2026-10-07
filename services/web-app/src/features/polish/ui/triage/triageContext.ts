@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { DiffIndex } from "../../lib";
-import type { CommentDraft } from "../../model";
+import type { CommentDraftChanges } from "../../model";
 
 /** What the triage view needs from whichever editor is open, without re-rendering on keystrokes. */
 export type EditorHandle = {
@@ -18,8 +18,11 @@ export type TriageCardHandlers = {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleContext: (id: string) => void;
-  onSaveDraft: (id: string, draft: CommentDraft) => void;
+  onSaveDraft: (id: string, changes: CommentDraftChanges) => void;
+  /** Close the editor and drop the draft (the Cancel button). */
   onCancelEdit: () => void;
+  /** Close the editor, confirming first if the draft changed (Esc). */
+  onRequestCancelEdit: () => void;
   onRegisterEditor: RegisterEditor;
 };
 

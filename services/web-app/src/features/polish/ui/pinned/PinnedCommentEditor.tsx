@@ -36,7 +36,11 @@ export const PinnedCommentEditor = ({
       ? `${comment.file.split("/").pop() ?? ""}${comment.line !== null ? `:${String(comment.line)}` : ""}`
       : "General";
 
+  // The server refuses a blank body; better to say so here than to roll the save back.
+  const isBodyBlank = body.trim().length === 0;
+
   const handleSave = (): void => {
+    if (isBodyBlank) return;
     onUpdate(comment.id, { body, severity });
   };
 
@@ -168,7 +172,8 @@ export const PinnedCommentEditor = ({
           <button
             type="button"
             className="btn ghost"
-            disabled={isPending}
+            disabled={isPending || isBodyBlank}
+            title={isBodyBlank ? "The comment needs some text" : undefined}
             onClick={handleSave}
             style={{ color: "var(--fg-0)" }}
           >

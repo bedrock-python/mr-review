@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useReviewDiff } from "@entities/review";
 import { EMPTY_FILTERS, GENERAL_FILE_KEY, buildDiffIndex, isFiltering } from "../../lib";
 import { usePolishViewStore } from "../../model";
@@ -18,7 +18,11 @@ import type { PolishActions } from "../../model";
 import type { TriageCardHandlers, TriageContextValue } from "./triageContext";
 import type { Comment } from "@entities/review";
 
-export type LeaveGuard = (action: () => void) => void;
+export type LeaveGuard = {
+  /** Run `action` now, or after the user decided what happens to an unsaved draft. */
+  run: (action: () => void) => void;
+  hasUnsavedDraft: () => boolean;
+};
 
 type TriageViewProps = {
   reviewId: string;
@@ -63,10 +67,18 @@ export const TriageView = ({
 
   const data = useTriageData({ comments, filters, editingId, isGrouped, collapsedGroups });
   const nav = useTriageNavigation({ visibleIds: data.visibleIds, editingId, setEditingId });
-  const { focusedId, focusComment, startEdit, stopEdit, dropEditorOf, registerEditor, runGuarded } =
-    nav;
+  const { focusedId, focusComment, startEdit, stopEdit, dropEditorOf, registerEditor } = nav;
+  const { runGuarded, hasUnsavedDraft, saveUnsavedDraft, requestCancelEdit } = nav;
 
-  useEffect(() => registerLeaveGuard(runGuarded), [registerLeaveGuard, runGuarded]);
+  useEffect(
+    () => registerLeaveGuard({ run: runGuarded, hasUnsavedDraft }),
+    [registerLeaveGuard, runGuarded, hasUnsavedDraft]
+  );
+
+  // Leaving by a route this view cannot intercept (stage bar, another review or iteration):
+  // keep what was typed rather than drop it — the save comes with the usual Undo toast. A
+  // layout cleanup runs before the editor's own effects are torn down, so it is still there.
+  useLayoutEffect(() => saveUnsavedDraft, [saveUnsavedDraft]);
 
   const toggleContext = useCallback((id: string) => {
     setExpandedIds((prev) => toggleInSet(prev, id));
@@ -90,14 +102,26 @@ export const TriageView = ({
         actions.deleteComment(id);
       },
       onToggleContext: toggleContext,
-      onSaveDraft: (id, draft) => {
-        actions.saveDraft(id, draft);
+      onSaveDraft: (id, changes) => {
+        actions.saveDraft(id, changes);
         stopEdit();
       },
-      onCancelEdit: stopEdit,
+      onCancelEdit: () => {
+        stopEdit();
+      },
+      onRequestCancelEdit: requestCancelEdit,
       onRegisterEditor: registerEditor,
     }),
-    [actions, focusComment, startEdit, stopEdit, dropEditorOf, registerEditor, toggleContext]
+    [
+      actions,
+      focusComment,
+      startEdit,
+      stopEdit,
+      requestCancelEdit,
+      dropEditorOf,
+      registerEditor,
+      toggleContext,
+    ]
   );
 
   const contextValue = useMemo(
@@ -105,7 +129,7 @@ export const TriageView = ({
     [handlers, diffIndex, isDiffLoading, isLocked]
   );
 
-  const matchingIds = data.matching.map((c) => c.id);
+  const actionableIds = data.actionable.map((c) => c.id);
   const isEditing = editingId !== null;
 
   useTriageHotkeys({
@@ -134,7 +158,7 @@ export const TriageView = ({
     onHelp: () => {
       setIsHelpOpen(true);
     },
-    onCancelEdit: nav.stopEdit,
+    onCancelEdit: requestCancelEdit,
     onSaveEdit: nav.saveEditor,
   });
 
@@ -152,17 +176,17 @@ export const TriageView = ({
             searchRef={searchRef}
           />
           <TriageBulkBar
-            shownCount={data.matching.length}
+            shownCount={data.actionable.length}
             totalCount={comments.length}
-            isFiltered={isFiltering(filters)}
+            isFiltered={isFiltering(filters) || data.actionable.length < comments.length}
             onKeepAll={() => {
-              actions.setStatus(matchingIds, "kept");
+              actions.setStatus(actionableIds, "kept");
             }}
             onDismissAll={() => {
-              actions.setStatus(matchingIds, "dismissed");
+              actions.setStatus(actionableIds, "dismissed");
             }}
             onSetSeverity={(severity) => {
-              actions.setSeverity(matchingIds, severity);
+              actions.setSeverity(actionableIds, severity);
             }}
             onAdd={() => {
               nav.startEdit(NEW_COMMENT_ID);
@@ -186,7 +210,10 @@ export const TriageView = ({
             defaultFile={filters.file === GENERAL_FILE_KEY ? null : filters.file}
             addComment={actions.addComment}
             onAdded={stopEdit}
-            onCancel={stopEdit}
+            onCancel={() => {
+              stopEdit();
+            }}
+            onRequestCancel={requestCancelEdit}
             onRegister={registerEditor}
           />
         )}

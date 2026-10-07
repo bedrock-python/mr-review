@@ -24,6 +24,21 @@ const SEVERITY_BY_KEY: Partial<Record<string, CommentSeverity>> = {
   "4": "suggestion",
 };
 
+const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
+const OPEN_MODAL_SELECTOR = '[aria-modal="true"], [role="dialog"][data-state="open"]';
+
+/**
+ * The keys listen on the whole document, so they must stand down while any other dialog has
+ * the user's attention — one the event comes from, or one open anywhere on the page. (The
+ * triage view's own dialogs switch the keys off through `isEnabled`.)
+ */
+const isForAnotherLayer = (event: KeyboardEvent): boolean =>
+  (event.target instanceof Element && event.target.closest(DIALOG_SELECTOR) !== null) ||
+  document.querySelector(OPEN_MODAL_SELECTOR) !== null;
+
+const hasCommandModifier = (event: KeyboardEvent): boolean =>
+  event.ctrlKey || event.metaKey || event.altKey;
+
 /**
  * Global triage keys. react-hotkeys-hook ignores events from inputs, textareas and selects,
  * so nothing here fires while the user types; the editor handles its own Esc / ⌘↵ and these
@@ -44,9 +59,18 @@ export const useTriageHotkeys = ({
   onCancelEdit,
   onSaveEdit,
 }: TriageHotkeyHandlers): void => {
-  const always = { enabled: isEnabled, preventDefault: true };
-  const whenIdle = { enabled: isEnabled && !isEditing, preventDefault: true };
-  const whenEditing = { enabled: isEnabled && isEditing, preventDefault: true };
+  const base = { preventDefault: true, ignoreEventWhen: isForAnotherLayer };
+  const always = { ...base, enabled: isEnabled };
+  const whenIdle = { ...base, enabled: isEnabled && !isEditing };
+  const whenEditing = { ...base, enabled: isEnabled && isEditing };
+  // Matched on the produced character, because "/" and "?" sit on different keys (and need
+  // Shift) on different layouts; a held Ctrl/⌘/Alt still means a browser shortcut.
+  const byCharacter = {
+    useKey: true,
+    ignoreModifiers: true,
+    ignoreEventWhen: (event: KeyboardEvent) =>
+      isForAnotherLayer(event) || hasCommandModifier(event),
+  };
 
   useHotkeys(
     "j, down",
@@ -105,13 +129,12 @@ export const useTriageHotkeys = ({
     },
     whenIdle
   );
-  // Code-based and without shift, so Shift+/ ("?") never also lands here.
   useHotkeys(
-    "slash",
+    "/",
     () => {
       onSearch();
     },
-    whenIdle
+    { ...whenIdle, ...byCharacter }
   );
   useHotkeys(
     "u",
@@ -120,13 +143,12 @@ export const useTriageHotkeys = ({
     },
     whenIdle
   );
-  // Matched on the produced character: "?" sits on different keys across layouts.
   useHotkeys(
     "?",
     () => {
       onHelp();
     },
-    { ...always, useKey: true, ignoreModifiers: true }
+    { ...always, ...byCharacter }
   );
   useHotkeys(
     "escape",

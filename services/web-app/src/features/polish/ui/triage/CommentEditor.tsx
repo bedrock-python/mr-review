@@ -4,17 +4,21 @@ import { Markdown } from "@shared/ui";
 import { SEVERITY_ORDER, SEV_COLOR, useAutosizeTextarea } from "../../lib";
 import { AnchorFields } from "./AnchorFields";
 import { useCommentDraft } from "./useCommentDraft";
-import type { CommentDraft } from "../../model";
+import type { CommentDraft, CommentDraftChanges } from "../../model";
 import type { RegisterEditor } from "./triageContext";
 
 type EditorTab = "write" | "preview";
 
 type CommentEditorProps = {
-  initial: CommentDraft;
+  /** The comment as saved (or a new comment's defaults); untouched fields keep following it. */
+  saved: CommentDraft;
   mode: "edit" | "create";
   isSubmitting?: boolean;
-  onSave: (draft: CommentDraft) => void;
+  onSave: (draft: CommentDraft, changes: CommentDraftChanges) => void;
+  /** The Cancel button: an explicit choice, so the draft goes without asking. */
   onCancel: () => void;
+  /** Esc: easy to hit by accident, so a changed draft is confirmed first. */
+  onRequestCancel: () => void;
   onRegister: RegisterEditor;
 };
 
@@ -24,15 +28,16 @@ const TABS: { id: EditorTab; label: string }[] = [
 ];
 
 export const CommentEditor = ({
-  initial,
+  saved,
   mode,
   isSubmitting = false,
   onSave,
   onCancel,
+  onRequestCancel,
   onRegister,
 }: CommentEditorProps): React.ReactElement => {
-  const state = useCommentDraft(initial);
-  const { draft, isDirty } = state;
+  const state = useCommentDraft(saved, mode === "create");
+  const { draft, changes, isDirty, isValid } = state;
   const [tab, setTab] = useState<EditorTab>("write");
   const [hasTriedSave, setHasTriedSave] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,12 +51,14 @@ export const CommentEditor = ({
   }, []);
 
   const save = useCallback((): boolean => {
+    // Already on its way: a second save must not send it twice.
+    if (isSubmitting) return true;
     setHasTriedSave(true);
-    if (draft === null) return false;
+    if (!isValid) return false;
     if (mode === "edit" && !isDirty) onCancel();
-    else onSave(draft);
+    else onSave(draft, changes);
     return true;
-  }, [draft, isDirty, mode, onCancel, onSave]);
+  }, [isSubmitting, isValid, mode, isDirty, onCancel, onSave, draft, changes]);
 
   const focus = useCallback((): void => {
     setTab("write");
@@ -65,10 +72,12 @@ export const CommentEditor = ({
 
   // Handled here rather than by the global hotkeys: these must work while typing.
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    // Esc and Enter also end an IME composition; that keystroke belongs to the input method.
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      onCancel();
+      onRequestCancel();
     } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       event.stopPropagation();
@@ -77,7 +86,7 @@ export const CommentEditor = ({
   };
 
   const bodyError = hasTriedSave ? state.bodyError : null;
-  const lineError = hasTriedSave || state.lineText.length > 0 ? state.lineError : null;
+  const { lineError } = state;
   const createLabel = isSubmitting ? "Adding…" : "Add comment";
   const saveLabel = mode === "create" ? createLabel : "Save";
 

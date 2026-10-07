@@ -21,6 +21,11 @@ export type TriageNavigation = {
   saveEditor: () => void;
   /** Close the editor if it belongs to `id` (the comment is going away). */
   dropEditorOf: (id: string) => void;
+  /** Close the editor, asking first when its draft has changes. */
+  requestCancelEdit: () => void;
+  hasUnsavedDraft: () => boolean;
+  /** Save the open draft if it has valid changes — for when the view goes away under it. */
+  saveUnsavedDraft: () => void;
   runGuarded: (action: GuardedAction) => void;
   resolveGuard: (choice: UnsavedChoice) => void;
   registerEditor: RegisterEditor;
@@ -165,6 +170,19 @@ export const useTriageNavigation = ({
     [closeEditor]
   );
 
+  const requestCancelEdit = useCallback(() => {
+    runGuarded(() => {
+      stopEdit();
+    });
+  }, [runGuarded, stopEdit]);
+
+  const hasUnsavedDraft = useCallback(() => editorRef.current?.isDirty() === true, []);
+
+  const saveUnsavedDraft = useCallback(() => {
+    const editor = editorRef.current;
+    if (editor?.isDirty() === true) editor.save();
+  }, []);
+
   const resolveGuard = useCallback(
     (choice: UnsavedChoice) => {
       const pending = pendingAction;
@@ -195,6 +213,9 @@ export const useTriageNavigation = ({
     stopEdit,
     saveEditor,
     dropEditorOf,
+    requestCancelEdit,
+    hasUnsavedDraft,
+    saveUnsavedDraft,
     runGuarded,
     resolveGuard,
     registerEditor,

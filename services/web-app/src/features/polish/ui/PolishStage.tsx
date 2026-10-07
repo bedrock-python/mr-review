@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview } from "@entities/review";
@@ -53,8 +53,24 @@ const PolishWorkspace = ({
   const leave = (action: () => void): void => {
     const guard = leaveGuardRef.current;
     if (guard === null) action();
-    else guard(action);
+    else guard.run(action);
   };
+
+  // Closing the tab or reloading cannot be intercepted any other way: ask the browser to
+  // confirm while a draft has changes or edits are still on their way to the server.
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      const hasDraft = leaveGuardRef.current?.hasUnsavedDraft() === true;
+      if (!hasDraft && !actions.hasPendingChanges()) return;
+      event.preventDefault();
+      // Older browsers only show the prompt when returnValue is set.
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [actions]);
 
   const handleViewModeChange = (mode: PolishViewMode): void => {
     if (mode !== viewMode) {
@@ -115,7 +131,10 @@ export const PolishStage = (): React.ReactElement => {
   const { setStage, activeIterationId } = useStageBarStore();
   const { data: review, isLoading } = useReview(activeReviewId);
   const setViewMode = usePolishViewStore((s) => s.setViewMode);
-  const [isComposingFirst, setIsComposingFirst] = useState(false);
+  // The iteration whose workspace is on screen. Once shown it stays mounted even if every
+  // comment is deleted: swapping in the empty state would discard an open draft and the
+  // undo history with it.
+  const [openIterationId, setOpenIterationId] = useState<string | null>(null);
 
   if (activeReviewId === null) {
     return (
@@ -150,7 +169,15 @@ export const PolishStage = (): React.ReactElement => {
     return <div style={centeredStyle}>No iteration yet. Go back to Dispatch to run a review.</div>;
   }
 
-  if (activeIteration.comments.length === 0 && !isComposingFirst) {
+  const hasComments = activeIteration.comments.length > 0;
+  const isOpen = openIterationId === activeIteration.id;
+  if (hasComments && !isOpen) {
+    // Adjusting state while rendering (React's documented pattern): remember that this
+    // iteration's workspace is now on screen.
+    setOpenIterationId(activeIteration.id);
+  }
+
+  if (!hasComments && !isOpen) {
     return (
       <div style={centeredStyle}>
         <p>No comments generated. Go back to Dispatch and try again.</p>
@@ -160,7 +187,7 @@ export const PolishStage = (): React.ReactElement => {
             className="btn"
             onClick={() => {
               setViewMode("list");
-              setIsComposingFirst(true);
+              setOpenIterationId(activeIteration.id);
             }}
           >
             Write a comment yourself
@@ -175,7 +202,8 @@ export const PolishStage = (): React.ReactElement => {
       key={activeIteration.id}
       reviewId={activeReviewId}
       iteration={activeIteration}
-      isComposingInitially={isComposingFirst}
+      // Read once, when the workspace mounts: empty then means "Write a comment yourself".
+      isComposingInitially={!hasComments}
       onAdvance={() => {
         setStage("post");
       }}

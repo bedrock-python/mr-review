@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
+import type { Range } from "@tanstack/react-virtual";
 import { CommentCard } from "./CommentCard";
 import { GroupHeader } from "./GroupHeader";
 import { cardDomId } from "./triageContext";
@@ -87,6 +88,21 @@ const VirtualList = ({
   // The scroll element must belong to this component: a parent's ref is attached only after
   // this component's layout effects, and the virtualizer would mount with nothing to measure.
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { editingId } = rest;
+  const editingIndex = useMemo(
+    () => rows.findIndex((row) => row.kind === "comment" && row.comment.id === editingId),
+    [rows, editingId]
+  );
+  // The card being edited stays mounted wherever the list is scrolled: unmounting it would
+  // throw away the draft the user is in the middle of.
+  const rangeExtractor = useCallback(
+    (range: Range): number[] => {
+      const indexes = defaultRangeExtractor(range);
+      if (editingIndex < 0 || indexes.includes(editingIndex)) return indexes;
+      return [...indexes, editingIndex].sort((a, b) => a - b);
+    },
+    [editingIndex]
+  );
   // This build has no React Compiler, so the rule's concern (auto-memoising the virtualizer's
   // functions) does not apply; the instance never leaves this component.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -100,13 +116,23 @@ const VirtualList = ({
       return row === undefined ? index : rowKey(row);
     },
     overscan: VIRTUAL_OVERSCAN,
+    rangeExtractor,
   });
 
+  // Scroll only when focus moves. Rows change on every save; following them would yank the
+  // list back to the focused card while the user is scrolling elsewhere.
+  const latest = useRef({ rows, virtualizer });
+  useLayoutEffect(() => {
+    latest.current = { rows, virtualizer };
+  });
   useEffect(() => {
     if (focusedId === null) return;
-    const index = rows.findIndex((row) => row.kind === "comment" && row.comment.id === focusedId);
-    if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
-  }, [focusedId, rows, virtualizer]);
+    const { rows: currentRows, virtualizer: current } = latest.current;
+    const index = currentRows.findIndex(
+      (row) => row.kind === "comment" && row.comment.id === focusedId
+    );
+    if (index >= 0) current.scrollToIndex(index, { align: "auto" });
+  }, [focusedId]);
 
   useEffect(() => {
     if (focusRequest === null) return;

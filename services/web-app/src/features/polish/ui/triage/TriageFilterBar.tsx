@@ -63,7 +63,7 @@ export const TriageFilterBar = ({
             update({ search: event.target.value });
           }}
           onKeyDown={(event) => {
-            if (event.key !== "Escape") return;
+            if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
             event.preventDefault();
             if (filters.search.length > 0) update({ search: "" });
             else event.currentTarget.blur();

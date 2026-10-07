@@ -6,7 +6,7 @@ import { describeAnchorProblem } from "../../lib";
 import { CodeContext } from "./CodeContext";
 import { CommentEditor } from "./CommentEditor";
 import { cardDomId, useTriageContext } from "./triageContext";
-import type { CommentDraft } from "../../model";
+import type { CommentDraft, CommentDraftChanges } from "../../model";
 import type { Comment } from "@entities/review";
 
 type CommentCardProps = {
@@ -33,7 +33,7 @@ const CommentCardBase = ({
   const { id } = comment;
   const isDismissed = comment.status === "dismissed";
   const anchorProblem = describeAnchorProblem(diffIndex, comment.file, comment.line);
-  const initialDraft = useMemo(
+  const saved = useMemo(
     (): CommentDraft => ({
       body: comment.body,
       severity: comment.severity,
@@ -44,8 +44,8 @@ const CommentCardBase = ({
   );
   const { onSaveDraft } = handlers;
   const handleSave = useCallback(
-    (draft: CommentDraft) => {
-      onSaveDraft(id, draft);
+    (_draft: CommentDraft, changes: CommentDraftChanges) => {
+      onSaveDraft(id, changes);
     },
     [onSaveDraft, id]
   );
@@ -125,10 +125,11 @@ const CommentCardBase = ({
 
       {isEditing ? (
         <CommentEditor
-          initial={initialDraft}
+          saved={saved}
           mode="edit"
           onSave={handleSave}
           onCancel={handlers.onCancelEdit}
+          onRequestCancel={handlers.onRequestCancelEdit}
           onRegister={handlers.onRegisterEditor}
         />
       ) : (

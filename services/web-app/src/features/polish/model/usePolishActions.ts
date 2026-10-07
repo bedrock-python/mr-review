@@ -20,33 +20,48 @@ export type CommentDraft = {
   line: number | null;
 };
 
+/** The fields of a draft the user actually changed; absent keys are left as they are. */
+export type CommentDraftChanges = Partial<CommentDraft>;
+
 export type PolishActions = {
   updateComment: (id: string, patch: CommentFieldPatch) => void;
   setStatus: (ids: readonly string[], status: CommentStatus) => void;
   /** Flip kept/dismissed based on the cached state at call time, not a render snapshot. */
   toggleStatus: (id: string) => void;
   setSeverity: (ids: readonly string[], severity: CommentSeverity) => void;
-  saveDraft: (id: string, draft: CommentDraft) => void;
+  saveDraft: (id: string, changes: CommentDraftChanges) => void;
   addComment: (draft: CommentDraft) => Promise<Comment | null>;
   deleteComment: (id: string) => void;
   undoLast: () => void;
   flush: () => Promise<void>;
+  /** True while a change is waiting to be sent or still on its way. */
+  hasPendingChanges: () => boolean;
 };
 
-type UndoEntry = { label: string; isDone: boolean; run: () => void };
+/** `run` reports whether it found anything to put back. */
+type UndoEntry = { label: string; isDone: boolean; run: () => boolean };
 
 // One toast slot: rapid triage replaces the message instead of stacking dozens of toasts.
 const UNDO_TOAST_ID = "polish-undo";
 const MAX_UNDO_ENTRIES = 50;
 
 const toNewComment = (draft: CommentDraft): NewCommentInput => {
-  const hasAnchor = draft.file !== null && draft.line !== null && draft.line >= 1;
+  const hasLine = draft.file !== null && draft.line !== null && draft.line >= 1;
   return {
     file: draft.file,
-    line: hasAnchor ? draft.line : null,
+    line: hasLine ? draft.line : null,
     severity: draft.severity,
     body: draft.body,
   };
+};
+
+const toPatch = (changes: CommentDraftChanges): CommentFieldPatch => {
+  const patch: CommentFieldPatch = {};
+  if (changes.body !== undefined) patch.body = changes.body;
+  if (changes.severity !== undefined) patch.severity = changes.severity;
+  if ("file" in changes) patch.file = changes.file ?? null;
+  if ("line" in changes) patch.line = patch.file === null ? null : (changes.line ?? null);
+  return patch;
 };
 
 const subjectOf = (count: number): string =>
@@ -64,20 +79,50 @@ const describe = (count: number, patch: CommentFieldPatch): string => {
   return count === 1 ? "Comment updated" : `Updated ${subjectOf(count)}`;
 };
 
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/** Replace the undo toast's text and drop its button: sonner merges updates into the toast. */
+const showNotice = (message: string): void => {
+  toast(message, { id: UNDO_TOAST_ID, action: null });
+};
+
 const createActions = (
   sync: CommentSync,
   getComments: () => readonly Comment[],
   iterationId: string,
   undoStack: UndoEntry[]
 ): PolishActions => {
+  // Restoring a deleted comment gives it a new server id; older undo entries still name the
+  // old one and are pointed at the copy through this map.
+  const aliases = new Map<string, string>();
+  const resolveId = (id: string): string => {
+    let current = id;
+    for (let next = aliases.get(current); next !== undefined; next = aliases.get(current)) {
+      current = next;
+    }
+    return current;
+  };
+
+  /** The patches re-keyed to the comments' current ids, dropping comments that are gone. */
+  const retarget = (patches: CommentPatches): Map<string, CommentFieldPatch> => {
+    const existing = new Set(getComments().map((c) => c.id));
+    const retargeted = new Map<string, CommentFieldPatch>();
+    patches.forEach((patch, id) => {
+      const currentId = resolveId(id);
+      if (existing.has(currentId)) retargeted.set(currentId, patch);
+    });
+    return retargeted;
+  };
+
   const runUndo = (entry: UndoEntry): void => {
     if (entry.isDone) return;
     entry.isDone = true;
-    entry.run();
-    toast(`Undone: ${entry.label}`, { id: UNDO_TOAST_ID });
+    const isApplied = entry.run();
+    showNotice(isApplied ? `Undone: ${entry.label}` : "Nothing to undo: that comment is gone");
   };
 
-  const pushUndo = (label: string, run: () => void): void => {
+  const pushUndo = (label: string, run: () => boolean): void => {
     const entry: UndoEntry = { label, isDone: false, run };
     undoStack.push(entry);
     if (undoStack.length > MAX_UNDO_ENTRIES) undoStack.shift();
@@ -97,7 +142,9 @@ const createActions = (
     if (forward.size === 0) return;
     sync.patch(iterationId, forward);
     pushUndo(label(forward.size), () => {
-      sync.patch(iterationId, inverse);
+      const targets = retarget(inverse);
+      sync.patch(iterationId, targets);
+      return targets.size > 0;
     });
   };
 
@@ -108,15 +155,14 @@ const createActions = (
     sync
       .add(iterationId, toNewComment(comment))
       .then((created) => {
+        aliases.set(comment.id, created.id);
         const extra: CommentFieldPatch = {};
         if (comment.status !== created.status) extra.status = comment.status;
         if (comment.resolved !== created.resolved) extra.resolved = comment.resolved;
         if (Object.keys(extra).length > 0) sync.patch(iterationId, new Map([[created.id, extra]]));
       })
       .catch((error: unknown) => {
-        toast.error("Failed to restore the comment", {
-          description: error instanceof Error ? error.message : String(error),
-        });
+        toast.error("Failed to restore the comment", { description: errorText(error) });
       });
   };
 
@@ -136,26 +182,21 @@ const createActions = (
     setSeverity: (ids, severity) => {
       applyChanges(sameForAll(ids, { severity }), (count) => describe(count, { severity }));
     },
-    saveDraft: (id, draft) => {
-      const patch: CommentFieldPatch = {
-        body: draft.body,
-        severity: draft.severity,
-        file: draft.file,
-        line: draft.file === null ? null : draft.line,
-      };
-      applyChanges(new Map([[id, patch]]), () => "Comment updated");
+    saveDraft: (id, changes) => {
+      applyChanges(new Map([[id, toPatch(changes)]]), () => "Comment updated");
     },
     addComment: async (draft) => {
       try {
         const created = await sync.add(iterationId, toNewComment(draft));
         pushUndo("Comment added", () => {
-          void sync.remove(iterationId, created.id);
+          const currentId = resolveId(created.id);
+          if (!getComments().some((c) => c.id === currentId)) return false;
+          void sync.remove(iterationId, currentId);
+          return true;
         });
         return created;
       } catch (error) {
-        toast.error("Failed to add the comment", {
-          description: error instanceof Error ? error.message : String(error),
-        });
+        toast.error("Failed to add the comment", { description: errorText(error) });
         return null;
       }
     },
@@ -167,17 +208,19 @@ const createActions = (
         void removal.then((isRemoved) => {
           if (isRemoved) restore(comment);
         });
+        return true;
       });
     },
     undoLast: () => {
       const entry = [...undoStack].reverse().find((e) => !e.isDone);
       if (entry === undefined) {
-        toast("Nothing to undo", { id: UNDO_TOAST_ID });
+        showNotice("Nothing to undo");
         return;
       }
       runUndo(entry);
     },
     flush: () => sync.flush(),
+    hasPendingChanges: () => sync.getState().isSaving,
   };
 };
 
