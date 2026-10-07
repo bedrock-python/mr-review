@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import asyncio
-import os
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypeVar
 from uuid import UUID, uuid4
 
-import yaml
-
 from mr_review.core.hosts.entities import Host
+from mr_review.infra.repositories.file_store import (
+    KeyedLock,
+    dump_yaml,
+    load_yaml,
+    restrict_file_permissions,
+    write_file_atomically,
+)
 from mr_review.infra.utils import now_utc as _now_utc
+
+_T = TypeVar("_T")
+_Rows = list[dict[str, object]]
+# All hosts live in one file, so a single lock key serialises every write to it.
+_FILE_LOCK_KEY = "hosts.yaml"
 
 
 def _host_from_dict(data: dict[str, object]) -> Host:
@@ -46,24 +57,46 @@ def _host_to_dict(host: Host) -> dict[str, object]:
     }
 
 
+def _index_of(rows: _Rows, host_id: UUID) -> int | None:
+    key = str(host_id)
+    return next((i for i, row in enumerate(rows) if str(row.get("id")) == key), None)
+
+
 class FileHostRepository:
+    """Hosts stored as a list in ``hosts.yaml``.
+
+    Reads see a complete file at all times (writes are atomic renames); writes are
+    serialised by one lock, and every read-modify-write runs under it.
+    """
+
     def __init__(self, data_dir: Path) -> None:
         self._path = data_dir / "hosts.yaml"
+        self._lock: KeyedLock[str] = KeyedLock()
+        # The file holds tokens; tighten files written by versions that did not.
+        restrict_file_permissions(self._path)
 
-    def _read(self) -> list[dict[str, object]]:
-        if not self._path.exists():
+    def _read(self) -> _Rows:
+        try:
+            content = self._path.read_text(encoding="utf-8")
+        except FileNotFoundError:
             return []
-        with self._path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if data is None:
-            return []
+        data = load_yaml(content)
         return data if isinstance(data, list) else []
 
-    def _write(self, hosts: list[dict[str, object]]) -> None:
-        tmp = self._path.with_suffix(".yaml.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(hosts, f, allow_unicode=True, sort_keys=False)
-        os.replace(tmp, self._path)
+    def _write(self, hosts: _Rows) -> None:
+        write_file_atomically(self._path, dump_yaml(hosts))
+
+    async def _modify(self, change: Callable[[_Rows], tuple[_T, bool]]) -> _T:
+        """Read all rows, let ``change`` edit them in place, and write them back if it says so."""
+
+        async def _operation() -> _T:
+            rows = await asyncio.to_thread(self._read)
+            result, changed = change(rows)
+            if changed:
+                await asyncio.to_thread(self._write, rows)
+            return result
+
+        return await self._lock.run(_FILE_LOCK_KEY, _operation)
 
     async def create(
         self,
@@ -85,28 +118,24 @@ class FileHostRepository:
             created_at=_now_utc(),
         )
 
-        def _sync() -> None:
-            hosts = self._read()
-            hosts.append(_host_to_dict(host))
-            self._write(hosts)
+        def _append(rows: _Rows) -> tuple[None, bool]:
+            rows.append(_host_to_dict(host))
+            return None, True
 
-        await asyncio.to_thread(_sync)
+        await self._modify(_append)
         return host
 
     async def get_by_id(self, host_id: UUID) -> Host | None:
         def _sync() -> Host | None:
-            hosts = self._read()
-            for data in hosts:
-                if str(data["id"]) == str(host_id):
-                    return _host_from_dict(data)
-            return None
+            rows = self._read()
+            index = _index_of(rows, host_id)
+            return _host_from_dict(rows[index]) if index is not None else None
 
         return await asyncio.to_thread(_sync)
 
     async def list_all(self) -> list[Host]:
         def _sync() -> list[Host]:
-            hosts = self._read()
-            entities = [_host_from_dict(d) for d in hosts]
+            entities = [_host_from_dict(d) for d in self._read()]
             return sorted(entities, key=lambda h: h.created_at)
 
         return await asyncio.to_thread(_sync)
@@ -132,6 +161,16 @@ class FileHostRepository:
             patches["timeout"] = timeout
         return patches
 
+    async def _patch(self, host_id: UUID, patches: dict[str, object]) -> Host | None:
+        def _apply(rows: _Rows) -> tuple[Host | None, bool]:
+            index = _index_of(rows, host_id)
+            if index is None:
+                return None, False
+            rows[index].update(patches)
+            return _host_from_dict(rows[index]), True
+
+        return await self._modify(_apply)
+
     async def update(
         self,
         host_id: UUID,
@@ -141,38 +180,41 @@ class FileHostRepository:
         color: str | None = None,
         timeout: int | None = None,
     ) -> Host | None:
-        patches = self._build_patches(name, base_url, token, color, timeout)
-
-        def _sync() -> Host | None:
-            hosts = self._read()
-            for data in hosts:
-                if str(data["id"]) == str(host_id):
-                    data.update(patches)
-                    self._write(hosts)
-                    return _host_from_dict(data)
-            return None
-
-        return await asyncio.to_thread(_sync)
+        return await self._patch(host_id, self._build_patches(name, base_url, token, color, timeout))
 
     async def set_favourite_repos(self, host_id: UUID, repo_paths: list[str]) -> Host | None:
-        def _sync() -> Host | None:
-            hosts = self._read()
-            for data in hosts:
-                if str(data["id"]) == str(host_id):
-                    data["favourite_repos"] = repo_paths
-                    self._write(hosts)
-                    return _host_from_dict(data)
-            return None
+        return await self._patch(host_id, {"favourite_repos": list(repo_paths)})
 
-        return await asyncio.to_thread(_sync)
+    async def update_with(self, host_id: UUID, change: Callable[[Host], Host]) -> Host | None:
+        def _existing_only(current: Host | None) -> Host | None:
+            return change(current) if current is not None else None
+
+        return await self.upsert_with(host_id, _existing_only)
+
+    async def upsert_with(self, host_id: UUID, change: Callable[[Host | None], Host | None]) -> Host | None:
+        def _apply(rows: _Rows) -> tuple[Host | None, bool]:
+            index = _index_of(rows, host_id)
+            current = _host_from_dict(rows[index]) if index is not None else None
+            updated = change(current)
+            if updated is None or updated is current:
+                return current, False
+            if updated.id != host_id:
+                raise ValueError(f"A change to host {host_id} must not alter its id")
+            if index is None:
+                rows.append(_host_to_dict(updated))
+            else:
+                # Merge rather than replace so keys written by a newer version survive.
+                rows[index] = {**rows[index], **_host_to_dict(updated)}
+            return updated, True
+
+        return await self._modify(_apply)
 
     async def delete(self, host_id: UUID) -> bool:
-        def _sync() -> bool:
-            hosts = self._read()
-            new_hosts = [d for d in hosts if str(d["id"]) != str(host_id)]
-            if len(new_hosts) == len(hosts):
-                return False
-            self._write(new_hosts)
-            return True
+        def _remove(rows: _Rows) -> tuple[bool, bool]:
+            index = _index_of(rows, host_id)
+            if index is None:
+                return False, False
+            del rows[index]
+            return True, True
 
-        return await asyncio.to_thread(_sync)
+        return await self._modify(_remove)

@@ -7,6 +7,7 @@ from dishka import Provider, Scope, provide
 from mr_review.api.config import Settings
 from mr_review.core.ai.protocols import AIFenceRegistry
 from mr_review.infra.ai.fence import AsyncioSemaphoreFenceRegistry
+from mr_review.infra.repositories.file_store import ensure_private_dir
 
 
 class ApiConfigProvider(Provider):
@@ -24,9 +25,10 @@ class ApiConfigProvider(Provider):
 
     @provide
     def get_data_dir(self, settings: Settings) -> Path:
+        # The store holds tokens and API keys: new directories are owner-only.
         data_dir = settings.data_dir
-        data_dir.mkdir(parents=True, exist_ok=True)
-        (data_dir / "reviews").mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(data_dir)
+        ensure_private_dir(data_dir / "reviews")
         return data_dir
 
     @provide

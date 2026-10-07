@@ -21,6 +21,7 @@ from mr_review.use_cases.reviews.dispatch_review import (
 from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
 
 from tests.factories.entities import make_ai_provider, make_comment, make_host, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
@@ -53,29 +54,16 @@ class _Model:
             self.closed = True
 
 
-def _repo_holding(review: Review) -> AsyncMock:
-    """A review repository mock whose reads see its own writes."""
-    repo = AsyncMock()
-    state = {"review": review}
-
-    async def get_by_id(_review_id: object) -> Review:
-        return state["review"]
-
-    async def update(updated: Review) -> Review:
-        state["review"] = updated
-        return updated
-
-    repo.get_by_id.side_effect = get_by_id
-    repo.update.side_effect = update
-    return repo
+def _repo_holding(review: Review) -> SingleReviewRepository:
+    """A review repository whose reads see its own writes."""
+    return SingleReviewRepository(review)
 
 
-def _stored(repo: AsyncMock) -> Iteration:
-    saved: Review = repo.update.call_args[0][0]
-    return saved.iterations[-1]
+def _stored(repo: SingleReviewRepository) -> Iteration:
+    return repo.last_write.iterations[-1]
 
 
-def _use_case(repo: AsyncMock, model: object) -> DispatchReviewUseCase:
+def _use_case(repo: SingleReviewRepository, model: object) -> DispatchReviewUseCase:
     return DispatchReviewUseCase(repo, AsyncMock(), AsyncMock(), MagicMock(), model)  # type: ignore[arg-type]
 
 
@@ -333,7 +321,7 @@ async def test__stream_and_save__new_iteration_after_a_posted_one__created_when_
 
     events = [e async for e in use_case._stream_and_save(uuid4(), None, "prompt", make_ai_provider())]  # noqa: SLF001
 
-    saved: Review = repo.update.call_args[0][0]
+    saved = repo.last_write
     assert [it.stage for it in saved.iterations] == [IterationStage.post, IterationStage.polish]
     assert saved.iterations[1].number == 2
     assert isinstance(events[-1], DispatchCompleted)
@@ -372,7 +360,7 @@ async def test__execute__nothing_written_until_the_stream_starts() -> None:
 
     stream = await use_case.execute(uuid4(), uuid4(), iteration_id=iteration.id)
 
-    review_repo.update.assert_not_awaited()
+    assert review_repo.writes == []
     first = await anext(stream)
     assert isinstance(first, DispatchChunk)
     marked = _stored(review_repo)
@@ -388,7 +376,7 @@ async def test__execute__posted_iteration__locked_before_any_work() -> None:
         await use_case.execute(uuid4(), uuid4(), iteration_id=iteration.id)
 
     vcs.get_mr.assert_not_awaited()
-    review_repo.update.assert_not_awaited()
+    assert review_repo.writes == []
 
 
 async def test__execute__vcs_failure__review_left_untouched() -> None:
@@ -399,4 +387,4 @@ async def test__execute__vcs_failure__review_left_untouched() -> None:
     with pytest.raises(RuntimeError, match="VCS down"):
         await use_case.execute(uuid4(), uuid4())
 
-    review_repo.update.assert_not_awaited()
+    assert review_repo.writes == []

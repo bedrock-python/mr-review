@@ -11,17 +11,17 @@ class ToggleFavouriteRepoUseCase:
         self._repo = repo
 
     async def execute(self, host_id: UUID, repo_path: str) -> Host:
-        host = await self._repo.get_by_id(host_id)
-        if host is None:
-            raise ValueError(f"Host {host_id} not found")
+        def _toggle(host: Host) -> Host:
+            favourites = list(host.favourite_repos)
+            if repo_path in favourites:
+                favourites.remove(repo_path)
+            else:
+                favourites.append(repo_path)
+            return host.model_copy(update={"favourite_repos": favourites})
 
-        current = list(host.favourite_repos)
-        if repo_path in current:
-            current.remove(repo_path)
-        else:
-            current.append(repo_path)
-
-        updated = await self._repo.set_favourite_repos(host_id, current)
+        # The toggle runs against the stored list under the repository's lock, so
+        # concurrent toggles of different repositories never overwrite each other.
+        updated = await self._repo.update_with(host_id, _toggle)
         if updated is None:
             raise ValueError(f"Host {host_id} not found")
         return updated

@@ -11,6 +11,7 @@ from mr_review.core.vcs.url_parser import InvalidRepoUrlError
 from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 
 from tests.factories.entities import make_host
+from tests.fakes import stub_update_with
 
 pytestmark = pytest.mark.unit
 
@@ -27,8 +28,7 @@ async def test__add_repo_by_url__valid_url__pins_and_returns_repo() -> None:
     host = make_host(type="github")
     host_repo = AsyncMock()
     host_repo.get_by_id.return_value = host
-    updated_host = host.model_copy(update={"favourite_repos": ["torvalds/linux"]})
-    host_repo.set_favourite_repos.return_value = updated_host
+    writes = stub_update_with(host_repo, host)
 
     repo = Repo(id="42", path="torvalds/linux", name="linux", description=None)
     provider = _make_provider(repo)
@@ -40,9 +40,30 @@ async def test__add_repo_by_url__valid_url__pins_and_returns_repo() -> None:
 
     # Assert
     provider.get_repo.assert_awaited_once_with("torvalds/linux")
-    host_repo.set_favourite_repos.assert_awaited_once_with(host.id, ["torvalds/linux"])
+    assert [w.favourite_repos for w in writes] == [["torvalds/linux"]]
     assert result_repo == repo
-    assert result_host == updated_host
+    assert result_host.favourite_repos == ["torvalds/linux"]
+
+
+async def test__add_repo_by_url__favourite_added_meanwhile__keeps_it() -> None:
+    """The pin is applied to the stored favourites, not to the copy read before the VCS call."""
+    # Arrange
+    host = make_host(type="github")
+    host_repo = AsyncMock()
+    host_repo.get_by_id.return_value = host
+    stored_now = host.model_copy(update={"favourite_repos": ["other/repo"]})
+    writes = stub_update_with(host_repo, stored_now)
+
+    repo = Repo(id="42", path="torvalds/linux", name="linux", description=None)
+    factory = MagicMock(return_value=_make_provider(repo))
+    use_case = AddRepoByUrlUseCase(host_repo=host_repo, vcs_factory=factory)
+
+    # Act
+    result_host, _ = await use_case.execute(host_id=host.id, url_or_path="torvalds/linux")
+
+    # Assert
+    assert writes[-1].favourite_repos == ["other/repo", "torvalds/linux"]
+    assert result_host.favourite_repos == ["other/repo", "torvalds/linux"]
 
 
 async def test__add_repo_by_url__already_pinned__skips_write() -> None:
@@ -51,6 +72,7 @@ async def test__add_repo_by_url__already_pinned__skips_write() -> None:
     host = make_host(type="github", favourite_repos=["torvalds/linux"])
     host_repo = AsyncMock()
     host_repo.get_by_id.return_value = host
+    writes = stub_update_with(host_repo, host)
 
     repo = Repo(id="42", path="torvalds/linux", name="linux", description=None)
     provider = _make_provider(repo)
@@ -61,6 +83,7 @@ async def test__add_repo_by_url__already_pinned__skips_write() -> None:
     result_host, result_repo = await use_case.execute(host_id=host.id, url_or_path="torvalds/linux")
 
     # Assert
+    assert writes == []
     host_repo.set_favourite_repos.assert_not_called()
     assert result_repo == repo
     assert result_host == host

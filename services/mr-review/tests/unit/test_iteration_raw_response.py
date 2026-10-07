@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -15,21 +14,19 @@ from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 
 from tests.factories.entities import make_comment, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
 _ANSWER = "Sure:\n```json\n" + json.dumps([{"file": "a.py", "line": 2, "body": "Fresh"}]) + "\n```"
 
 
-def _repo(review: Review | None) -> AsyncMock:
-    repo = AsyncMock()
-    repo.get_by_id.return_value = review
-    repo.update.side_effect = lambda updated: updated
-    return repo
+def _repo(review: Review | None) -> SingleReviewRepository:
+    return SingleReviewRepository(review)
 
 
-def _saved(repo: AsyncMock) -> Review:
-    return repo.update.call_args[0][0]
+def _saved(repo: SingleReviewRepository) -> Review:
+    return repo.last_write
 
 
 async def test__import_response__comments_parsed__raw_answer_stored_on_the_iteration() -> None:
@@ -52,7 +49,7 @@ async def test__import_response__nothing_parsed__review_untouched() -> None:
 
     assert outcome.result.json_error is not None
     assert outcome.stored == 0
-    repo.update.assert_not_awaited()
+    assert repo.writes == []
 
 
 async def test__get_raw_response__stored__returned_verbatim() -> None:
@@ -113,7 +110,7 @@ async def test__reparse__posted_iteration__locked(locked: dict[str, object]) -> 
     with pytest.raises(IterationLockedError):
         await ReparseIterationUseCase(repo).execute(uuid4(), iteration.id)
 
-    repo.update.assert_not_awaited()
+    assert repo.writes == []
 
 
 async def test__reparse__no_stored_answer__value_error() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
@@ -24,12 +25,53 @@ class ReviewRepository(Protocol):
         brief_config: BriefConfig | None = None,
     ) -> Review: ...
 
+    async def get_or_create_by_mr(
+        self,
+        host_id: UUID,
+        repo_path: str,
+        mr_iid: int,
+        brief_config: BriefConfig | None = None,
+    ) -> Review:
+        """Return the review of an MR, creating it first if there is none.
+
+        Atomic: concurrent calls for the same MR all get the same review.
+        """
+        ...
+
     async def get_by_id(self, review_id: UUID) -> Review | None: ...
 
     async def get_by_mr(self, host_id: UUID, repo_path: str, mr_iid: int) -> Review | None: ...
 
-    async def list_all(self) -> list[Review]: ...
+    async def list_all(self) -> list[Review]:
+        """The most recently updated reviews, newest first, capped for the history list."""
+        ...
 
-    async def update(self, review: Review) -> Review: ...
+    async def list_all_uncapped(self) -> list[Review]:
+        """Every stored review, newest first."""
+        ...
+
+    async def update(self, review: Review) -> Review:
+        """Overwrite the stored review with ``review`` and bump ``updated_at``.
+
+        Prefer :meth:`update_with` when the new state is derived from the stored one.
+        """
+        ...
+
+    async def update_with(self, review_id: UUID, change: Callable[[Review], Review]) -> Review | None:
+        """Atomically read the review, apply ``change`` and store the result with a new ``updated_at``.
+
+        Concurrent changes to one review are serialised, so none of them is lost. Returning
+        the very object ``change`` was given writes nothing. ``None`` when the review does
+        not exist; exceptions raised by ``change`` propagate and nothing is written.
+        """
+        ...
+
+    async def upsert_with(self, review_id: UUID, change: Callable[[Review | None], Review | None]) -> Review | None:
+        """Like :meth:`update_with`, but ``change`` gets ``None`` for a missing review and may create it.
+
+        Returning ``None`` or the object it was given writes nothing. The review is stored
+        exactly as returned — timestamps included — which is what an import needs.
+        """
+        ...
 
     async def delete(self, review_id: UUID) -> bool: ...
