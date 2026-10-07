@@ -42,6 +42,9 @@ class MR(BaseModel):
     web_url: str = ""
     created_at: datetime
     updated_at: datetime
+    # Commit the source branch points at. Context files are read at this commit: it exists in the
+    # target repository even for fork MRs and after the source branch is deleted. Internal only.
+    head_sha: str | None = None
 
 
 class InboxMR(BaseModel):

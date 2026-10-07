@@ -53,6 +53,17 @@ async def test__resolve_source__mr_source__calls_get_mr_and_get_diff() -> None:
     assert resolved.ref == "feature/x"
 
 
+async def test__resolve_source__mr_with_head_sha__anchors_context_at_the_head_commit() -> None:
+    """Fork MRs and deleted branches: the head commit is readable from the target repo, the branch name is not."""
+    provider = AsyncMock()
+    provider.get_mr.return_value = _make_mr(source_branch="feature/x").model_copy(update={"head_sha": "abc123"})
+    provider.get_diff.return_value = []
+
+    resolved = await resolve_source(make_review(mr_iid=7, repo_path="team/svc"), provider)
+
+    assert resolved.ref == "abc123"
+
+
 async def test__resolve_source__branch_diff_source__calls_get_branch_diff() -> None:
     """Branch-diff reviews skip get_mr entirely and use get_branch_diff."""
     provider = AsyncMock()

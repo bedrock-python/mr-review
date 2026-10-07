@@ -10,7 +10,7 @@ from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, Pe
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.infra.vcs._diff_parser import diff_file_from_patch
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
-from mr_review.infra.vcs._pagination import gitlab_has_more, json_list, optional_int
+from mr_review.infra.vcs._pagination import gitlab_has_more, json_list, optional_int, optional_str
 
 # /merge_requests/:iid/diffs is paginated; 100 pages of 100 files is far beyond what GitLab
 # itself renders, and keeps a pathological MR from looping forever.
@@ -333,6 +333,7 @@ def _item_to_mr(item: dict[str, Any]) -> MR:
         web_url=str(item.get("web_url", "")),
         created_at=_parse_datetime(str(item["created_at"])),
         updated_at=_parse_datetime(str(item["updated_at"])),
+        head_sha=optional_str(item.get("sha") or (item.get("diff_refs") or {}).get("head_sha")),
     )
 
 

@@ -381,6 +381,10 @@ Context fetches run five at a time with a pause between batches, to stay under h
 limits. Every one of them is an API call against the VCS host, so the optional toggles cost
 wall-clock time before the model is called at all.
 
+For a merge request, files are read at its head commit, which the target repository has even
+when the MR comes from a fork or its source branch has been deleted. The branch name is used only
+when the host does not report the commit.
+
 ## Rules that break a deployment
 
 1. **There is no authentication.** Not one route requires a credential. Anyone who can

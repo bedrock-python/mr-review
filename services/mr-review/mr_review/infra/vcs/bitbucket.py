@@ -384,6 +384,7 @@ def _pr_to_mr(
     source: dict[str, Any] = item.get("source", {})
     destination: dict[str, Any] = item.get("destination", {})
     source_branch = str(source.get("branch", {}).get("name", ""))
+    source_commit: dict[str, Any] = source.get("commit") or {}
     target_branch = str(destination.get("branch", {}).get("name", ""))
     author_data: dict[str, Any] = item.get("author", {})
     author = str(author_data.get("username", author_data.get("display_name", "")))
@@ -407,4 +408,5 @@ def _pr_to_mr(
         web_url=str(item.get("links", {}).get("html", {}).get("href", "")),
         created_at=_parse_datetime(str(item["created_on"])),
         updated_at=_parse_datetime(str(item["updated_on"])),
+        head_sha=str(source_commit["hash"]) if source_commit.get("hash") else None,
     )

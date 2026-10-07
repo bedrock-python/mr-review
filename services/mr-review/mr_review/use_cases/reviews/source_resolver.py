@@ -7,7 +7,7 @@ branch/commit diff (``BranchDiffSource``). The rest of the use-case pipeline
 * the list of ``DiffFile`` objects under review
 * a human-readable title
 * a human-readable description
-* a ref to anchor file/context lookups against (``HEAD`` of the change)
+* a ref to anchor file/context lookups against (the change's head commit)
 
 This module exposes a single :func:`resolve_source` helper that produces those
 four values regardless of the underlying source, so individual use cases stay
@@ -42,7 +42,9 @@ async def resolve_source(review: Review, provider: VCSProvider) -> ResolvedSourc
             diff_files=diff_files,
             title=mr.title,
             description=mr.description,
-            ref=mr.source_branch,
+            # The head commit is readable from the target repo even for fork MRs and deleted branches;
+            # a same-named branch there may be a different branch, or gone.
+            ref=mr.head_sha or mr.source_branch,
         )
     if isinstance(source, BranchDiffSource):
         diff_files = await provider.get_branch_diff(

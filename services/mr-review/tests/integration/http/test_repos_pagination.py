@@ -42,6 +42,7 @@ def _mr(iid: int, project: str = "group/p1", updated: str = "2026-01-02T00:00:00
         "draft": False,
         "web_url": f"https://gitlab.example.com/{project}/-/merge_requests/{iid}",
         "references": {"full": f"{project}!{iid}"},
+        "sha": f"sha-{iid}",
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": updated,
     }
@@ -114,6 +115,7 @@ async def test__list_mrs__returns_page_envelope_with_null_stats(
     assert (body["page"], body["per_page"], body["has_more"]) == (1, 5, False)
     item = body["items"][0]
     assert (item["iid"], item["additions"], item["deletions"], item["file_count"]) == (1, None, None, None)
+    assert "head_sha" not in item
     params = gitlab.last_params()
     assert (params["state"], params["search"], params["in"], params["per_page"]) == ("merged", "fix", "title", "5")
 

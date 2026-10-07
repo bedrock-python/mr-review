@@ -46,6 +46,11 @@ def filter_by_title(mrs: list[MR], query: str | None) -> list[MR]:
     return [mr for mr in mrs if needle in mr.title.lower()]
 
 
+def optional_str(value: object) -> str | None:
+    """A non-empty string reported by a host, or ``None``."""
+    return str(value) if value else None
+
+
 def optional_int(value: object) -> int | None:
     """Coerce a count reported by a host to ``int``; ``None`` (or garbage) when it was not reported.
 

@@ -11,7 +11,7 @@ from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, Pe
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
-from mr_review.infra.vcs._pagination import has_next_link, json_list, optional_int
+from mr_review.infra.vcs._pagination import has_next_link, json_list, optional_int, optional_str
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -379,6 +379,7 @@ def _pr_to_mr(item: dict[str, Any]) -> MR:
         web_url=str(item.get("html_url", "")),
         created_at=_parse_datetime(str(item["created_at"])),
         updated_at=_parse_datetime(str(item["updated_at"])),
+        head_sha=optional_str(item["head"].get("sha")),
     )
 
 
