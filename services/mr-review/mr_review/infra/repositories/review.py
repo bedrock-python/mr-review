@@ -63,12 +63,28 @@ def _comments_from_list(raw: object) -> list[Comment]:
     return [comment for comment in (_comment_from_dict(item) for item in raw) if comment is not None]
 
 
+def _brief_config_from_dict(raw: object) -> BriefConfig:
+    """A stored brief; a field that no longer validates (an unknown preset, a value out of range)
+    falls back to its default instead of making the whole review unreadable."""
+    if not isinstance(raw, dict):
+        return BriefConfig()
+    fields = {str(key): value for key, value in raw.items()}
+    try:
+        return BriefConfig.model_validate(fields)
+    except ValidationError as exc:
+        bad = {str(error["loc"][0]) for error in exc.errors() if error["loc"]}
+        _log.warning("Stored brief has unreadable fields %s; using their defaults", sorted(bad))
+    try:
+        return BriefConfig.model_validate({key: value for key, value in fields.items() if key not in bad})
+    except ValidationError:
+        return BriefConfig()
+
+
 def _iteration_from_dict(data: dict[str, object]) -> Iteration:
     comments = _comments_from_list(data.get("comments"))
     raw_response = data.get("raw_response")
 
-    brief_raw = data.get("brief_config") or {}
-    brief_config = BriefConfig.model_validate(brief_raw)
+    brief_config = _brief_config_from_dict(data.get("brief_config"))
 
     completed_at: datetime | None = None
     if data.get("completed_at"):
