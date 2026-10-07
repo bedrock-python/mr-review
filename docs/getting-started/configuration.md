@@ -63,6 +63,7 @@ The ones worth knowing:
 | `MR_REVIEW__DATA_DIR` | `/data` in the images | Path *inside* the container (`~/.mr-review` when run outside Docker) |
 | `MR_REVIEW__VCS_TIMEOUT` | `60.0` | HTTP timeout in seconds for calls to a VCS host |
 | `MR_REVIEW__AI_THROTTLE__DEFAULT_MAX_CONCURRENT` | `4` | Dispatches in flight per AI provider |
+| `MR_REVIEW__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1,api` | Host names the server answers — see [Host names](#host-names) |
 | `MR_REVIEW__CORS__ALLOW_ORIGINS` | dev ports | JSON array; needed only when the UI calls the API on another origin — see below |
 
 The complete list, with the server and CORS settings, is on the
@@ -79,6 +80,38 @@ API container, so the UI and the API share one origin and CORS never comes into 
 | `API_BASE_URL` | empty | Where the **browser** sends API calls. Empty means the UI's own origin, through the proxy above. Set it only to serve the API from another origin, which must then allow the UI's origin in `MR_REVIEW__CORS__ALLOW_ORIGINS` |
 | `HSTS_MAX_AGE` | empty | Seconds for a `Strict-Transport-Security` header; empty sends none. Better set by the proxy that terminates TLS |
 | `HSTS_INCLUDE_SUBDOMAINS` | `false` | `true` adds `includeSubDomains` — only when every subdomain of the host is HTTPS |
+
+### Host names
+
+The server answers only requests whose `Host` header names it the way it expects:
+`localhost`, `127.0.0.1`, `::1` and `api` (the API's service name in the standard compose
+file), on any port. Anything else gets `400 Invalid host header`, naming the host it
+refused. This is what stops a web page from re-pointing its own domain at `127.0.0.1` (DNS
+rebinding) and reading the API — the data export with every stored token included — from
+your browser.
+
+Opening mr-review by any other name means adding that name, without a port, to
+`MR_REVIEW__ALLOWED_HOSTS` on the API container (all-in-one: the only container). Two cases
+need it:
+
+- **Another machine on the LAN.** The compose files publish the port on `127.0.0.1` only, so
+  this takes both settings: `MR_REVIEW_BIND=0.0.0.0` (or the LAN address) in the `.env` —
+  see [Opening it from another machine](installation.md#opening-it-from-another-machine) —
+  and the address or name the other machines use in `MR_REVIEW__ALLOWED_HOSTS`.
+- **A reverse proxy in front.** Add the domain it serves when it forwards the browser's
+  `Host` (nginx: `proxy_set_header Host $host;`, Caddy does by default). A proxy that does
+  not forward it sends the name of its upstream instead — `proxy_pass http://mr-review:8000`
+  arrives as `mr-review` — so either forward `Host` or allow that name. The standard
+  deployment's web container forwards the browser's `Host`.
+
+```yaml
+environment:
+  MR_REVIEW__ALLOWED_HOSTS: "localhost,192.168.1.10,mr-review.example.com"
+```
+
+It takes a comma-separated list or a JSON array; `*.example.com` matches every subdomain,
+and `*` switches the check off. The value replaces the default list, but `localhost`,
+`127.0.0.1` and `::1` are always accepted, so the container health check keeps working.
 
 ## Where data is stored
 
@@ -131,7 +164,8 @@ When deploying on a server rather than a local machine:
   `127.0.0.1` so the proxy is the only way in. There is no authentication in mr-review
   itself, so the port must not be reachable by anyone you would not hand the tokens to.
   Point the proxy at the all-in-one port or at the standard deployment's web port; the
-  API needs no separate route.
+  API needs no separate route. Add the domain the proxy serves to
+  `MR_REVIEW__ALLOWED_HOSTS` ([Host names](#host-names)).
 - A review is streamed back as Server-Sent Events. The API marks the stream
   `X-Accel-Buffering: no`, which nginx honours, and sends a keep-alive every 15 seconds; a
   proxy that ignores that header must be told not to buffer `text/event-stream`, or the

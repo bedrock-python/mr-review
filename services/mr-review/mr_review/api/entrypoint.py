@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 
 from mr_review.api.ai_errors import register_ai_error_handlers
+from mr_review.api.allowed_hosts import AllowedHostsMiddleware
 from mr_review.api.config import Settings
 from mr_review.api.routers.health import router as health_router
 from mr_review.api.routers.v1.ai_providers import router as ai_providers_v1_router
@@ -89,6 +90,10 @@ def create_app() -> FastAPI:
 
     if settings.static_dir is not None:
         _mount_spa(app, settings)
+
+    # The outermost middleware, being added last: a request for a host name that is not
+    # allowed (DNS rebinding) reaches nothing else, the UI included.
+    app.add_middleware(AllowedHostsMiddleware, allowed_hosts=settings.allowed_hosts)
 
     return app
 
