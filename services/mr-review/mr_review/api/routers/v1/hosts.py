@@ -4,7 +4,7 @@ from uuid import UUID
 
 import httpx
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from mr_review.api.schemas.hosts import (
     AddRepoByUrlRequest,
@@ -20,6 +20,7 @@ from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
+from mr_review.use_cases.hosts.invalidate_host_cache import InvalidateHostCacheUseCase
 from mr_review.use_cases.hosts.list_hosts import ListHostsUseCase
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
 from mr_review.use_cases.hosts.update_host import UpdateHostUseCase
@@ -89,6 +90,19 @@ async def delete_host(
     deleted = await use_case.execute(host_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Host not found")
+
+
+@router.post("/{host_id}/cache/invalidate", status_code=status.HTTP_204_NO_CONTENT)
+async def invalidate_host_cache(
+    host_id: UUID,
+    use_case: FromDishka[InvalidateHostCacheUseCase],
+    repo_path: str | None = Query(default=None, description="Drop only this repository's cached responses"),
+) -> None:
+    normalized = repo_path.strip().strip("/") if repo_path else ""
+    try:
+        await use_case.execute(host_id, repo_path=normalized or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/{host_id}/favourite-repos/{repo_path:path}", response_model=HostResponse)

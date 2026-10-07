@@ -26,6 +26,7 @@ from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
 from mr_review.use_cases.hosts.check_connection import CheckConnectionUseCase
 from mr_review.use_cases.hosts.create_host import CreateHostUseCase
 from mr_review.use_cases.hosts.delete_host import DeleteHostUseCase
+from mr_review.use_cases.hosts.invalidate_host_cache import InvalidateHostCacheUseCase
 from mr_review.use_cases.hosts.list_hosts import ListHostsUseCase
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
 from mr_review.use_cases.hosts.update_host import UpdateHostUseCase
@@ -154,12 +155,18 @@ class UseCaseProvider(Provider):
         return ListHostsUseCase(repo)
 
     @provide
-    def get_delete_host_use_case(self, repo: FileHostRepository) -> DeleteHostUseCase:
-        return DeleteHostUseCase(repo)
+    def get_delete_host_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> DeleteHostUseCase:
+        return DeleteHostUseCase(repo, vcs_cache)
 
     @provide
-    def get_update_host_use_case(self, repo: FileHostRepository) -> UpdateHostUseCase:
-        return UpdateHostUseCase(repo)
+    def get_update_host_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> UpdateHostUseCase:
+        return UpdateHostUseCase(repo, vcs_cache)
+
+    @provide
+    def get_invalidate_host_cache_use_case(
+        self, repo: FileHostRepository, vcs_cache: VCSCache
+    ) -> InvalidateHostCacheUseCase:
+        return InvalidateHostCacheUseCase(host_repo=repo, vcs_cache=vcs_cache)
 
     @provide
     def get_check_connection_use_case(

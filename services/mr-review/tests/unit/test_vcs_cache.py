@@ -148,6 +148,47 @@ async def test__ttl_cache__cancelled_waiter__does_not_cancel_the_shared_load() -
     assert len(cache) == 1
 
 
+async def test__ttl_cache__invalidate_with_predicate__drops_only_matching_keys() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    loaders = {key: _Loader(value=key) for key in (("a", 1), ("a", 2), ("b", 1))}
+    for key, loader in loaders.items():
+        await cache.get_or_load(key, loader)
+
+    cache.invalidate(lambda key: key[0] == "a")  # type: ignore[index]
+
+    assert len(cache) == 1
+    for key, loader in loaders.items():
+        await cache.get_or_load(key, loader)
+    assert [loader.calls for loader in loaders.values()] == [2, 2, 1]
+
+
+async def test__ttl_cache__invalidate_all__drops_everything() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    for key in ("a", "b"):
+        await cache.get_or_load(key, _Loader())
+
+    cache.invalidate()
+
+    assert len(cache) == 0
+
+
+async def test__ttl_cache__load_running_during_invalidate__answers_but_is_not_stored() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    stale = _Loader(value="before push")
+    stale.release.clear()
+    waiter = asyncio.create_task(cache.get_or_load("k", stale))
+    await asyncio.sleep(0)
+
+    cache.invalidate()
+    fresh = _Loader(value="after push")
+    fresh_value = await cache.get_or_load("k", fresh)
+    stale.release.set()
+
+    assert await waiter == "before push"
+    assert fresh_value == "after push"
+    assert await cache.get_or_load("k", _Loader(value="unused")) == "after push"
+
+
 def _repo_page(page: int) -> Page[Repo]:
     return Page(items=[Repo(id=str(page), path=f"g/r{page}", name="r")], page=page, per_page=1, has_more=True)
 
@@ -209,3 +250,56 @@ async def test__vcs_cache__same_host__one_provider_until_its_credentials_change(
 
         registry.invalidate(host.id)
         assert registry.get(host) is not first
+
+
+async def test__cached_provider__invalidate_repo__drops_only_that_repos_entries() -> None:
+    inner = AsyncMock()
+    inner.list_repos.return_value = Page(items=[], page=1, per_page=50, has_more=False)
+    inner.list_mrs.return_value = Page(items=[], page=1, per_page=30, has_more=False)
+    inner.get_diff.return_value = []
+    inner.get_diff_refs.return_value = {}
+    inner.get_file.return_value = "content"
+    inner.list_directory.return_value = ["src/a.py"]
+    inner.get_commits.return_value = []
+    provider = CachedVCSProvider(inner)
+
+    async def touch(repo: str) -> None:
+        await provider.list_mrs(repo)
+        await provider.get_diff(repo, 1)
+        await provider.get_diff_refs(repo, 1)
+        await provider.get_file(repo, "src/a.py", "sha")
+        await provider.list_directory(repo, "src", "sha")
+        await provider.get_commits(repo, "src/a.py", "sha")
+
+    await provider.list_repos()
+    await touch("g/a")
+    await touch("g/b")
+
+    provider.invalidate("g/a")
+    await provider.list_repos()
+    await touch("g/a")
+    await touch("g/b")
+
+    for method in (inner.list_mrs, inner.get_diff, inner.get_diff_refs, inner.get_file, inner.list_directory):
+        assert method.await_count == 3, method
+    assert inner.get_commits.await_count == 3
+    assert inner.list_repos.await_count == 1
+
+    provider.invalidate()
+    await provider.list_repos()
+    assert inner.list_repos.await_count == 2
+
+
+async def test__vcs_cache__invalidate__repo_keeps_the_provider_whole_host_drops_it() -> None:
+    async with httpx.AsyncClient() as client:
+        registry = VCSCache(client=client)
+        host = make_host(type="gitlab")
+        provider = registry.get(host)
+
+        registry.invalidate(host.id, "group/proj")
+        assert registry.get(host) is provider
+
+        registry.invalidate(host.id)
+        assert registry.get(host) is not provider
+
+        registry.invalidate(make_host().id)  # unknown host: nothing to do

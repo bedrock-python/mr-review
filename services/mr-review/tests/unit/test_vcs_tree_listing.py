@@ -87,3 +87,16 @@ async def test__per_directory_hosts__keep_their_own_listing() -> None:
         assert isinstance(GitHubProvider(client=client, base_url="", token="t"), WholeTreeListing)
         assert not isinstance(GitLabProvider(client=client, base_url="https://gl", token="t"), WholeTreeListing)
         assert not isinstance(BitbucketProvider(client=client, base_url="", token="u:p"), WholeTreeListing)
+
+
+async def test__github__repo_invalidation__drops_the_cached_tree() -> None:
+    transport = RoutedTransport({"/repos/acme/api/git/trees/main": json_response(_TREE)})
+    provider = _github(transport)
+
+    await provider.list_directory("acme/api", "src", "main")
+    provider.invalidate("other/repo")
+    await provider.list_directory("acme/api", "src", "main")
+    provider.invalidate("acme/api")
+    await provider.list_directory("acme/api", "src", "main")
+
+    assert len(transport.requests) == 2

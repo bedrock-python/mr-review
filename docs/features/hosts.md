@@ -94,7 +94,8 @@ so those two views are always empty there. On GitHub and Gitea these three views
 search and show no branch names.
 
 Responses from the host are cached in memory for five minutes (repository lists for fifteen), so
-going back to a list you just saw does not call the host again.
+going back to a list you just saw does not call the host again. **Sync** forgets them, so a push
+made a minute ago shows up, and editing or deleting a host forgets everything cached for it.
 
 ## Verify a token
 

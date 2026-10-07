@@ -39,6 +39,8 @@ class TTLCache:
       caller that gets cancelled (a client disconnecting) neither cancels the others nor wastes
       the fetch: the result is still stored.
     * Failed loads are never stored; every caller waiting on that load gets the exception.
+    * ``invalidate`` drops entries; a load that was already running when it was called still
+      answers its callers but is not stored, since its result may predate the invalidation.
 
     Safe for concurrent use from one event loop; not thread-safe.
     """
@@ -52,6 +54,7 @@ class TTLCache:
         self._data: OrderedDict[Hashable, tuple[object, float]] = OrderedDict()
         self._inflight: dict[Hashable, asyncio.Task[object]] = {}
         self._next_sweep = clock() + ttl
+        self._generation = 0
 
     def __len__(self) -> int:
         return len(self._data)
@@ -62,14 +65,30 @@ class TTLCache:
             return cast(T, value)
         task = self._inflight.get(key)
         if task is None:
-            task = asyncio.get_running_loop().create_task(self._load(key, loader))
+            # The generation is taken now, not when the task first runs: an invalidation in between
+            # must still keep this load's (possibly stale) result out of the cache.
+            task = asyncio.get_running_loop().create_task(self._load(key, loader, self._generation))
             self._inflight[key] = task
             task.add_done_callback(partial(self._forget_load, key))
         return cast(T, await asyncio.shield(task))
 
-    async def _load(self, key: Hashable, loader: Callable[[], Awaitable[object]]) -> object:
+    def invalidate(self, predicate: Callable[[Hashable], bool] | None = None) -> None:
+        """Drop the entries whose key matches ``predicate`` — every entry when there is none."""
+        self._generation += 1
+        if predicate is None:
+            self._data.clear()
+            self._inflight.clear()
+            return
+        for key in [key for key in self._data if predicate(key)]:
+            del self._data[key]
+        # Later callers must start a fresh load rather than join one that began before this call.
+        for key in [key for key in self._inflight if predicate(key)]:
+            del self._inflight[key]
+
+    async def _load(self, key: Hashable, loader: Callable[[], Awaitable[object]], generation: int) -> object:
         value = await loader()
-        self._set(key, value)
+        if generation == self._generation:
+            self._set(key, value)
         return value
 
     def _forget_load(self, key: Hashable, task: asyncio.Task[object]) -> None:
@@ -106,6 +125,19 @@ class TTLCache:
         self._next_sweep = now + self._ttl
 
 
+# Cache key kinds that belong to one repository; the repository path is the key's second element.
+_REPO_SCOPED_KINDS = frozenset(
+    {"repo", "mrs", "mr", "diff", "branch_diff", "diff_refs", "file", "dir", "tree", "commits"}
+)
+
+
+def _belongs_to_repo(repo_path: str) -> Callable[[Hashable], bool]:
+    def predicate(key: Hashable) -> bool:
+        return isinstance(key, tuple) and len(key) > 1 and key[0] in _REPO_SCOPED_KINDS and key[1] == repo_path
+
+    return predicate
+
+
 class CachedVCSProvider:
     """Wraps a VCSProvider and caches read-only responses.
 
@@ -131,6 +163,12 @@ class CachedVCSProvider:
         self._repos = TTLCache(repos_ttl, max_repo_entries)
         self._meta = TTLCache(ttl, max_entries)
         self._content = TTLCache(ttl, max_content_entries)
+
+    def invalidate(self, repo_path: str | None = None) -> None:
+        """Forget cached responses: one repository's (MRs, diffs, files, ...) or, without a path, all."""
+        predicate = _belongs_to_repo(repo_path) if repo_path is not None else None
+        for store in (self._repos, self._meta, self._content):
+            store.invalidate(predicate)
 
     async def test_connection(self) -> dict[str, str]:
         return await self._provider.test_connection()
@@ -280,6 +318,16 @@ class VCSCache:
             self._entries[host.id] = entry
         return entry.provider
 
-    def invalidate(self, host_id: UUID) -> None:
-        """Evict the provider and all cached data for a host (e.g. after a Sync action)."""
-        self._entries.pop(host_id, None)
+    def invalidate(self, host_id: UUID, repo_path: str | None = None) -> None:
+        """Forget a host's cached responses — only one repository's when ``repo_path`` is given.
+
+        Without a path the host's provider goes too, so the next request starts from scratch
+        (including the user lookups some providers keep).
+        """
+        entry = self._entries.get(host_id)
+        if entry is None:
+            return
+        # Clear the stores as well: a request still holding this provider must not read stale data.
+        entry.provider.invalidate(repo_path)
+        if repo_path is None:
+            del self._entries[host_id]

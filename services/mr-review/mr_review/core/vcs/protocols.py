@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
+from uuid import UUID
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
@@ -65,6 +66,12 @@ class VCSProvider(Protocol):
     ) -> None: ...
 
     async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None: ...
+
+
+class VCSCacheInvalidator(Protocol):
+    def invalidate(self, host_id: UUID, repo_path: str | None = None) -> None:
+        """Forget cached VCS responses for a host — only one repository's when ``repo_path`` is given."""
+        ...
 
 
 # Factory that produces a VCSProvider for a given Host.

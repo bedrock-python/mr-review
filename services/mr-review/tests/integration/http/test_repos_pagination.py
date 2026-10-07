@@ -225,3 +225,53 @@ async def test__list_repos__vcs_unreachable__returns_502(
 
     assert response.status_code == 502
     assert "unreachable" in response.json()["detail"]
+
+
+async def _load_everything(api: AsyncClient, host_id: str) -> None:
+    for path in ("repos", "repos/group/p1/mrs", "repos/group/p2/mrs"):
+        assert (await api.get(f"/api/v1/hosts/{host_id}/{path}")).status_code == 200
+
+
+async def test__cache_invalidate__repo_path__refetches_only_that_repository(
+    api: AsyncClient, host_id: str, gitlab: RoutedTransport
+) -> None:
+    await _load_everything(api, host_id)
+    gitlab.requests.clear()
+    await _load_everything(api, host_id)
+    assert gitlab.requests == []  # all cached
+
+    response = await api.post(f"/api/v1/hosts/{host_id}/cache/invalidate", params={"repo_path": "/group/p1/"})
+    await _load_everything(api, host_id)
+
+    assert response.status_code == 204
+    assert gitlab.paths() == [f"{_API}/projects/group%2Fp1/merge_requests"]
+
+
+async def test__cache_invalidate__no_repo_path__refetches_the_whole_host(
+    api: AsyncClient, host_id: str, gitlab: RoutedTransport
+) -> None:
+    await _load_everything(api, host_id)
+    gitlab.requests.clear()
+
+    response = await api.post(f"/api/v1/hosts/{host_id}/cache/invalidate")
+    await _load_everything(api, host_id)
+
+    assert response.status_code == 204
+    assert sorted(gitlab.paths()) == sorted(
+        [f"{_API}/projects", f"{_API}/projects/group%2Fp1/merge_requests", f"{_API}/projects/group%2Fp2/merge_requests"]
+    )
+
+
+async def test__cache_invalidate__unknown_host__returns_404(api: AsyncClient) -> None:
+    response = await api.post("/api/v1/hosts/00000000-0000-0000-0000-000000000000/cache/invalidate")
+
+    assert response.status_code == 404
+
+
+async def test__update_host__drops_its_cache(api: AsyncClient, host_id: str, gitlab: RoutedTransport) -> None:
+    await api.get(f"/api/v1/hosts/{host_id}/repos")
+
+    assert (await api.patch(f"/api/v1/hosts/{host_id}", json={"name": "renamed"})).status_code == 200
+    await api.get(f"/api/v1/hosts/{host_id}/repos")
+
+    assert gitlab.paths() == [f"{_API}/projects", f"{_API}/projects"]
