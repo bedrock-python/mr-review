@@ -3,7 +3,9 @@ services:
     image: ghcr.io/bedrock-python/mr-review/all-in-one:latest
     restart: unless-stopped
     ports:
-      - "${PORT:-17240}:8000"
+      # Loopback only unless MR_REVIEW_BIND says otherwise: mr-review has no
+      # login, and anyone who reaches this port can read every stored token.
+      - "${MR_REVIEW_BIND:-127.0.0.1}:${PORT:-17240}:8000"
     environment:
       MR_REVIEW__SERVER__HOST: "0.0.0.0"
       MR_REVIEW__SERVER__PORT: "8000"

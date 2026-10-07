@@ -3,7 +3,9 @@ services:
     image: ghcr.io/bedrock-python/mr-review/api:latest
     restart: unless-stopped
     ports:
-      - "${API_PORT:-17241}:8000"
+      # Loopback only unless MR_REVIEW_BIND says otherwise: mr-review has no
+      # login, and anyone who reaches this port can read every stored token.
+      - "${MR_REVIEW_BIND:-127.0.0.1}:${API_PORT:-17241}:8000"
     environment:
       MR_REVIEW__SERVER__HOST: "0.0.0.0"
       MR_REVIEW__SERVER__PORT: "8000"
@@ -29,7 +31,8 @@ services:
     image: ghcr.io/bedrock-python/mr-review/web-app:latest
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-17242}:8080"
+      # Same as the api service: the UI proxies the whole API under /api/.
+      - "${MR_REVIEW_BIND:-127.0.0.1}:${WEB_PORT:-17242}:8080"
     environment:
       # The UI calls /api/ on its own origin and nginx in this container
       # forwards it to the api service, so the UI works from any hostname or
