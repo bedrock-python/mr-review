@@ -58,6 +58,22 @@ def test__include_patterns__other_files_left_out_with_a_reason() -> None:
     assert path_filter.exclusion_reason("README.md") == NOT_INCLUDED
 
 
+def test__negated_exclude__one_default_overridden_the_rest_still_apply() -> None:
+    path_filter = PathFilter.from_brief(BriefConfig(exclude_paths=["!/go.sum"]))
+
+    assert path_filter.exclusion_reason("go.sum") is None
+    assert path_filter.exclusion_reason("tools/go.sum") == "go.sum"
+    assert path_filter.exclusion_reason("uv.lock") == "*.lock"
+
+
+def test__negated_exclude__last_matching_pattern_decides() -> None:
+    path_filter = PathFilter(exclude=["docs/", "!docs/api/", "docs/api/internal/"])
+
+    assert path_filter.exclusion_reason("docs/guide.md") == "docs/"
+    assert path_filter.exclusion_reason("docs/api/users.md") is None
+    assert path_filter.exclusion_reason("docs/api/internal/x.md") == "docs/api/internal/"
+
+
 def test__include_and_exclude__exclude_wins_inside_the_included_set() -> None:
     path_filter = PathFilter(include=["src/**"], exclude=["*_pb2.py"])
 

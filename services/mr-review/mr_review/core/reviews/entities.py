@@ -68,9 +68,10 @@ class BriefConfig(BaseModel):
     min_severity: Severity = "suggestion"
     # At most this many comments are asked for and stored, the most severe first; ``None`` = no cap.
     max_comments: int | None = Field(default=None, ge=1, le=MAX_COMMENTS_LIMIT)
-    # Glob patterns over changed-file paths. Non-empty ``include_paths`` keeps only matching
-    # files; ``exclude_paths`` (plus the built-in defaults while ``use_default_excludes``) drops
-    # files from the diff sent to the model and from context gathering.
+    # Glob patterns over changed-file paths (see ``core.reviews.path_filter``). Non-empty
+    # ``include_paths`` keeps only matching files; ``exclude_paths``, read after the built-in
+    # defaults while ``use_default_excludes``, drops files from the diff sent to the model and from
+    # context gathering — a ``!pattern`` takes a file back in.
     include_paths: list[str] = Field(default_factory=list)
     exclude_paths: list[str] = Field(default_factory=list)
     use_default_excludes: bool = True

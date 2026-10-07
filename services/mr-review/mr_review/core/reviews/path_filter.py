@@ -9,6 +9,10 @@ Pattern forms, close to ``.gitignore``:
 
 ``*`` and ``?`` stay inside one path segment, ``**`` crosses directories and ``[abc]`` / ``[!abc]``
 are character classes. Matching is case-sensitive.
+
+Exclude patterns are read after the built-in defaults and, as in ``.gitignore``, the last one that
+matches decides: a pattern starting with ``!`` takes a file back in (``!/go.sum`` reviews the root
+``go.sum`` while every other default still applies).
 """
 
 from __future__ import annotations
@@ -137,21 +141,26 @@ class _Rule:
     pattern: str
     target: _Target
     regex: re.Pattern[str]
+    # ``!pattern``: a file it matches is taken back in.
+    negated: bool = False
 
     @classmethod
     def compile(cls, pattern: str) -> _Rule | None:
         text = pattern.strip()
+        negated = text.startswith("!")
+        if negated:
+            text = text[1:].strip()
         if not text.strip("/"):
             return None
         anchored = text.startswith("/")
         if text.endswith("/"):
             body = _translate(text.strip("/"))
             prefix = "" if anchored else "(?:.*/)?"
-            return cls(pattern, "dir", re.compile(f"{prefix}{body}/"))
+            return cls(pattern, "dir", re.compile(f"{prefix}{body}/"), negated)
         body_text = text.lstrip("/")
         if "/" not in body_text and not anchored:
-            return cls(pattern, "name", re.compile(_translate(body_text)))
-        return cls(pattern, "path", re.compile(_translate(body_text)))
+            return cls(pattern, "name", re.compile(_translate(body_text)), negated)
+        return cls(pattern, "path", re.compile(_translate(body_text)), negated)
 
     def matches(self, path: str) -> bool:
         if self.target == "dir":
@@ -176,20 +185,22 @@ class PathFilter:
     """Decides, path by path, whether a changed file takes part in the review."""
 
     def __init__(self, include: Sequence[str] = (), exclude: Sequence[str] = ()) -> None:
-        self._include = _compile_all(include)
+        """``exclude`` is read in order and the last matching pattern decides."""
+        self._include = tuple(rule for rule in _compile_all(include) if not rule.negated)
         self._exclude = _compile_all(exclude)
 
     @classmethod
     def from_brief(cls, config: BriefConfig) -> PathFilter:
         defaults = DEFAULT_EXCLUDE_PATTERNS if config.use_default_excludes else ()
-        return cls(include=config.include_paths, exclude=[*config.exclude_paths, *defaults])
+        return cls(include=config.include_paths, exclude=[*defaults, *config.exclude_paths])
 
     def exclusion_reason(self, path: str) -> str | None:
         """Why ``path`` is left out, or ``None`` when it is reviewed."""
         normalized = path.lstrip("/")
         if self._include and not any(rule.matches(normalized) for rule in self._include):
             return NOT_INCLUDED
-        return next((rule.pattern for rule in self._exclude if rule.matches(normalized)), None)
+        decisive = next((rule for rule in reversed(self._exclude) if rule.matches(normalized)), None)
+        return None if decisive is None or decisive.negated else decisive.pattern
 
     def allows(self, path: str) -> bool:
         return self.exclusion_reason(path) is None
