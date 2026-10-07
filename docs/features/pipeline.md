@@ -69,8 +69,8 @@ The keys do nothing while you type in a text field.
 - **Group by file** collapses the list into one section per file (general notes first),
   each with its comment count. Without grouping the list is ordered by severity, then file
   and line.
-- **Keep**, **Dismiss** and **Set severity** act on every comment the filters let through —
-  including those in collapsed groups — in a single request.
+- **Keep**, **Dismiss** and **Set severity** act on the comments on screen — those the
+  filters let through, minus any in collapsed groups — in a single request.
 
 Every change shows a toast with **Undo**, which puts the previous values back; `u` does the
 same for the last change.
@@ -78,11 +78,14 @@ same for the last change.
 ### Edit, re-anchor, add, delete
 
 - **Edit** opens an editor in the card with **Write** and **Preview** tabs (Markdown).
-  Moving to another card, switching view or continuing to Post with unsaved changes asks
-  whether to save, discard or keep editing.
+  Saving sends only the fields you changed, so a bulk action taken while the editor was
+  open is not undone by the save. Moving to another card, pressing `Esc`, switching view or
+  continuing to Post with unsaved changes asks whether to save, discard or keep editing;
+  the **Cancel** button discards without asking.
 - **Anchor** — pick another file from the diff and a line, or make it a general comment.
-  If the line is not part of the diff, the card says so: the host cannot place it inline,
-  so it is posted as a general note.
+  Leave the line empty to comment on the file as a whole. A comment without a line, or on
+  a line that is not part of the diff, cannot be placed inline by the host and is posted as
+  a general note; the card says so.
 - **Code context** — an anchored comment can show the diff three lines either side of its
   line.
 - **New comment** adds one by hand, general or anchored; **Delete** removes a comment for
@@ -96,6 +99,11 @@ a second of each other — a bulk action, a burst of keystrokes — go to the se
 request, and requests for a review are sent one at a time. If the server refuses a change,
 only that change is rolled back and an error is shown. **Continue to post** waits for
 pending changes to be saved first.
+
+Leaving Polish another way — the stage bar, another iteration or another review — saves
+an open draft that has valid changes rather than dropping it; the usual **Undo** toast
+follows. Closing or reloading the tab while a draft has changes or saves are still pending
+asks the browser to confirm.
 
 ## POST — publish to the MR
 
