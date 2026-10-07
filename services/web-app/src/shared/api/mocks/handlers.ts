@@ -1,4 +1,5 @@
 import { http, HttpResponse } from "msw";
+import { dispatchHandlers } from "./handlers/dispatch";
 import { MOCK_FAVOURITE_REPOS, MOCK_HOST_ID } from "./fixtures/mrs";
 import { mrHandlers } from "./handlers/mrs";
 import { patchHandlers } from "./handlers/patch";
@@ -134,4 +135,4 @@ const reviewHandlers = [
   }),
 ];
 
-export const handlers = [...reviewHandlers, ...mrHandlers, ...patchHandlers];
+export const handlers = [...reviewHandlers, ...dispatchHandlers, ...mrHandlers, ...patchHandlers];

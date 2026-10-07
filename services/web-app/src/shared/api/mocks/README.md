@@ -73,6 +73,23 @@ Error responses follow the backend FastAPI-style envelope:
 Parse on the client side with `PatchErrorEnvelopeSchema` from
 `@entities/review`.
 
+## AI dispatch — streaming endpoints
+
+`handlers/dispatch.ts` mocks the "Run in app" flow with the fixtures from
+`fixtures/dispatch.ts`.
+
+| Endpoint                                                | Response                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `POST /reviews/:id/dispatch`                            | `text/event-stream`: `chunk` × N, `comment` × 3, then `done` |
+| `GET /reviews/:id/iterations/:iterationId/raw-response` | `text/plain`: the raw model output the stream delivered      |
+| `POST /reviews/:id/iterations/:iterationId/reparse`     | `{ imported: 3, errors: [], json_error: null }`              |
+
+The stream is framed exactly like sse-starlette (CRLF line endings, a `: ping`
+keep-alive comment) so the client's event-stream parsing is exercised as in
+production. `done.iteration_id` echoes the request's `iteration_id`. Frames are
+spaced 30 ms apart so the UI streams visibly; tests build the handlers with
+`createDispatchHandlers({ frameDelayMs: 0 })`.
+
 ## Adding a new scenario
 
 1. Add a new comment ID constant in `fixtures/patch.ts::PATCH_MOCK_COMMENT_IDS`.

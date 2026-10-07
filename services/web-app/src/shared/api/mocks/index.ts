@@ -15,6 +15,14 @@ export {
   paginate,
 } from "./fixtures/mrs";
 export type { MockPage } from "./fixtures/mrs";
+export { createDispatchHandlers, dispatchHandlers } from "./handlers/dispatch";
+export type { DispatchHandlersOptions } from "./handlers/dispatch";
+export {
+  DISPATCH_MOCK_COMMENTS,
+  DISPATCH_MOCK_ITERATION_ID,
+  DISPATCH_MOCK_RAW_RESPONSE,
+} from "./fixtures/dispatch";
+export type { DispatchMockComment } from "./fixtures/dispatch";
 export {
   APPLIED_PATCH_FIXTURE,
   DISCARDED_COMMENT_FIXTURE,
