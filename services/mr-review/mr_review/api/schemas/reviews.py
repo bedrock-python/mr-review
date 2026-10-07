@@ -6,8 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from mr_review.core.reviews.entities import BriefConfig, Comment, IterationStage
+from mr_review.core.reviews.entities import BriefConfig, IterationStage
 from mr_review.core.reviews.sources import ReviewSource
+from mr_review.use_cases.reviews.dto import CommentPatchDTO
 
 
 class CreateReviewRequest(BaseModel):
@@ -70,7 +71,7 @@ def _reject_blank(value: str | None, field: str) -> str | None:
     return value
 
 
-class UpdateCommentRequest(BaseModel):
+class UpdateCommentRequest(CommentPatchDTO):
     """Partial update of one comment; omitted fields keep their current value.
 
     ``file`` and ``line`` tell an omitted field apart from an explicit ``null``:
@@ -78,12 +79,6 @@ class UpdateCommentRequest(BaseModel):
     goes too), ``"line": null`` keeps the file but drops the line.
     """
 
-    id: UUID
-    status: Literal["kept", "dismissed"] | None = None
-    body: str | None = None
-    severity: Literal["critical", "major", "minor", "suggestion"] | None = None
-    resolved: bool | None = None
-    file: str | None = None
     line: int | None = Field(default=None, ge=1)
 
     @field_validator("body")
@@ -101,29 +96,6 @@ class UpdateCommentRequest(BaseModel):
         if "file" in self.model_fields_set and self.file is None and self.line is not None:
             raise ValueError("line cannot be set when file is null")
         return self
-
-    def apply_to(self, comment: Comment) -> Comment:
-        """Return ``comment`` with this patch applied.
-
-        Raises ``ValueError`` when the result would carry a line without a file,
-        e.g. a ``line`` patch on a general comment.
-        """
-        updates: dict[str, object] = {
-            name: value
-            for name in ("status", "body", "severity", "resolved")
-            if (value := getattr(self, name)) is not None
-        }
-        touches_anchor = bool({"file", "line"} & self.model_fields_set)
-        if "file" in self.model_fields_set:
-            updates["file"] = self.file
-            if self.file is None:
-                updates["line"] = None
-        if "line" in self.model_fields_set:
-            updates["line"] = self.line
-        updated = comment.model_copy(update=updates)
-        if touches_anchor and updated.file is None and updated.line is not None:
-            raise ValueError(f"Comment {comment.id} is a general comment; set file together with line")
-        return updated
 
 
 class UpdateReviewRequest(BaseModel):

@@ -6,7 +6,9 @@ from uuid import uuid4
 import pytest
 from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationStage
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
+from mr_review.use_cases.reviews.dto import CommentPatchDTO
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
+from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
@@ -136,27 +138,54 @@ async def test__update_review__iteration_stage_provided__persists_new_stage() ->
     assert result.iterations[0].stage == IterationStage.polish
 
 
-async def test__update_review__iteration_comments_provided__persists_new_comments() -> None:
-    """UpdateReviewUseCase.execute replaces iteration comments when supplied."""
+async def test__update_review__comment_patches__merged_against_the_review_it_reads() -> None:
+    """Patches are resolved inside the use case, against the single read it persists from."""
     repo = AsyncMock()
-    iteration = make_iteration(comments=[])
+    patched, untouched = make_comment(body="old", severity="minor"), make_comment(body="keep")
+    iteration = make_iteration(comments=[patched, untouched])
     original = make_review(iterations=[iteration])
-    comment = make_comment(body="critical issue")
-    updated_iter = iteration.model_copy(update={"comments": [comment]})
-    updated = original.model_copy(update={"iterations": [updated_iter]})
     repo.get_by_id.return_value = original
-    repo.update.return_value = updated
+    repo.update.side_effect = lambda review: review
     use_case = UpdateReviewUseCase(repo)
 
     result = await use_case.execute(
         review_id=original.id,
         iteration_id=iteration.id,
-        iteration_comments=[comment],
+        comment_patches=[CommentPatchDTO(id=patched.id, body="new"), CommentPatchDTO(id=uuid4(), body="ghost")],
     )
 
+    repo.get_by_id.assert_awaited_once_with(original.id)
     repo.update.assert_awaited_once()
-    assert len(result.iterations[0].comments) == 1
-    assert result.iterations[0].comments[0].body == "critical issue"
+    assert [(c.body, c.severity) for c in result.iterations[0].comments] == [("new", "minor"), ("keep", "minor")]
+
+
+async def test__update_review__invalid_comment_patch__raises_and_writes_nothing() -> None:
+    """A patch that would leave a line on a general comment fails the whole update."""
+    repo = AsyncMock()
+    general = make_comment(file=None, line=None)
+    iteration = make_iteration(comments=[general])
+    repo.get_by_id.return_value = make_review(iterations=[iteration])
+
+    with pytest.raises(InvalidCommentPatchError):
+        await UpdateReviewUseCase(repo).execute(
+            review_id=uuid4(),
+            iteration_id=iteration.id,
+            comment_patches=[CommentPatchDTO(id=general.id, line=4)],
+        )
+    repo.update.assert_not_awaited()
+
+
+async def test__update_review__comment_patches_for_unknown_iteration__raises_value_error() -> None:
+    """Patching an iteration the review does not have is a not-found error."""
+    repo = AsyncMock()
+    repo.get_by_id.return_value = make_review()
+    missing = uuid4()
+
+    with pytest.raises(ValueError, match=str(missing)):
+        await UpdateReviewUseCase(repo).execute(
+            review_id=uuid4(), iteration_id=missing, comment_patches=[CommentPatchDTO(id=uuid4(), body="x")]
+        )
+    repo.update.assert_not_awaited()
 
 
 async def test__update_review__review_not_found__raises_value_error() -> None:

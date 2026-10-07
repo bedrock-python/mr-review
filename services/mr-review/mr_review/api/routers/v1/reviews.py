@@ -38,7 +38,7 @@ from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCa
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
-from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
+from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
@@ -146,39 +146,17 @@ async def update_review(
     review_id: UUID,
     body: UpdateReviewRequest,
     use_case: FromDishka[UpdateReviewUseCase],
-    get_use_case: FromDishka[GetReviewUseCase],
 ) -> ReviewResponse:
-    try:
-        current = await get_use_case.execute(review_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    # Resolve iteration comment patches against the iteration's existing comments
-    iteration_comments: list[Comment] | None = None
-    if body.iteration_comments is not None and body.iteration_id is not None:
-        target_iteration = next((it for it in current.iterations if it.id == body.iteration_id), None)
-        if target_iteration is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Iteration {body.iteration_id} not found",
-            )
-        update_map = {u.id: u for u in body.iteration_comments}
-        try:
-            iteration_comments = [
-                patch.apply_to(c) if (patch := update_map.get(c.id)) is not None else c
-                for c in target_iteration.comments
-            ]
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-
     try:
         review = await use_case.execute(
             review_id=review_id,
             brief_config=body.brief_config,
             iteration_id=body.iteration_id,
             iteration_stage=body.iteration_stage,
-            iteration_comments=iteration_comments,
+            comment_patches=body.iteration_comments,
         )
+    except InvalidCommentPatchError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

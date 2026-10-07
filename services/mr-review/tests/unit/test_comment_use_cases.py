@@ -8,7 +8,13 @@ import pytest
 from mr_review.core.reviews.entities import IterationStage, Review
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
-from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
+from mr_review.use_cases.reviews.dto import CommentPatchDTO
+from mr_review.use_cases.reviews.iteration_comments import (
+    IterationLockedError,
+    append_comment,
+    patch_comments,
+    remove_comment,
+)
 
 from tests.factories.entities import make_comment, make_iteration, make_review
 
@@ -165,3 +171,35 @@ async def test__delete_comment__posted_iteration__raises_locked() -> None:
     with pytest.raises(IterationLockedError):
         await DeleteCommentUseCase(repo).execute(review_id=review.id, iteration_id=iteration.id, comment_id=comment.id)
     repo.update.assert_not_awaited()
+
+
+def test__pure_changes__leave_the_input_review_untouched() -> None:
+    """append/remove/patch return a new review; the one they were given is not mutated."""
+    kept = make_comment(body="kept")
+    iteration = make_iteration(stage=IterationStage.polish, comments=[kept])
+    review = make_review(iterations=[iteration])
+    added = make_comment(body="added")
+
+    appended = append_comment(review, iteration.id, added)
+    patched = patch_comments(appended, iteration.id, [CommentPatchDTO(id=kept.id, status="dismissed")])
+    removed = remove_comment(patched, iteration.id, added.id)
+
+    assert [c.body for c in review.iterations[0].comments] == ["kept"]
+    assert [c.body for c in appended.iterations[0].comments] == ["kept", "added"]
+    assert [(c.body, c.status) for c in removed.iterations[0].comments] == [("kept", "dismissed")]
+
+
+def test__pure_changes__posted_iteration__refuse_add_and_remove_but_allow_patches() -> None:
+    """Adding or removing on a posted iteration is locked; editing stays allowed, as before."""
+    comment = make_comment()
+    iteration = make_iteration(
+        stage=IterationStage.post, completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc), comments=[comment]
+    )
+    review = make_review(iterations=[iteration])
+
+    with pytest.raises(IterationLockedError):
+        append_comment(review, iteration.id, make_comment())
+    with pytest.raises(IterationLockedError):
+        remove_comment(review, iteration.id, comment.id)
+    patched = patch_comments(review, iteration.id, [CommentPatchDTO(id=comment.id, body="edited")])
+    assert patched.iterations[0].comments[0].body == "edited"

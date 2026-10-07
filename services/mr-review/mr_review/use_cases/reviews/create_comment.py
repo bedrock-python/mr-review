@@ -4,12 +4,8 @@ from uuid import UUID, uuid4
 
 from mr_review.core.reviews.entities import Comment, Review
 from mr_review.core.reviews.repositories import ReviewRepository
-from mr_review.use_cases.reviews.iteration_comments import (
-    CommentSeverity,
-    ensure_iteration_editable,
-    find_iteration_index,
-    replace_iteration,
-)
+from mr_review.use_cases.reviews._review_change import apply_review_change
+from mr_review.use_cases.reviews.iteration_comments import CommentSeverity, append_comment
 
 
 class CreateCommentUseCase:
@@ -32,14 +28,6 @@ class CreateCommentUseCase:
         Raises ``ValueError`` for an unknown review or iteration and
         ``IterationLockedError`` when the iteration was already posted.
         """
-        review = await self._repo.get_by_id(review_id)
-        if review is None:
-            raise ValueError(f"Review {review_id} not found")
-
-        index = find_iteration_index(review, iteration_id)
-        iteration = review.iterations[index]
-        ensure_iteration_editable(iteration)
-
         comment = Comment(
             id=uuid4(),
             file=file,
@@ -48,5 +36,6 @@ class CreateCommentUseCase:
             severity=severity,
             body=body,
         )
-        updated_iteration = iteration.model_copy(update={"comments": [*iteration.comments, comment]})
-        return await self._repo.update(replace_iteration(review, index, updated_iteration))
+        return await apply_review_change(
+            self._repo, review_id, lambda review: append_comment(review, iteration_id, comment)
+        )
