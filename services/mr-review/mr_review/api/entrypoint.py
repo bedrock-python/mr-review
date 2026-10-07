@@ -1,6 +1,7 @@
 import json
 import os
-from contextlib import suppress
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 from dishka.integrations.fastapi import setup_dishka
@@ -29,6 +30,13 @@ logger = structlog.get_logger(__name__)
 _settings_cache: list[Settings] = []
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    # Runs the APP-scope finalizers, e.g. closes the shared VCS HTTP client and its connection pool.
+    await app.state.dishka_container.close()
+
+
 def create_app() -> FastAPI:
     """Factory function for uvicorn to create the app instance."""
     settings = _settings_cache[0] if _settings_cache else Settings()
@@ -46,6 +54,7 @@ def create_app() -> FastAPI:
         docs_url="/system/docs",
         redoc_url="/system/redoc",
         redirect_slashes=False,
+        lifespan=_lifespan,
     )
 
     app.add_middleware(GZipMiddleware, minimum_size=1000)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator, AsyncIterator
 
-import httpx
 from dishka import Provider, Scope, provide
 
 from mr_review.core.ai.protocols import AIDispatcherFactory, AIFenceRegistry
@@ -17,7 +16,6 @@ from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
 from mr_review.infra.repositories.host import FileHostRepository
 from mr_review.infra.repositories.review import FileReviewRepository
 from mr_review.infra.vcs.cache import VCSCache
-from mr_review.infra.vcs.factory import get_cached_provider
 from mr_review.use_cases.ai_providers.create_ai_provider import CreateAIProviderUseCase
 from mr_review.use_cases.ai_providers.delete_ai_provider import DeleteAIProviderUseCase
 from mr_review.use_cases.ai_providers.list_ai_providers import ListAIProvidersUseCase
@@ -133,11 +131,11 @@ async def _model_lister(ai_provider: AIProviderEntity) -> list[str]:
     return await ai.list_models()
 
 
-def _make_vcs_factory(vcs_client: httpx.AsyncClient, vcs_cache: VCSCache) -> VCSProviderFactory:
-    """Return a VCSProviderFactory closed over the current request's client and app-scoped cache."""
+def _make_vcs_factory(vcs_cache: VCSCache) -> VCSProviderFactory:
+    """Return a VCSProviderFactory backed by the app-scoped provider registry."""
 
     def factory(host: Host) -> VCSProvider:
-        return get_cached_provider(host, vcs_client, vcs_cache)
+        return vcs_cache.get(host)
 
     return factory
 
@@ -168,49 +166,36 @@ class UseCaseProvider(Provider):
         self,
         repo: FileHostRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
     ) -> CheckConnectionUseCase:
-        return CheckConnectionUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+        return CheckConnectionUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
     def get_toggle_favourite_repo_use_case(self, repo: FileHostRepository) -> ToggleFavouriteRepoUseCase:
         return ToggleFavouriteRepoUseCase(repo)
 
     @provide
-    def get_add_repo_by_url_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> AddRepoByUrlUseCase:
-        return AddRepoByUrlUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_add_repo_by_url_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> AddRepoByUrlUseCase:
+        return AddRepoByUrlUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
-    def get_list_repos_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> ListReposUseCase:
-        return ListReposUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_list_repos_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> ListReposUseCase:
+        return ListReposUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
-    def get_list_mrs_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> ListMRsUseCase:
-        return ListMRsUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_list_mrs_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> ListMRsUseCase:
+        return ListMRsUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
-    def get_get_mr_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> GetMRUseCase:
-        return GetMRUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_get_mr_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> GetMRUseCase:
+        return GetMRUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
-    def get_get_mr_diff_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> GetMRDiffUseCase:
-        return GetMRDiffUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_get_mr_diff_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> GetMRDiffUseCase:
+        return GetMRDiffUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
-    def get_list_inbox_mrs_use_case(
-        self, repo: FileHostRepository, vcs_cache: VCSCache, vcs_client: httpx.AsyncClient
-    ) -> ListInboxMRsUseCase:
-        return ListInboxMRsUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_client, vcs_cache))
+    def get_list_inbox_mrs_use_case(self, repo: FileHostRepository, vcs_cache: VCSCache) -> ListInboxMRsUseCase:
+        return ListInboxMRsUseCase(host_repo=repo, vcs_factory=_make_vcs_factory(vcs_cache))
 
     @provide
     def get_create_review_use_case(self, repo: FileReviewRepository) -> CreateReviewUseCase:
@@ -254,12 +239,11 @@ class UseCaseProvider(Provider):
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
     ) -> GetReviewDiffUseCase:
         return GetReviewDiffUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
-            vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
+            vcs_factory=_make_vcs_factory(vcs_cache),
         )
 
     @provide
@@ -268,12 +252,11 @@ class UseCaseProvider(Provider):
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
     ) -> GetReviewContextUseCase:
         return GetReviewContextUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
-            vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
+            vcs_factory=_make_vcs_factory(vcs_cache),
         )
 
     @provide
@@ -282,12 +265,11 @@ class UseCaseProvider(Provider):
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
     ) -> GetReviewPromptUseCase:
         return GetReviewPromptUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
-            vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
+            vcs_factory=_make_vcs_factory(vcs_cache),
         )
 
     @provide
@@ -297,14 +279,13 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
         fence_registry: AIFenceRegistry,
     ) -> DispatchReviewUseCase:
         return DispatchReviewUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
-            vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
+            vcs_factory=_make_vcs_factory(vcs_cache),
             ai_dispatcher_factory=_make_ai_dispatcher_factory(fence_registry),
         )
 
@@ -318,12 +299,11 @@ class UseCaseProvider(Provider):
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
-        vcs_client: httpx.AsyncClient,
     ) -> PostReviewUseCase:
         return PostReviewUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
-            vcs_factory=_make_vcs_factory(vcs_client, vcs_cache),
+            vcs_factory=_make_vcs_factory(vcs_cache),
         )
 
     @provide

@@ -1,0 +1,174 @@
+"""TTLCache (LRU cap, expiry, single-flight, no error caching), CachedVCSProvider, VCSCache registry."""
+
+from __future__ import annotations
+
+import asyncio
+from unittest.mock import AsyncMock
+
+import httpx
+import pytest
+from mr_review.infra.vcs.cache import CachedVCSProvider, TTLCache, VCSCache
+
+from tests.factories.entities import make_host
+
+pytestmark = pytest.mark.unit
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class _Loader:
+    """Counts calls; optionally blocks until released so concurrent callers overlap."""
+
+    def __init__(self, value: object = "value", error: Exception | None = None) -> None:
+        self.calls = 0
+        self.value = value
+        self.error = error
+        self.release = asyncio.Event()
+        self.release.set()
+
+    async def __call__(self) -> object:
+        self.calls += 1
+        await self.release.wait()
+        if self.error is not None:
+            raise self.error
+        return self.value
+
+
+async def test__ttl_cache__hit__does_not_reload() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    loader = _Loader()
+
+    assert await cache.get_or_load("k", loader) == "value"
+    assert await cache.get_or_load("k", loader) == "value"
+
+    assert loader.calls == 1
+
+
+async def test__ttl_cache__entry_expires_after_ttl() -> None:
+    clock = _Clock()
+    cache = TTLCache(ttl=60, max_entries=10, clock=clock)
+    loader = _Loader()
+    await cache.get_or_load("k", loader)
+
+    clock.now += 59
+    await cache.get_or_load("k", loader)
+    assert loader.calls == 1
+
+    clock.now += 1
+    await cache.get_or_load("k", loader)
+    assert loader.calls == 2
+
+
+async def test__ttl_cache__over_capacity__evicts_least_recently_used() -> None:
+    cache = TTLCache(ttl=60, max_entries=2)
+    loaders = {key: _Loader(value=key) for key in ("a", "b", "c")}
+    await cache.get_or_load("a", loaders["a"])
+    await cache.get_or_load("b", loaders["b"])
+    await cache.get_or_load("a", loaders["a"])  # "a" is now the most recently used
+
+    await cache.get_or_load("c", loaders["c"])
+
+    assert len(cache) == 2
+    await cache.get_or_load("a", loaders["a"])
+    assert loaders["a"].calls == 1
+    await cache.get_or_load("b", loaders["b"])
+    assert loaders["b"].calls == 2
+
+
+async def test__ttl_cache__expired_entries__are_swept_on_a_later_write() -> None:
+    clock = _Clock()
+    cache = TTLCache(ttl=60, max_entries=100, clock=clock)
+    for key in ("a", "b", "c"):
+        await cache.get_or_load(key, _Loader())
+    assert len(cache) == 3
+
+    clock.now += 61
+    await cache.get_or_load("d", _Loader())
+
+    assert len(cache) == 1
+
+
+async def test__ttl_cache__concurrent_misses__share_one_load() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    loader = _Loader()
+    loader.release.clear()
+
+    waiters = [asyncio.create_task(cache.get_or_load("k", loader)) for _ in range(5)]
+    await asyncio.sleep(0)
+    loader.release.set()
+    results = await asyncio.gather(*waiters)
+
+    assert results == ["value"] * 5
+    assert loader.calls == 1
+
+
+async def test__ttl_cache__failed_load__is_shared_by_waiters_and_not_cached() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    loader = _Loader(error=RuntimeError("upstream 502"))
+    loader.release.clear()
+
+    waiters = [asyncio.create_task(cache.get_or_load("k", loader)) for _ in range(3)]
+    await asyncio.sleep(0)
+    loader.release.set()
+    results = await asyncio.gather(*waiters, return_exceptions=True)
+
+    assert all(isinstance(r, RuntimeError) for r in results)
+    assert loader.calls == 1
+    assert len(cache) == 0
+
+    loader.error = None
+    assert await cache.get_or_load("k", loader) == "value"
+    assert loader.calls == 2
+
+
+async def test__ttl_cache__cancelled_waiter__does_not_cancel_the_shared_load() -> None:
+    cache = TTLCache(ttl=60, max_entries=10)
+    loader = _Loader()
+    loader.release.clear()
+
+    first = asyncio.create_task(cache.get_or_load("k", loader))
+    second = asyncio.create_task(cache.get_or_load("k", loader))
+    await asyncio.sleep(0)
+    first.cancel()
+    await asyncio.sleep(0)
+    loader.release.set()
+
+    assert await second == "value"
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    assert loader.calls == 1
+    assert len(cache) == 1
+
+
+async def test__cached_provider__writes_bypass_the_cache() -> None:
+    inner = AsyncMock()
+    provider = CachedVCSProvider(inner)
+
+    await provider.post_general_note("g/r", 1, "a")
+    await provider.post_general_note("g/r", 1, "a")
+
+    assert inner.post_general_note.await_count == 2
+
+
+async def test__vcs_cache__same_host__one_provider_until_its_credentials_change() -> None:
+    async with httpx.AsyncClient() as client:
+        registry = VCSCache(client=client)
+        host = make_host(type="github", token="one")
+
+        first = registry.get(host)
+        assert registry.get(host) is first
+        assert registry.get(host.model_copy(update={"name": "renamed"})) is first
+
+        rotated = registry.get(make_host(id=host.id, type="github", token="two"))
+        assert rotated is not first
+        moved = registry.get(make_host(id=host.id, type="github", token="two", base_url="https://ghe.example.com"))
+        assert moved is not rotated
+
+        registry.invalidate(host.id)
+        assert registry.get(host) is not first

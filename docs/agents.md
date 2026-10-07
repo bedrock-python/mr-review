@@ -296,6 +296,15 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
 | `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file |
 
+### VCS connections and caching
+
+Every VCS call goes through one pooled HTTP client that lives as long as the process, with
+keep-alive connections reused across requests and hosts; `MR_REVIEW__VCS_TIMEOUT` is its timeout.
+Read-only responses are cached in memory per host: repository lists for 15 minutes, everything
+else — repository searches, merge requests, diffs, files — for 5 minutes, in bounded
+least-recently-used stores. Concurrent identical requests share one call to the host, and errors
+are never cached. Changing a host's token, URL or type starts it on a fresh cache.
+
 ### What goes into the prompt
 
 The `BriefConfig` fields, with the caps the collectors enforce:
