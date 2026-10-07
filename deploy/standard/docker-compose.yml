@@ -9,7 +9,6 @@ services:
       MR_REVIEW__SERVER__PORT: "8000"
       MR_REVIEW__DATA_DIR: "/data"
       MR_REVIEW__HOST_DATA_DIR: "${DATA_DIR:-./data}"
-      MR_REVIEW__CORS__ALLOW_ORIGINS: '["http://localhost:${WEB_PORT:-17242}"]'
       MR_REVIEW__LOGGING__USE_JSON: "true"
     volumes:
       - ${DATA_DIR:-./data}:/data
@@ -28,7 +27,10 @@ services:
     ports:
       - "${WEB_PORT:-17242}:8080"
     environment:
-      API_BASE_URL: "http://localhost:${API_PORT:-17241}"
+      # The UI calls /api/ on its own origin and nginx in this container
+      # forwards it to the api service, so the UI works from any hostname or
+      # address and the API needs no CORS settings.
+      API_UPSTREAM: "http://api:8000"
       APP_ENV: "production"
     networks:
       - mr-review
