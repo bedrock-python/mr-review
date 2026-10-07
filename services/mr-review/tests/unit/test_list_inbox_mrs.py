@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from mr_review.core.mrs.entities import MR, Repo
-from mr_review.use_cases.mrs.list_inbox_mrs import INBOX_REPO_LIMIT, InboxMR, ListInboxMRsUseCase
+from mr_review.core.mrs.entities import MR, InboxMR, InboxScope, MRStateFilter, Repo
+from mr_review.core.pagination import Page
+from mr_review.use_cases.mrs.list_inbox_mrs import INBOX_FETCH_CONCURRENCY, INBOX_REPO_BATCH, ListInboxMRsUseCase
 
 from tests.factories.entities import make_host
 
@@ -15,7 +18,7 @@ pytestmark = pytest.mark.unit
 _NOW = datetime.now(timezone.utc)
 
 
-def _make_mr(iid: int = 1) -> MR:
+def _make_mr(iid: int = 1, age_minutes: int = 0) -> MR:
     return MR(
         iid=iid,
         title=f"MR {iid}",
@@ -25,137 +28,136 @@ def _make_mr(iid: int = 1) -> MR:
         target_branch="main",
         status="opened",
         draft=False,
-        additions=1,
-        deletions=0,
-        file_count=1,
         created_at=_NOW,
-        updated_at=_NOW,
+        updated_at=_NOW - timedelta(minutes=age_minutes),
     )
 
 
-def _make_repo(path: str = "group/repo") -> Repo:
-    return Repo(id="1", path=path, name=path)
+def _repos(paths: list[str], *, has_more: bool = False, page: int = 1) -> Page[Repo]:
+    return Page(
+        items=[Repo(id=p, path=p, name=p) for p in paths], page=page, per_page=INBOX_REPO_BATCH, has_more=has_more
+    )
 
 
-def _make_use_case(host_repo: AsyncMock, provider: AsyncMock) -> ListInboxMRsUseCase:
+def _mrs(mrs: list[MR]) -> Page[MR]:
+    return Page(items=mrs, page=1, per_page=30, has_more=False)
+
+
+def _make_use_case(provider: AsyncMock, favourites: list[str] | None = None) -> ListInboxMRsUseCase:
+    host_repo = AsyncMock()
+    host_repo.get_by_id.return_value = make_host(favourite_repos=favourites or [])
     return ListInboxMRsUseCase(host_repo=host_repo, vcs_factory=lambda _host: provider)
 
 
 async def test__list_inbox_mrs__host_not_found__raises_value_error() -> None:
-    """ValueError is raised immediately when the host does not exist."""
     host_repo = AsyncMock()
     host_repo.get_by_id.return_value = None
-    use_case = _make_use_case(host_repo, AsyncMock())
+    use_case = ListInboxMRsUseCase(host_repo=host_repo, vcs_factory=lambda _host: AsyncMock())
     missing_id = uuid4()
 
     with pytest.raises(ValueError, match=str(missing_id)):
         await use_case.execute(missing_id)
 
 
-async def test__list_inbox_mrs__no_repos__returns_empty_list() -> None:
-    """Returns empty list when the host has no repos."""
-    host_repo = AsyncMock()
-    host_repo.get_by_id.return_value = make_host()
+async def test__list_inbox_mrs__all__no_repos__returns_empty_page() -> None:
+    provider = AsyncMock()
+    provider.list_repos.return_value = _repos([])
+
+    result = await _make_use_case(provider).execute(host_id=uuid4())
+
+    assert (result.items, result.has_more) == ([], False)
+    provider.list_mrs.assert_not_called()
+
+
+async def test__list_inbox_mrs__all__fetches_one_repo_batch_and_first_mr_page_of_each() -> None:
+    provider = AsyncMock()
+    provider.list_repos.return_value = _repos(["g/r1", "g/r2"], has_more=True, page=2)
+
+    def list_mrs(repo_path: str, state: MRStateFilter, page: int, per_page: int) -> Page[MR]:
+        return _mrs([_make_mr(iid=1, age_minutes=5)] if repo_path == "g/r1" else [_make_mr(iid=2, age_minutes=1)])
+
+    provider.list_mrs.side_effect = list_mrs
+
+    result = await _make_use_case(provider).execute(host_id=uuid4(), page=2, per_page=7)
+
+    provider.list_repos.assert_awaited_once_with(page=2, per_page=INBOX_REPO_BATCH)
+    assert {call.kwargs["per_page"] for call in provider.list_mrs.await_args_list} == {7}
+    assert {call.kwargs["page"] for call in provider.list_mrs.await_args_list} == {1}
+    # Newest update first, across repositories.
+    assert [(item.repo_path, item.mr.iid) for item in result.items] == [("g/r2", 2), ("g/r1", 1)]
+    assert (result.page, result.per_page, result.has_more) == (2, 7, True)
+
+
+async def test__list_inbox_mrs__all__page_one_includes_unlisted_favourites_once() -> None:
+    provider = AsyncMock()
+    provider.list_repos.return_value = _repos(["g/r1", "pinned/listed"])
+    provider.list_mrs.return_value = _mrs([])
+
+    await _make_use_case(provider, favourites=["pinned/extra", "pinned/listed"]).execute(host_id=uuid4())
+
+    queried = [call.kwargs["repo_path"] for call in provider.list_mrs.await_args_list]
+    assert sorted(queried) == ["g/r1", "pinned/extra", "pinned/listed"]
+
+
+async def test__list_inbox_mrs__all__later_pages_skip_favourites() -> None:
+    provider = AsyncMock()
+    provider.list_repos.return_value = _repos(["g/r9", "pinned/listed"], page=2)
+    provider.list_mrs.return_value = _mrs([])
+
+    await _make_use_case(provider, favourites=["pinned/listed", "pinned/extra"]).execute(host_id=uuid4(), page=2)
+
+    assert [call.kwargs["repo_path"] for call in provider.list_mrs.await_args_list] == ["g/r9"]
+
+
+async def test__list_inbox_mrs__all__concurrency_is_bounded() -> None:
+    in_flight = 0
+    peak = 0
+
+    async def list_mrs(**_: object) -> Page[MR]:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return _mrs([])
 
     provider = AsyncMock()
-    provider.list_repos.return_value = []
-    use_case = _make_use_case(host_repo, provider)
-    result = await use_case.execute(host_id=make_host().id)
+    provider.list_repos.return_value = _repos([f"g/r{i}" for i in range(INBOX_REPO_BATCH)])
+    provider.list_mrs.side_effect = list_mrs
 
-    assert result == []
+    await _make_use_case(provider).execute(host_id=uuid4())
 
-
-async def test__list_inbox_mrs__repos_with_mrs__returns_all_inbox_mrs() -> None:
-    """Returns one InboxMR per open MR found across all repos."""
-    host = make_host()
-    host_repo = AsyncMock()
-    host_repo.get_by_id.return_value = host
-
-    repo1 = _make_repo("group/repo1")
-    repo2 = _make_repo("group/repo2")
-    mr1 = _make_mr(iid=1)
-    mr2 = _make_mr(iid=2)
-
-    provider = AsyncMock()
-    provider.list_repos.return_value = [repo1, repo2]
-    provider.list_mrs.side_effect = lambda repo_path, state: [mr1] if repo_path == repo1.path else [mr2]
-    use_case = _make_use_case(host_repo, provider)
-    result = await use_case.execute(host_id=host.id)
-
-    assert len(result) == 2
-    paths = {item.repo_path for item in result}
-    assert paths == {repo1.path, repo2.path}
-    assert all(isinstance(item, InboxMR) for item in result)
+    assert provider.list_mrs.await_count == INBOX_REPO_BATCH
+    assert peak == INBOX_FETCH_CONCURRENCY
 
 
-async def test__list_inbox_mrs__fetch_fails_for_repo__returns_empty_for_that_repo() -> None:
-    """Exceptions in fetch_mrs for one repo are swallowed; other repos succeed."""
-    host = make_host()
-    host_repo = AsyncMock()
-    host_repo.get_by_id.return_value = host
-
-    repo1 = _make_repo("group/ok")
-    repo2 = _make_repo("group/broken")
-    mr_ok = _make_mr(iid=1)
-
-    def _list_mrs_side_effect(repo_path: str, state: str) -> list[MR]:
-        if repo_path == repo2.path:
+async def test__list_inbox_mrs__all__failing_repo__is_skipped_and_logged(caplog: pytest.LogCaptureFixture) -> None:
+    def list_mrs(repo_path: str, **_: object) -> Page[MR]:
+        if repo_path == "g/broken":
             raise ConnectionError("network down")
-        return [mr_ok]
+        return _mrs([_make_mr()])
 
     provider = AsyncMock()
-    provider.list_repos.return_value = [repo1, repo2]
-    provider.list_mrs.side_effect = _list_mrs_side_effect
-    use_case = _make_use_case(host_repo, provider)
-    result = await use_case.execute(host_id=host.id)
-
-    assert len(result) == 1
-    assert result[0].repo_path == repo1.path
-
-
-async def test__list_inbox_mrs__fetch_fails_for_repo__logs_warning(caplog: pytest.LogCaptureFixture) -> None:
-    """A warning is logged when fetch_mrs raises an exception."""
-    import logging
-
-    host = make_host()
-    host_repo = AsyncMock()
-    host_repo.get_by_id.return_value = host
-
-    repo = _make_repo("group/broken")
-
-    provider = AsyncMock()
-    provider.list_repos.return_value = [repo]
-    provider.list_mrs.side_effect = RuntimeError("boom")
-    use_case = _make_use_case(host_repo, provider)
+    provider.list_repos.return_value = _repos(["g/ok", "g/broken"])
+    provider.list_mrs.side_effect = list_mrs
 
     with caplog.at_level(logging.WARNING, logger="mr_review.use_cases.mrs.list_inbox_mrs"):
-        await use_case.execute(host_id=host.id)
+        result = await _make_use_case(provider).execute(host_id=uuid4())
 
-    assert any("group/broken" in record.message for record in caplog.records)
+    assert [item.repo_path for item in result.items] == ["g/ok"]
+    assert any("g/broken" in record.message for record in caplog.records)
 
 
-async def test__list_inbox_mrs__more_repos_than_limit__only_queries_top_repos() -> None:
-    """At most INBOX_REPO_LIMIT repos are queried for MRs."""
-    host = make_host()
-    host_repo = AsyncMock()
-    host_repo.get_by_id.return_value = host
-
-    repos = [_make_repo(f"group/repo{i}") for i in range(INBOX_REPO_LIMIT + 5)]
-
+@pytest.mark.parametrize("scope", ["authored", "assigned", "review_requested"])
+async def test__list_inbox_mrs__personal_scope__delegates_to_host_listing(scope: InboxScope) -> None:
+    older = InboxMR(mr=_make_mr(iid=1, age_minutes=10), repo_path="a/b")
+    newer = InboxMR(mr=_make_mr(iid=2, age_minutes=1), repo_path="c/d")
     provider = AsyncMock()
-    provider.list_repos.return_value = repos
-    provider.list_mrs.return_value = []
-    use_case = _make_use_case(host_repo, provider)
-    await use_case.execute(host_id=host.id)
+    provider.list_my_mrs.return_value = Page(items=[older, newer], page=3, per_page=5, has_more=True)
 
-    assert provider.list_mrs.await_count == INBOX_REPO_LIMIT
+    result = await _make_use_case(provider).execute(host_id=uuid4(), scope=scope, page=3, per_page=5)
 
-
-async def test__list_inbox_mrs__inbox_mr_is_pydantic_model() -> None:
-    """InboxMR is a Pydantic BaseModel with mr and repo_path fields."""
-    mr = _make_mr()
-    repo = _make_repo()
-    item = InboxMR(mr=mr, repo_path=repo.path)
-
-    assert item.mr == mr
-    assert item.repo_path == repo.path
+    provider.list_my_mrs.assert_awaited_once_with(scope, page=3, per_page=5)
+    provider.list_repos.assert_not_called()
+    assert [item.mr.iid for item in result.items] == [2, 1]
+    assert (result.page, result.per_page, result.has_more) == (3, 5, True)

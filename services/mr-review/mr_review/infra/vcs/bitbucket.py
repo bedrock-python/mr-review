@@ -3,14 +3,27 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import quote
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
 
 _BITBUCKET_API = "https://api.bitbucket.org/2.0"
+
+# Bitbucket's documented ``pagelen`` ceilings; a larger per_page is clamped to them, so such a page is shorter.
+_REPOS_MAX_PAGELEN = 100
+_PULLREQUESTS_MAX_PAGELEN = 50
+
+_STATE_FILTER: dict[MRStateFilter, list[str]] = {
+    "opened": ["OPEN"],
+    "merged": ["MERGED"],
+    "closed": ["DECLINED", "SUPERSEDED"],
+    "all": ["OPEN", "MERGED", "DECLINED", "SUPERSEDED"],
+}
 
 
 def _parse_datetime(value: str) -> datetime:
@@ -52,6 +65,9 @@ class BitbucketProvider:
             self._auth = None
             self._bearer = token
             self._username = ""
+        # Resolved once per provider (the provider lives as long as the host's token doesn't change).
+        self._user_uuid: str | None = None
+        self._user_lock = asyncio.Lock()
 
     def _build_headers(self) -> dict[str, str]:
         if self._auth is None:
@@ -73,6 +89,11 @@ class BitbucketProvider:
         )
         response.raise_for_status()
         return response.json()
+
+    async def _get_page(self, path: str, params: dict[str, Any], page: int) -> tuple[list[dict[str, Any]], bool]:
+        """One page of a paginated collection: its values and whether Bitbucket advertises a ``next`` page."""
+        data: dict[str, Any] = await self._get(path, params={**params, "page": page})
+        return list(data.get("values", [])), bool(data.get("next"))
 
     async def _get_paginated(
         self, url: str, params: dict[str, Any] | None = None, max_pages: int = 100
@@ -115,41 +136,73 @@ class BitbucketProvider:
             "email": "",  # Bitbucket requires separate /user/emails call
         }
 
-    async def list_repos(self, query: str | None = None) -> list[Repo]:
+    async def list_repos(
+        self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
+    ) -> Page[Repo]:
         workspace = self._username
         if not workspace:
-            return []
-        url = f"{self._api_url}/repositories/{workspace}"
-        params: dict[str, Any] = {"sort": "-updated_on", "pagelen": 100}
+            return Page(items=[], page=page, per_page=per_page, has_more=False)
+        params: dict[str, Any] = {"sort": "-updated_on", "pagelen": min(per_page, _REPOS_MAX_PAGELEN)}
         if query:
-            params["q"] = f'name ~ "{query}"'
-        items = await self._get_paginated(url, params=params)
-        return [
-            Repo(
-                id=str(item.get("uuid", item.get("slug", ""))),
-                path=str(item["full_name"]),
-                name=str(item["slug"]),
-                description=item.get("description") or None,
-            )
-            for item in items
-        ]
+            params["q"] = f"name ~ {_bbql_string(query)}"
+        items, has_more = await self._get_page(f"/repositories/{workspace}", params, page)
+        return Page(items=[_item_to_repo(item) for item in items], page=page, per_page=per_page, has_more=has_more)
 
     async def get_repo(self, repo_path: str) -> Repo:
         workspace, repo_slug = _split_repo_path(repo_path)
         data: dict[str, Any] = await self._get(f"/repositories/{workspace}/{repo_slug}")
-        return Repo(
-            id=str(data.get("uuid", data.get("slug", ""))),
-            path=str(data["full_name"]),
-            name=str(data["slug"]),
-            description=data.get("description") or None,
+        return _item_to_repo(data)
+
+    async def list_mrs(
+        self,
+        repo_path: str,
+        state: MRStateFilter = "opened",
+        page: int = 1,
+        per_page: int = DEFAULT_MRS_PER_PAGE,
+        query: str | None = None,
+    ) -> Page[MR]:
+        workspace, repo_slug = _split_repo_path(repo_path)
+        params: dict[str, Any] = {
+            "state": _STATE_FILTER[state],
+            "sort": "-updated_on",
+            "pagelen": min(per_page, _PULLREQUESTS_MAX_PAGELEN),
+        }
+        if query:
+            params["q"] = f"title ~ {_bbql_string(query)}"
+        items, has_more = await self._get_page(f"/repositories/{workspace}/{repo_slug}/pullrequests", params, page)
+        return Page(items=[_pr_to_mr(item) for item in items], page=page, per_page=per_page, has_more=has_more)
+
+    async def list_my_mrs(
+        self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
+    ) -> Page[InboxMR]:
+        """Open PRs the token's user authored.
+
+        Bitbucket has no assignees, and no cross-repository listing of PRs awaiting a user's review,
+        so ``assigned`` and ``review_requested`` are always an empty page.
+        """
+        if scope != "authored":
+            return Page(items=[], page=page, per_page=per_page, has_more=False)
+        user = quote(await self._current_user_uuid(), safe="")
+        params: dict[str, Any] = {
+            "state": "OPEN",
+            "sort": "-updated_on",
+            "pagelen": min(per_page, _PULLREQUESTS_MAX_PAGELEN),
+        }
+        items, has_more = await self._get_page(f"/pullrequests/{user}", params, page)
+        return Page(
+            items=[InboxMR(mr=_pr_to_mr(item), repo_path=_pr_repo_path(item)) for item in items],
+            page=page,
+            per_page=per_page,
+            has_more=has_more,
         )
 
-    async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
-        workspace, repo_slug = _split_repo_path(repo_path)
-        bb_state = _map_state_to_bb(state)
-        url = f"{self._api_url}/repositories/{workspace}/{repo_slug}/pullrequests"
-        items = await self._get_paginated(url, params={"state": bb_state, "pagelen": 50})
-        return [_pr_to_mr(item) for item in items]
+    async def _current_user_uuid(self) -> str:
+        if self._user_uuid is None:
+            async with self._user_lock:
+                if self._user_uuid is None:
+                    data: dict[str, Any] = await self._get("/user")
+                    self._user_uuid = str(data.get("uuid") or data.get("account_id") or self._username)
+        return self._user_uuid
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
         workspace, repo_slug = _split_repo_path(repo_path)
@@ -290,25 +343,43 @@ class BitbucketProvider:
         return result
 
 
-def _map_state_to_bb(state: str) -> str:
-    mapping = {"opened": "OPEN", "merged": "MERGED", "closed": "DECLINED"}
-    return mapping.get(state, "OPEN")
+def _bbql_string(value: str) -> str:
+    """Quote a value for Bitbucket's query language."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _item_to_repo(item: dict[str, Any]) -> Repo:
+    return Repo(
+        id=str(item.get("uuid", item.get("slug", ""))),
+        path=str(item["full_name"]),
+        name=str(item["slug"]),
+        description=item.get("description") or None,
+    )
+
+
+def _pr_repo_path(item: dict[str, Any]) -> str:
+    repository: dict[str, Any] = (item.get("destination") or {}).get("repository") or {}
+    return str(repository.get("full_name", ""))
+
+
+def _status(bb_state: str) -> Literal["opened", "merged", "closed"]:
+    if bb_state == "MERGED":
+        return "merged"
+    if bb_state == "OPEN":
+        return "opened"
+    return "closed"
 
 
 def _pr_to_mr(
     item: dict[str, Any],
     *,
-    additions: int = 0,
-    deletions: int = 0,
-    file_count: int = 0,
+    additions: int | None = None,
+    deletions: int | None = None,
+    file_count: int | None = None,
 ) -> MR:
-    bb_state = str(item.get("state", "DECLINED"))
-    if bb_state == "MERGED":
-        status = "merged"
-    elif bb_state == "OPEN":
-        status = "opened"
-    else:
-        status = "closed"
+    """Map a pull request; Bitbucket only reports diff stats through the separate diffstat endpoint."""
+    status = _status(str(item.get("state", "DECLINED")))
 
     source: dict[str, Any] = item.get("source", {})
     destination: dict[str, Any] = item.get("destination", {})

@@ -55,9 +55,46 @@ A repository is identified by `owner/repo`. Only GitLab accepts more than two se
 (`group/subgroup/project`); for the other types a deeper path is rejected before any request
 is made.
 
-The repository list comes from what the token is a member of. To reach a repository outside
-that — a public one, say — paste its URL or `owner/repo` slug into **Add repository by URL**: it is
-resolved against the host, checked, and pinned as a favourite so it stays in the sidebar.
+The repository list comes from what the token is a member of, most recently active first, and
+is loaded a page at a time as you scroll. To reach a repository outside that — a public one, say —
+paste its URL or `owner/repo` slug into **Add repository by URL**: it is resolved against the host,
+checked, and pinned as a favourite so it stays at the top of the list.
+
+## Merge request lists and the inbox
+
+Merge request lists also load a page at a time, most recently updated first, and can be filtered
+by state (open, merged, closed or all) and searched by title. Each page is a single request to the
+host, so a repository with years of history opens as fast as a new one.
+
+What each host type offers:
+
+* **GitLab** — states and title search are answered by GitLab itself. List entries carry no file
+  count or pipeline status; opening the merge request shows them. GitLab reports no line counts.
+* **GitHub** — open and all pull requests come from the pulls API. Merged and closed ones, and title
+  searches, come from GitHub's issue search, which shows no branch names and allows 30 searches a
+  minute. Line counts appear once a pull request is opened.
+* **Gitea / Forgejo** — Gitea can only list open or closed pull requests, so merged and closed are
+  told apart, and titles searched, within each page as it arrives. A page can come back short, or
+  empty, while more remain; scrolling keeps loading.
+* **Bitbucket** — states and title search are answered by Bitbucket. Line counts appear once a pull
+  request is opened.
+
+The **inbox** has four views of open merge requests:
+
+| View | What it shows |
+|------|---------------|
+| **All** | Open merge requests across your repositories, ten repositories per page, most recently active repositories first; pinned favourites are included on the first page |
+| **Authored** | Ones you opened |
+| **Assigned** | Ones assigned to you |
+| **Review requested** | Ones waiting for your review |
+
+Authored, assigned and review-requested are asked of the host directly, across every repository
+the token can see. Bitbucket has no assignees and no list of pull requests awaiting a user's review,
+so those two views are always empty there. On GitHub and Gitea these three views come from issue
+search and show no branch names.
+
+Responses from the host are cached in memory for five minutes (repository lists for fifteen), so
+going back to a list you just saw does not call the host again.
 
 ## Verify a token
 

@@ -1,4 +1,4 @@
-"""TTLCache (LRU cap, expiry, single-flight, no error caching), CachedVCSProvider, VCSCache registry."""
+"""TTLCache (LRU cap, expiry, single-flight, no error caching), CachedVCSProvider keys, VCSCache registry."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from mr_review.core.mrs.entities import Repo
+from mr_review.core.pagination import Page
 from mr_review.infra.vcs.cache import CachedVCSProvider, TTLCache, VCSCache
 
 from tests.factories.entities import make_host
@@ -144,6 +146,41 @@ async def test__ttl_cache__cancelled_waiter__does_not_cancel_the_shared_load() -
         await first
     assert loader.calls == 1
     assert len(cache) == 1
+
+
+def _repo_page(page: int) -> Page[Repo]:
+    return Page(items=[Repo(id=str(page), path=f"g/r{page}", name="r")], page=page, per_page=1, has_more=True)
+
+
+async def test__cached_provider__list_keys_include_every_paging_argument() -> None:
+    inner = AsyncMock()
+    inner.list_repos.side_effect = lambda query, page, per_page: _repo_page(page)
+    inner.list_mrs.return_value = Page(items=[], page=1, per_page=30, has_more=False)
+    inner.list_my_mrs.return_value = Page(items=[], page=1, per_page=30, has_more=False)
+    provider = CachedVCSProvider(inner)
+
+    assert (await provider.list_repos(page=1, per_page=1)).page == 1
+    assert (await provider.list_repos(page=2, per_page=1)).page == 2
+    await provider.list_repos(page=2, per_page=1)
+    await provider.list_repos(query="x", page=2, per_page=1)
+    assert inner.list_repos.await_count == 3
+
+    for kwargs in (
+        {"state": "opened"},
+        {"state": "merged"},
+        {"state": "merged", "page": 2},
+        {"state": "merged", "page": 2, "per_page": 10},
+        {"state": "merged", "page": 2, "per_page": 10, "query": "fix"},
+        {"state": "merged", "page": 2, "per_page": 10, "query": "fix"},
+    ):
+        await provider.list_mrs("g/r", **kwargs)
+    assert inner.list_mrs.await_count == 5
+
+    await provider.list_my_mrs("authored")
+    await provider.list_my_mrs("assigned")
+    await provider.list_my_mrs("assigned", page=2)
+    await provider.list_my_mrs("assigned", page=2)
+    assert inner.list_my_mrs.await_count == 3
 
 
 async def test__cached_provider__writes_bypass_the_cache() -> None:

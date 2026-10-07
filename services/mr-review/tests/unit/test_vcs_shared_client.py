@@ -46,12 +46,12 @@ async def test__provider_from_finished_request__keeps_working_for_a_running_one(
         provider_a = (await request_a.get(VCSCache)).get(host)
         async with container() as request_b:
             provider_b = (await request_b.get(VCSCache)).get(host)
-            await provider_b.list_mrs("group/proj")
+            await provider_b.list_mrs("group/proj", page=1)
         # Request B is over. Request A carries on with the provider it already holds.
-        mrs = await provider_a.list_mrs("group/proj", state="merged")
+        page = await provider_a.list_mrs("group/proj", page=2)
 
     assert provider_a is provider_b
-    assert mrs == []
+    assert page.page == 2
     client = await container.get(httpx.AsyncClient)
     assert not client.is_closed
 
@@ -66,15 +66,15 @@ async def test__concurrent_requests_on_one_host__all_succeed_on_the_shared_clien
         name="GL", type_="gitlab", base_url="https://gitlab.example.com", token="secret"
     )
 
-    async def one_request(repo: int) -> int:
+    async def one_request(page: int) -> int:
         async with container() as request:
             use_case = await request.get(ListMRsUseCase)
-            await use_case.execute(host_id=host.id, repo_path=f"group/proj{repo}")
-            return repo
+            result = await use_case.execute(host_id=host.id, repo_path="group/proj", page=page)
+            return result.page
 
-    repos = await asyncio.gather(*[one_request(repo) for repo in range(1, 21)])
+    pages = await asyncio.gather(*[one_request(page) for page in range(1, 21)])
 
-    assert repos == list(range(1, 21))
+    assert pages == list(range(1, 21))
     assert len(gitlab.requests) == 20
     await container.close()
 

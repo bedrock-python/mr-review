@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
 
-from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 
 if TYPE_CHECKING:
     from mr_review.core.hosts.entities import Host
@@ -12,11 +13,30 @@ if TYPE_CHECKING:
 class VCSProvider(Protocol):
     async def test_connection(self) -> dict[str, str]: ...
 
-    async def list_repos(self, query: str | None = None) -> list[Repo]: ...
+    async def list_repos(
+        self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
+    ) -> Page[Repo]:
+        """One page of the repositories the token can see, most recently active first."""
+        ...
 
     async def get_repo(self, repo_path: str) -> Repo: ...
 
-    async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]: ...
+    async def list_mrs(
+        self,
+        repo_path: str,
+        state: MRStateFilter = "opened",
+        page: int = 1,
+        per_page: int = DEFAULT_MRS_PER_PAGE,
+        query: str | None = None,
+    ) -> Page[MR]:
+        """One page of a repository's MRs, most recently updated first; ``query`` searches titles."""
+        ...
+
+    async def list_my_mrs(
+        self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
+    ) -> Page[InboxMR]:
+        """One page of open MRs across repositories that the token's user authored, is assigned or reviews."""
+        ...
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR: ...
 

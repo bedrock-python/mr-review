@@ -11,22 +11,37 @@ from mr_review.api.schemas.mrs import (
     DiffFileResponse,
     DiffHunkResponse,
     DiffLineResponse,
+    InboxMRPageResponse,
     InboxMRResponse,
+    MRPageResponse,
     MRResponse,
+    RepoPageResponse,
     RepoResponse,
 )
-from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine, InboxMR, InboxScope, MRStateFilter, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, MAX_PER_PAGE
 from mr_review.use_cases.mrs.get_mr import GetMRUseCase
 from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
-from mr_review.use_cases.mrs.list_inbox_mrs import InboxMR, ListInboxMRsUseCase
+from mr_review.use_cases.mrs.list_inbox_mrs import ListInboxMRsUseCase
 from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
 
 router = APIRouter(prefix="/api/v1/hosts/{host_id}", tags=["repos"], route_class=DishkaRoute)
 
 
+def _is_rate_limited(response: httpx.Response) -> bool:
+    # GitHub answers an exhausted (search) quota with 403 and X-RateLimit-Remaining: 0, the others with 429.
+    return response.status_code == status.HTTP_429_TOO_MANY_REQUESTS or (
+        response.status_code == status.HTTP_403_FORBIDDEN and response.headers.get("x-ratelimit-remaining") == "0"
+    )
+
+
 def _handle_vcs_error(exc: httpx.HTTPStatusError) -> NoReturn:
     code = exc.response.status_code
+    if _is_rate_limited(exc.response):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="VCS rate limit reached — try again shortly"
+        ) from exc
     if code == 401:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="VCS authentication failed — check your token"
@@ -39,6 +54,19 @@ def _handle_vcs_error(exc: httpx.HTTPStatusError) -> NoReturn:
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=f"VCS returned {code}",
     ) from exc
+
+
+def _handle_vcs_unreachable(exc: httpx.RequestError) -> NoReturn:
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"VCS host unreachable ({type(exc).__name__})",
+    ) from exc
+
+
+def _normalize_query(q: str | None) -> str | None:
+    if q is None:
+        return None
+    return q.strip() or None
 
 
 def _repo_to_response(repo: Repo) -> RepoResponse:
@@ -111,35 +139,61 @@ def _diff_file_to_response(df: DiffFile) -> DiffFileResponse:
     )
 
 
-@router.get("/repos", response_model=list[RepoResponse])
+@router.get("/repos", response_model=RepoPageResponse)
 async def list_repos(
     host_id: UUID,
     use_case: FromDishka[ListReposUseCase],
-    q: str | None = Query(default=None),
-) -> list[RepoResponse]:
+    q: str | None = Query(default=None, description="Search repositories by name"),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=DEFAULT_REPOS_PER_PAGE, ge=1, le=MAX_PER_PAGE),
+) -> RepoPageResponse:
     try:
-        repos = await use_case.execute(host_id, query=q)
+        result = await use_case.execute(host_id, query=_normalize_query(q), page=page, per_page=per_page)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         _handle_vcs_error(exc)
-    return [_repo_to_response(r) for r in repos]
+    except httpx.RequestError as exc:
+        _handle_vcs_unreachable(exc)
+    return RepoPageResponse(
+        items=[_repo_to_response(r) for r in result.items],
+        page=result.page,
+        per_page=result.per_page,
+        has_more=result.has_more,
+    )
 
 
-@router.get("/repos/{repo_path:path}/mrs", response_model=list[MRResponse])
+@router.get("/repos/{repo_path:path}/mrs", response_model=MRPageResponse)
 async def list_mrs(
     host_id: UUID,
     repo_path: str,
     use_case: FromDishka[ListMRsUseCase],
-    state: str = Query(default="opened"),
-) -> list[MRResponse]:
+    state: MRStateFilter = Query(default="opened"),
+    q: str | None = Query(default=None, description="Search merge requests by title"),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=DEFAULT_MRS_PER_PAGE, ge=1, le=MAX_PER_PAGE),
+) -> MRPageResponse:
     try:
-        mrs = await use_case.execute(host_id=host_id, repo_path=repo_path, state=state)
+        result = await use_case.execute(
+            host_id=host_id,
+            repo_path=repo_path,
+            state=state,
+            page=page,
+            per_page=per_page,
+            query=_normalize_query(q),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         _handle_vcs_error(exc)
-    return [_mr_to_response(m) for m in mrs]
+    except httpx.RequestError as exc:
+        _handle_vcs_unreachable(exc)
+    return MRPageResponse(
+        items=[_mr_to_response(m) for m in result.items],
+        page=result.page,
+        per_page=result.per_page,
+        has_more=result.has_more,
+    )
 
 
 @router.get("/repos/{repo_path:path}/mrs/{mr_iid}", response_model=MRResponse)
@@ -155,6 +209,8 @@ async def get_mr(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         _handle_vcs_error(exc)
+    except httpx.RequestError as exc:
+        _handle_vcs_unreachable(exc)
     return _mr_to_response(mr)
 
 
@@ -171,18 +227,30 @@ async def get_mr_diff(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         _handle_vcs_error(exc)
+    except httpx.RequestError as exc:
+        _handle_vcs_unreachable(exc)
     return [_diff_file_to_response(f) for f in diff]
 
 
-@router.get("/inbox", response_model=list[InboxMRResponse])
+@router.get("/inbox", response_model=InboxMRPageResponse)
 async def list_inbox_mrs(
     host_id: UUID,
     use_case: FromDishka[ListInboxMRsUseCase],
-) -> list[InboxMRResponse]:
+    scope: InboxScope = Query(default="all"),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=DEFAULT_MRS_PER_PAGE, ge=1, le=MAX_PER_PAGE),
+) -> InboxMRPageResponse:
     try:
-        items = await use_case.execute(host_id)
+        result = await use_case.execute(host_id, scope=scope, page=page, per_page=per_page)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         _handle_vcs_error(exc)
-    return [_inbox_mr_to_response(item) for item in items]
+    except httpx.RequestError as exc:
+        _handle_vcs_unreachable(exc)
+    return InboxMRPageResponse(
+        items=[_inbox_mr_to_response(item) for item in result.items],
+        page=result.page,
+        per_page=result.per_page,
+        has_more=result.has_more,
+    )

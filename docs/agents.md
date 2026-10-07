@@ -278,11 +278,11 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/hosts/{id}/test` | GET | Verify the token against the host |
 | `/api/v1/hosts/{id}/repos/add-by-url` | POST | Resolve a URL or slug, verify it, pin it |
 | `/api/v1/hosts/{id}/favourite-repos/{repo_path}` | POST | Toggle a pin |
-| `/api/v1/hosts/{id}/repos` | GET | List repositories, optional `query` |
-| `/api/v1/hosts/{id}/repos/{repo_path}/mrs` | GET | Open merge requests |
+| `/api/v1/hosts/{id}/repos` | GET | One page of repositories, most recently active first — `q`, `page`, `per_page` (default 50) |
+| `/api/v1/hosts/{id}/repos/{repo_path}/mrs` | GET | One page of merge requests, most recently updated first — `state` (`opened` by default, `merged`, `closed`, `all`), `q` (title), `page`, `per_page` (default 30) |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}` | GET | One merge request |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}/diff` | GET | Its parsed diff |
-| `/api/v1/hosts/{id}/inbox` | GET | Open MRs across the first 20 repositories |
+| `/api/v1/hosts/{id}/inbox` | GET | One page of open MRs — `scope` (`all` by default, `authored`, `assigned`, `review_requested`), `page`, `per_page` (default 30) |
 | `/api/v1/reviews` | GET, POST | List, create from an MR |
 | `/api/v1/reviews/code` | POST | Create from a `base_ref`/`head_ref` diff |
 | `/api/v1/reviews/{id}` | GET, PATCH, DELETE | Read, edit brief and comments, delete |
@@ -296,14 +296,70 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
 | `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file |
 
+### Pagination
+
+The three list routes above answer one page at a time, and every page costs a single request to
+the host (the `all` inbox scope costs one per repository in its batch, see below) — nothing is
+fetched ahead.
+
+```json
+{"items": [...], "page": 1, "per_page": 50, "has_more": true}
+```
+
+* `page` is 1-based; `per_page` is 1–100. Anything outside those bounds, an unknown `state` or an
+  unknown `scope` is a 422 before the host is called.
+* `has_more` is the host's own next-page signal — GitHub's `Link: rel="next"`, GitLab's
+  `X-Next-Page`, Gitea's `X-HasMore` or `Link`, Bitbucket's `next` — and only when a host sends
+  none of them, "the page came back full". Keep paging while it is `true`: a page can be shorter
+  than `per_page`, even empty, and still have more after it.
+* Hosts cap the page size on their side — Gitea at its `MAX_RESPONSE_ITEMS` (50 by default),
+  Bitbucket at 50 pull requests or 100 repositories — so a larger `per_page` gives shorter pages,
+  never skipped items.
+* In MR listings `additions`, `deletions` and `file_count` are `null` when the host does not
+  report them in that view (GitHub, GitLab and Bitbucket lists never do). The single-MR route fills
+  what the host provides — GitLab only ever reports `file_count`. GitLab's list items also leave
+  `pipeline` `null`.
+
+Repositories: pinned favourites the host's listing does not return are fetched and put in front of
+page 1 (filtered by `q` when one is given), and left out of later pages, so each appears once.
+
+Merge requests per host:
+
+| Host | `opened` / `all` | `merged` / `closed` | `q` |
+|---|---|---|---|
+| GitLab | merge request listing | same, by state | host-side title search |
+| GitHub | pulls API | issue search (`is:merged`; `is:closed is:unmerged`) | issue search, `in:title` |
+| Gitea, Forgejo | pulls API | pulls API `closed`, split per item | filtered on the fetched page |
+| Bitbucket | pull request listing | same (`closed` is `DECLINED` + `SUPERSEDED`) | host-side title search |
+
+GitHub's issue search returns no branch names, so those items have empty `source_branch` and
+`target_branch`, and it allows 30 requests a minute per user. Gitea's per-item split and title
+filter are why its pages can be short.
+
+The inbox (all scopes list open MRs only, newest update first within a page):
+
+| Scope | GitLab | GitHub | Gitea, Forgejo | Bitbucket |
+|---|---|---|---|---|
+| `authored` | `scope=created_by_me` | `author:@me` | `created=true` | `/pullrequests/{user}` |
+| `assigned` | `scope=assigned_to_me` | `assignee:@me` | `assigned=true` | always empty — no assignees |
+| `review_requested` | `reviewer_username=<you>` | `review-requested:@me` | `review_requested=true` | always empty — no such listing |
+
+`authored`, `assigned` and `review_requested` are each one host request per page. GitHub and Gitea
+answer them from issue search, so those items have no branch names either. `all` walks the
+repositories the token sees, most recently active first: page N takes the N-th batch of 10
+repositories and the first `per_page` open MRs of each (five repositories at a time), merged
+newest-first; `has_more` means more repositories remain. Pinned favourites join page 1. A
+repository whose MRs cannot be fetched is skipped with a warning rather than failing the page.
+
 ### VCS connections and caching
 
 Every VCS call goes through one pooled HTTP client that lives as long as the process, with
 keep-alive connections reused across requests and hosts; `MR_REVIEW__VCS_TIMEOUT` is its timeout.
-Read-only responses are cached in memory per host: repository lists for 15 minutes, everything
-else — repository searches, merge requests, diffs, files — for 5 minutes, in bounded
-least-recently-used stores. Concurrent identical requests share one call to the host, and errors
-are never cached. Changing a host's token, URL or type starts it on a fresh cache.
+Read-only responses are cached in memory per host: repository list pages for 15 minutes, everything
+else — repository searches, MR pages, single MRs, diffs, files — for 5 minutes, in bounded
+least-recently-used stores.
+Concurrent identical requests share one call to the host, and errors are never cached. Changing a
+host's token, URL or type starts it on a fresh cache.
 
 ### What goes into the prompt
 
@@ -504,7 +560,9 @@ The API answers with a status and a `detail` string; the UI shows it as-is.
 | 404 | A host, review, iteration or comment id that does not exist, or a repository the host does not have |
 | 409 | Posting a review whose source is a branch diff, or adding or deleting a comment on an iteration that was posted |
 | 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
+| 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token; GitHub's issue search allows 30 requests a minute |
 | 502 | `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
+| 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, timeout |
 
 Two failures do not surface as a status code:
 

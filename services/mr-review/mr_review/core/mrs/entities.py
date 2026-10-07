@@ -5,6 +5,17 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+# State filter accepted by MR listings. "all" means every state.
+MRStateFilter = Literal["opened", "merged", "closed", "all"]
+
+# Personal MR listings a host can answer natively ("open MRs I opened / that are
+# assigned to me / where my review is requested").
+PersonalMRScope = Literal["authored", "assigned", "review_requested"]
+
+# Inbox scopes exposed by the API: the personal ones plus "all", which spans the
+# user's repositories.
+InboxScope = Literal["all", "authored", "assigned", "review_requested"]
+
 
 class Repo(BaseModel):
     id: str
@@ -23,12 +34,21 @@ class MR(BaseModel):
     status: Literal["opened", "merged", "closed"]
     draft: bool
     pipeline: Literal["passed", "failed", "running", "none"] | None = None
-    additions: int
-    deletions: int
-    file_count: int
+    # None means the host did not report the figure in this view (list endpoints
+    # usually don't); the single-MR view fills them when the host provides them.
+    additions: int | None = None
+    deletions: int | None = None
+    file_count: int | None = None
     web_url: str = ""
     created_at: datetime
     updated_at: datetime
+
+
+class InboxMR(BaseModel):
+    """MR with the path of the repository it belongs to."""
+
+    mr: MR
+    repo_path: str
 
 
 class DiffLine(BaseModel):

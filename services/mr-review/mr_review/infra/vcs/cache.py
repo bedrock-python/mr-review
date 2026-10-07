@@ -15,7 +15,8 @@ from uuid import UUID
 import httpx
 
 from mr_review.core.hosts.entities import Host
-from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.core.vcs.protocols import VCSProvider
 from mr_review.infra.vcs.factory import build_vcs_provider
 
@@ -133,17 +134,38 @@ class CachedVCSProvider:
     async def test_connection(self) -> dict[str, str]:
         return await self._provider.test_connection()
 
-    async def list_repos(self, query: str | None = None) -> list[Repo]:
+    async def list_repos(
+        self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
+    ) -> Page[Repo]:
         # Search results are ad hoc: keep them under the short TTL.
         store = self._meta if query else self._repos
-        return await store.get_or_load(("repos", query or ""), lambda: self._provider.list_repos(query=query))
+        return await store.get_or_load(
+            ("repos", query or "", page, per_page),
+            lambda: self._provider.list_repos(query=query, page=page, per_page=per_page),
+        )
 
     async def get_repo(self, repo_path: str) -> Repo:
         return await self._meta.get_or_load(("repo", repo_path), lambda: self._provider.get_repo(repo_path))
 
-    async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
+    async def list_mrs(
+        self,
+        repo_path: str,
+        state: MRStateFilter = "opened",
+        page: int = 1,
+        per_page: int = DEFAULT_MRS_PER_PAGE,
+        query: str | None = None,
+    ) -> Page[MR]:
         return await self._meta.get_or_load(
-            ("mrs", repo_path, state), lambda: self._provider.list_mrs(repo_path, state)
+            ("mrs", repo_path, state, page, per_page, query or ""),
+            lambda: self._provider.list_mrs(repo_path, state=state, page=page, per_page=per_page, query=query),
+        )
+
+    async def list_my_mrs(
+        self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
+    ) -> Page[InboxMR]:
+        return await self._meta.get_or_load(
+            ("my_mrs", scope, page, per_page),
+            lambda: self._provider.list_my_mrs(scope, page=page, per_page=per_page),
         )
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
