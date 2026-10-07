@@ -6,8 +6,14 @@ from urllib.parse import quote
 import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.infra.vcs._diff_parser import diff_file_from_patch
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
-from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_diff_text
+from mr_review.infra.vcs._pagination import gitlab_has_more, json_list
+
+# /merge_requests/:iid/diffs is paginated; 100 pages of 100 files is far beyond what GitLab
+# itself renders, and keeps a pathological MR from looping forever.
+_DIFF_PAGE_SIZE = 100
+_MAX_DIFF_PAGES = 100
 
 
 def _encode_path(repo_path: str) -> str:
@@ -39,11 +45,14 @@ class GitLabProvider:
         self._token = token
         self._headers = {"PRIVATE-TOKEN": token}
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+    async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}/api/v4{path}"
         response = await self._client.get(url, headers=self._headers, params=params)
         response.raise_for_status()
-        return response.json()
+        return response
+
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return (await self._get_response(path, params)).json()
 
     async def _post(self, path: str, json_body: dict[str, Any]) -> Any:
         url = f"{self._base_url}/api/v4{path}"
@@ -157,27 +166,28 @@ class GitLabProvider:
 
     async def get_diff(self, repo_path: str, mr_iid: int) -> list[DiffFile]:
         encoded = _encode_path(repo_path)
-        data: dict[str, Any] = await self._get(
-            f"/projects/{encoded}/merge_requests/{mr_iid}/changes",
-        )
-        diff_files: list[DiffFile] = []
-        for change in data.get("changes", []):
-            diff_text: str = change.get("diff", "")
-            hunks = _parse_diff_text(diff_text)
-            additions = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))
-            deletions = sum(1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---"))
-            old_path = change.get("old_path")
-            new_path = str(change["new_path"])
-            diff_files.append(
-                DiffFile(
-                    path=new_path,
-                    old_path=old_path if old_path != new_path else None,
-                    additions=additions,
-                    deletions=deletions,
-                    hunks=hunks,
-                )
+        try:
+            changes = await self._list_mr_diffs(encoded, mr_iid)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != httpx.codes.NOT_FOUND:
+                raise
+            # GitLab < 15.7 has no /diffs; /changes is deprecated (and truncates large MRs) but still there.
+            data: dict[str, Any] = await self._get(f"/projects/{encoded}/merge_requests/{mr_iid}/changes")
+            changes = data.get("changes", [])
+        return [_change_to_diff_file(change) for change in changes]
+
+    async def _list_mr_diffs(self, encoded: str, mr_iid: int) -> list[dict[str, Any]]:
+        changes: list[dict[str, Any]] = []
+        for page in range(1, _MAX_DIFF_PAGES + 1):
+            response = await self._get_response(
+                f"/projects/{encoded}/merge_requests/{mr_iid}/diffs",
+                params={"page": page, "per_page": _DIFF_PAGE_SIZE},
             )
-        return diff_files
+            items = json_list(response)
+            changes.extend(items)
+            if not gitlab_has_more(response, len(items), _DIFF_PAGE_SIZE):
+                break
+        return changes
 
     async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
         encoded = _encode_path(repo_path)
@@ -185,28 +195,12 @@ class GitLabProvider:
             f"/projects/{encoded}/repository/compare",
             params={"from": base_ref, "to": head_ref, "straight": "false"},
         )
-        diff_files: list[DiffFile] = []
-        for change in data.get("diffs", []):
-            diff_text: str = change.get("diff", "")
-            hunks = _parse_diff_text(diff_text)
-            additions = sum(1 for line in diff_text.splitlines() if line.startswith("+") and not line.startswith("+++"))
-            deletions = sum(1 for line in diff_text.splitlines() if line.startswith("-") and not line.startswith("---"))
-            old_path = change.get("old_path")
-            new_path = str(change["new_path"])
-            diff_files.append(
-                DiffFile(
-                    path=new_path,
-                    old_path=old_path if old_path != new_path else None,
-                    additions=additions,
-                    deletions=deletions,
-                    hunks=hunks,
-                )
-            )
-        return diff_files
+        return [_change_to_diff_file(change) for change in data.get("diffs", [])]
 
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         encoded = _encode_path(repo_path)
-        data: dict[str, Any] = await self._get(f"/projects/{encoded}/merge_requests/{mr_iid}/changes")
+        # The MR itself carries diff_refs; /changes would download the whole diff just for them.
+        data: dict[str, Any] = await self._get(f"/projects/{encoded}/merge_requests/{mr_iid}")
         dr: dict[str, Any] = data.get("diff_refs") or {}
         return {
             "base_sha": str(dr.get("base_sha", "")),
@@ -299,3 +293,7 @@ class GitLabProvider:
 def _map_mr_state(state: str) -> str:
     mapping = {"opened": "opened", "merged": "merged", "closed": "closed"}
     return mapping.get(state, "closed")
+
+
+def _change_to_diff_file(change: dict[str, Any]) -> DiffFile:
+    return diff_file_from_patch(str(change["new_path"]), change.get("old_path"), str(change.get("diff") or ""))
