@@ -24,9 +24,20 @@ Before dispatching to the AI, tune the review brief:
 
 ## DISPATCH — run the review
 
-Click **Run review**. The request streams back via SSE — comments appear as the AI generates them.
+Click **Run review**. The request streams back via SSE — each comment appears as soon as the AI
+finishes writing it, while the rest of the answer is still arriving.
 
-The AI produces structured comments, each anchored to a specific file and line range.
+The AI produces structured comments, each anchored to a specific file and line. Models do not
+always answer in exactly the requested format, so the answer is read leniently: reasoning
+blocks are skipped, JSON is found inside markdown fences or prose, wrapper objects and one
+comment per line are understood, common formatting slips are repaired, and alternative field
+names and severity words are mapped. When the model runs out of output tokens mid-answer, the
+comments it completed are kept and the review is marked as truncated. If nothing in the answer
+can be read as comments, the whole answer is kept as a single general comment.
+
+The raw answer is stored with the iteration, so you can always look at exactly what the model
+said and have it parsed again. If the dispatch fails or you close the page while it runs, the
+comments completed so far are saved; if none were, the iteration keeps the comments it had.
 
 ## POLISH — edit comments
 
