@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -21,8 +22,8 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
-_GITHUB_COM = "https://github.com"
 _GITHUB_API = "https://api.github.com"
+_PUBLIC_GITHUB_HOSTS = frozenset({"github.com", "www.github.com", "api.github.com"})
 
 # Search qualifiers per MR state. The pulls API cannot tell merged from closed,
 # so those two states (and title searches) go through the issue search API.
@@ -43,14 +44,16 @@ _PERSONAL_SCOPE_QUALIFIERS: dict[PersonalMRScope, str] = {
 def _resolve_api_base_url(base_url: str) -> str:
     """Map a user-supplied GitHub URL to the correct REST API base URL.
 
-    GitHub.com: https://github.com → https://api.github.com
-    GitHub Enterprise: https://ghe.company.com → https://ghe.company.com/api/v3
-    Empty/unset: default to https://api.github.com
+    github.com, www.github.com, api.github.com (any scheme, path or trailing slash) or empty
+        → https://api.github.com
+    GitHub Enterprise: https://ghe.company.com → https://ghe.company.com/api/v3 (kept if already there)
     """
-    url = base_url.rstrip("/") if base_url else ""
+    url = base_url.strip().rstrip("/")
     if not url:
         return _GITHUB_API
-    if url.rstrip("/").lower() == _GITHUB_COM:
+    if "://" not in url:
+        url = f"https://{url}"
+    if (urlsplit(url).hostname or "").lower() in _PUBLIC_GITHUB_HOSTS:
         return _GITHUB_API
     # GitHub Enterprise Server exposes the API under /api/v3
     if not url.endswith("/api/v3"):

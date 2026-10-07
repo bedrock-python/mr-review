@@ -236,7 +236,7 @@ the compose file.
 | Type | API base derived from `base_url` | Token |
 |---|---|---|
 | `gitlab` | `<base_url>/api/v4` | Personal access token, `api` scope |
-| `github` | `https://github.com` or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic token, `repo` scope |
+| `github` | `github.com`, `www.github.com`, `api.github.com` (any path) or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic token, `repo` scope |
 | `gitea`, `forgejo` | `<base_url>/api/v1` | Personal access token |
 | `bitbucket` | `base_url` is ignored — always `https://api.bitbucket.org/2.0` | `username:app_password` for Basic auth; a token with no colon is sent as Bearer |
 

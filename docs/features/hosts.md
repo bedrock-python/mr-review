@@ -28,7 +28,7 @@ time.
 | Type | API base derived from the base URL | Token |
 |------|------------------------------------|-------|
 | GitLab | `<base_url>/api/v4` | Personal access token, `api` scope |
-| GitHub | `https://github.com` or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic personal access token, `repo` scope |
+| GitHub | `github.com`, `www.github.com`, `api.github.com` (any path) or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic personal access token, `repo` scope |
 | Gitea, Forgejo | `<base_url>/api/v1` | Personal access token with repository read/write |
 | Bitbucket | the base URL is **ignored** — always `https://api.bitbucket.org/2.0` | `username:app_password` |
 
