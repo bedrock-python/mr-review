@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from mr_review.use_cases.reviews.context_files import CONTEXT_EMBED_CHARS
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
 
 from tests.factories.entities import make_host, make_review
@@ -60,8 +59,8 @@ async def test__get_review_context__host_not_found__raises_value_error() -> None
         await use_case.execute(review.id)
 
 
-async def test__get_review_context__small_context__returns_merged_and_is_large_false() -> None:
-    """Returns (merged_context, False) when total chars < CONTEXT_EMBED_CHARS."""
+async def test__get_review_context__found_files__merged_into_one_text() -> None:
+    """Every context file found is in the merged text under its path."""
     host = make_host()
     review = make_review(host_id=host.id)
     review_repo = AsyncMock()
@@ -71,18 +70,17 @@ async def test__get_review_context__small_context__returns_merged_and_is_large_f
 
     provider = AsyncMock()
     provider.get_mr.return_value = _make_mr_stub()
-    provider.get_file.return_value = "# Hello"
+    provider.get_file.side_effect = lambda _repo, path, _ref: "# Hello" if path == "README.md" else None
     provider.list_directory.return_value = []
 
     use_case = _make_use_case(review_repo, host_repo, provider)
-    merged, is_large = await use_case.execute(review.id)
+    merged = await use_case.execute(review.id)
 
-    assert is_large is False
-    assert isinstance(merged, str)
+    assert merged == "### README.md\n\n# Hello"
 
 
-async def test__get_review_context__large_context__returns_is_large_true() -> None:
-    """Returns (merged_context, True) when total chars >= CONTEXT_EMBED_CHARS."""
+async def test__get_review_context__large_files__returned_uncut() -> None:
+    """The context endpoint returns files whole; the prompt budget decides what is cut."""
     host = make_host()
     review = make_review(host_id=host.id)
     review_repo = AsyncMock()
@@ -90,16 +88,16 @@ async def test__get_review_context__large_context__returns_is_large_true() -> No
     host_repo = AsyncMock()
     host_repo.get_by_id.return_value = host
 
-    large_content = "x" * CONTEXT_EMBED_CHARS
+    large_content = "x" * 300_000
     provider = AsyncMock()
     provider.get_mr.return_value = _make_mr_stub()
-    provider.get_file.return_value = large_content
+    provider.get_file.side_effect = lambda _repo, path, _ref: large_content if path == "README.md" else None
     provider.list_directory.return_value = []
 
     use_case = _make_use_case(review_repo, host_repo, provider)
-    merged, is_large = await use_case.execute(review.id)
+    merged = await use_case.execute(review.id)
 
-    assert is_large is True
+    assert large_content in merged
 
 
 async def test__get_review_context__passes_source_branch_to_provider() -> None:

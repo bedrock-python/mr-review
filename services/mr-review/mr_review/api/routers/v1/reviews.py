@@ -220,7 +220,7 @@ async def get_review_context(
     use_case: FromDishka[GetReviewContextUseCase],
 ) -> Response:
     try:
-        merged, _ = await use_case.execute(review_id)
+        merged = await use_case.execute(review_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(content=merged, media_type="text/plain")
