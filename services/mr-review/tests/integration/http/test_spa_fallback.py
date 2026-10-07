@@ -53,7 +53,7 @@ async def test__liveness__spa_mounted__answers_with_json(spa_client: AsyncClient
     assert response.json() == {"status": "ok"}
 
 
-@pytest.mark.parametrize("path", ["/health", "/no/such/page"])
+@pytest.mark.parametrize("path", ["/health", "/no/such/page", "/apiary"])
 async def test__unmatched_path__spa_mounted__returns_the_shell_with_200(spa_client: AsyncClient, path: str) -> None:
     """Any path the API does not serve — /health included — falls back to index.html."""
     # Arrange / Act
@@ -62,3 +62,15 @@ async def test__unmatched_path__spa_mounted__returns_the_shell_with_200(spa_clie
     # Assert
     assert response.status_code == 200
     assert response.text == _SHELL
+
+
+@pytest.mark.parametrize("path", ["/api", "/api/v1/no-such-endpoint", "/api/v2/reviews"])
+async def test__unknown_api_path__spa_mounted__returns_json_404(spa_client: AsyncClient, path: str) -> None:
+    """An API path no route serves answers a JSON 404, not the UI shell with a 200."""
+    # Arrange / Act
+    response = await spa_client.get(path)
+
+    # Assert
+    assert response.status_code == 404
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {"detail": "Not Found"}

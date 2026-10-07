@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager, suppress
 
 import structlog
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from mr_review.api.ai_errors import register_ai_error_handlers
@@ -27,6 +27,8 @@ from mr_review.common.logging import SensitiveDataFilter, configure_logging
 from mr_review.infra.di.containers.api import create_api_container
 
 logger = structlog.get_logger(__name__)
+
+_API_PREFIX = "/api"
 
 # Mutable container so main() can pre-load Settings for the factory
 # without a global assignment (avoids PLW0603).
@@ -118,9 +120,14 @@ def _mount_spa(app: FastAPI, settings: Settings) -> None:
         return PlainTextResponse(config_js_content, media_type="application/javascript")
 
     # SPA fallback — all unmatched routes return index.html so the React
-    # router can handle navigation on the client side
+    # router can handle navigation on the client side. An unknown API path is
+    # a client bug or a version mismatch, not a page: it gets a JSON 404, as the
+    # client expects, instead of the HTML shell with a 200.
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str, request: Request) -> FileResponse:  # noqa: ARG001
+    async def spa_fallback(full_path: str) -> Response:
+        path = f"/{full_path}"
+        if path == _API_PREFIX or path.startswith(f"{_API_PREFIX}/"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         return FileResponse(index_html)
 
 
