@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from mr_review.core.reviews.entities import BriefConfig, IterationStage
+from mr_review.core.reviews.entities import BriefConfig, Comment, IterationStage
 from mr_review.core.reviews.sources import ReviewSource
 
 
@@ -64,12 +64,66 @@ class ReviewResponse(BaseModel):
     updated_at: datetime
 
 
+def _reject_blank(value: str | None, field: str) -> str | None:
+    if value is not None and not value.strip():
+        raise ValueError(f"{field} must not be blank")
+    return value
+
+
 class UpdateCommentRequest(BaseModel):
+    """Partial update of one comment; omitted fields keep their current value.
+
+    ``file`` and ``line`` tell an omitted field apart from an explicit ``null``:
+    ``"file": null`` clears the anchor (the comment becomes a general note, its line
+    goes too), ``"line": null`` keeps the file but drops the line.
+    """
+
     id: UUID
     status: Literal["kept", "dismissed"] | None = None
     body: str | None = None
     severity: Literal["critical", "major", "minor", "suggestion"] | None = None
     resolved: bool | None = None
+    file: str | None = None
+    line: int | None = Field(default=None, ge=1)
+
+    @field_validator("body")
+    @classmethod
+    def _body_not_blank(cls, value: str | None) -> str | None:
+        return _reject_blank(value, "body")
+
+    @field_validator("file")
+    @classmethod
+    def _file_not_blank(cls, value: str | None) -> str | None:
+        return _reject_blank(value, "file")
+
+    @model_validator(mode="after")
+    def _line_needs_file(self) -> UpdateCommentRequest:
+        if "file" in self.model_fields_set and self.file is None and self.line is not None:
+            raise ValueError("line cannot be set when file is null")
+        return self
+
+    def apply_to(self, comment: Comment) -> Comment:
+        """Return ``comment`` with this patch applied.
+
+        Raises ``ValueError`` when the result would carry a line without a file,
+        e.g. a ``line`` patch on a general comment.
+        """
+        updates: dict[str, object] = {
+            name: value
+            for name in ("status", "body", "severity", "resolved")
+            if (value := getattr(self, name)) is not None
+        }
+        touches_anchor = bool({"file", "line"} & self.model_fields_set)
+        if "file" in self.model_fields_set:
+            updates["file"] = self.file
+            if self.file is None:
+                updates["line"] = None
+        if "line" in self.model_fields_set:
+            updates["line"] = self.line
+        updated = comment.model_copy(update=updates)
+        if touches_anchor and updated.file is None and updated.line is not None:
+            raise ValueError(f"Comment {comment.id} is a general comment; set file together with line")
+        return updated
 
 
 class UpdateReviewRequest(BaseModel):
@@ -118,3 +172,30 @@ class ImportResponseResponse(BaseModel):
     imported: int
     errors: list[CommentParseErrorResponse] = Field(default_factory=list)
     json_error: str | None = None
+
+
+class CreateCommentRequest(BaseModel):
+    """A hand-written comment; without ``file`` it is a general (unanchored) note."""
+
+    file: str | None = None
+    line: int | None = Field(default=None, ge=1)
+    severity: Literal["critical", "major", "minor", "suggestion"]
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def _body_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("body must not be blank")
+        return value
+
+    @field_validator("file")
+    @classmethod
+    def _file_not_blank(cls, value: str | None) -> str | None:
+        return _reject_blank(value, "file")
+
+    @model_validator(mode="after")
+    def _line_needs_file(self) -> CreateCommentRequest:
+        if self.file is None and self.line is not None:
+            raise ValueError("line cannot be set without file")
+        return self

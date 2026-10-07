@@ -12,6 +12,7 @@ from mr_review.api.schemas.reviews import (
     CommentParseErrorResponse,
     CommentResponse,
     CreateCodeReviewRequest,
+    CreateCommentRequest,
     CreateIterationRequest,
     CreateReviewRequest,
     DispatchReviewRequest,
@@ -26,8 +27,10 @@ from mr_review.api.schemas.reviews import (
 )
 from mr_review.core.reviews.entities import Comment, Iteration, Review
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
+from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
+from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
 from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
@@ -35,6 +38,7 @@ from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCa
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
+from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
@@ -159,27 +163,13 @@ async def update_review(
                 detail=f"Iteration {body.iteration_id} not found",
             )
         update_map = {u.id: u for u in body.iteration_comments}
-        merged: list[Comment] = []
-        for c in target_iteration.comments:
-            patch = update_map.get(c.id)
-            if patch is None:
-                merged.append(c)
-            else:
-                merged.append(
-                    c.model_copy(
-                        update={
-                            k: v
-                            for k, v in {
-                                "status": patch.status,
-                                "body": patch.body,
-                                "severity": patch.severity,
-                                "resolved": patch.resolved,
-                            }.items()
-                            if v is not None
-                        }
-                    )
-                )
-        iteration_comments = merged
+        try:
+            iteration_comments = [
+                patch.apply_to(c) if (patch := update_map.get(c.id)) is not None else c
+                for c in target_iteration.comments
+            ]
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     try:
         review = await use_case.execute(
@@ -342,3 +332,51 @@ async def post_review(
             detail=f"Failed to post comments: {exc}",
         ) from exc
     return PostReviewResponse(posted=posted)
+
+
+@router.post(
+    "/{review_id}/iterations/{iteration_id}/comments",
+    response_model=ReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_comment(
+    review_id: UUID,
+    iteration_id: UUID,
+    body: CreateCommentRequest,
+    use_case: FromDishka[CreateCommentUseCase],
+) -> ReviewResponse:
+    """Add a hand-written comment to an iteration; the server assigns its id."""
+    try:
+        review = await use_case.execute(
+            review_id=review_id,
+            iteration_id=iteration_id,
+            severity=body.severity,
+            body=body.body,
+            file=body.file,
+            line=body.line,
+        )
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _review_to_response(review)
+
+
+@router.delete(
+    "/{review_id}/iterations/{iteration_id}/comments/{comment_id}",
+    response_model=ReviewResponse,
+)
+async def delete_comment(
+    review_id: UUID,
+    iteration_id: UUID,
+    comment_id: UUID,
+    use_case: FromDishka[DeleteCommentUseCase],
+) -> ReviewResponse:
+    """Remove one comment from an iteration that has not been posted yet."""
+    try:
+        review = await use_case.execute(review_id=review_id, iteration_id=iteration_id, comment_id=comment_id)
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _review_to_response(review)
