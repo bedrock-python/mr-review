@@ -126,7 +126,19 @@ reviews/<uuid>.yaml   one file per review
 
 There is no database and nothing to migrate; the directory survives container restarts and
 image updates. Tokens and API keys are stored in plain text, so treat it as a secret — the
-password on export/import encrypts the export file, not the store.
+passphrase on export encrypts the export file, not the store. mr-review creates the
+directory readable by its owner only (`0700`) and writes every file in it as `0600`; a
+`hosts.yaml` or `ai_providers.yaml` that an older version left readable by others is
+tightened to `0600` the first time it is opened. An existing directory keeps its
+permissions. On Windows these permission bits are not applied.
+
+Every write goes to a temporary file in the same directory that is flushed to disk and then
+renamed over the old one, so a crash or two requests at once never leave a half-written
+file, and concurrent changes to the same record are applied one after another rather than
+overwriting each other. That holds within one process — run a single worker.
+
+To move the data to another instance or keep a backup, use
+[Export and import](../features/export-import.md).
 
 ## AI providers
 

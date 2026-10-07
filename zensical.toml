@@ -24,6 +24,7 @@ nav = [
         { "Review pipeline" = "features/pipeline.md" },
         { "VCS hosts" = "features/hosts.md" },
         { "AI providers" = "features/ai-providers.md" },
+        { "Export and import" = "features/export-import.md" },
     ] },
     { "Changelog" = "changelog.md" },
 ]
