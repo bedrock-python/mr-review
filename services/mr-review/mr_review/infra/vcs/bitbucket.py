@@ -269,7 +269,8 @@ class BitbucketProvider:
     ) -> list[dict[str, str]]:
         workspace, repo_slug = _split_repo_path(repo_path)
         url = f"{self._api_url}/repositories/{workspace}/{repo_slug}/commits/{ref}"
-        items = await self._get_paginated(url, params={"path": file_path, "pagelen": limit})
+        # The first page already holds the newest ``limit`` commits; following ``next`` would walk the whole history.
+        items = await self._get_paginated(url, params={"path": file_path, "pagelen": limit}, max_pages=1)
         result: list[dict[str, str]] = []
         for item in items[:limit]:
             author_raw: dict[str, Any] = item.get("author", {})
