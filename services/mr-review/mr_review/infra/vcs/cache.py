@@ -18,6 +18,7 @@ from mr_review.core.hosts.entities import Host
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.core.vcs.protocols import VCSProvider
+from mr_review.infra.vcs._tree import WholeTreeListing, files_under
 from mr_review.infra.vcs.factory import build_vcs_provider
 
 
@@ -207,8 +208,13 @@ class CachedVCSProvider:
         )
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        provider = self._provider
+        if isinstance(provider, WholeTreeListing):
+            # Context gathering lists many directories per review: fetch the whole tree once per ref.
+            tree = await self._content.get_or_load(("tree", repo_path, ref), lambda: provider.list_tree(repo_path, ref))
+            return files_under(tree, dir_path)
         return await self._meta.get_or_load(
-            ("dir", repo_path, ref, dir_path), lambda: self._provider.list_directory(repo_path, dir_path, ref)
+            ("dir", repo_path, ref, dir_path), lambda: provider.list_directory(repo_path, dir_path, ref)
         )
 
     async def get_commits(

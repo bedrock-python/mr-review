@@ -359,7 +359,9 @@ Read-only responses are cached in memory per host: repository list pages for 15 
 else — repository searches, MR pages, single MRs, diffs, files — for 5 minutes, in bounded
 least-recently-used stores.
 Concurrent identical requests share one call to the host, and errors are never cached. Changing a
-host's token, URL or type starts it on a fresh cache.
+host's token, URL or type starts it on a fresh cache. GitHub and Gitea can only list a directory by
+returning the repository's whole tree, so that tree is fetched once per repository and commit and
+every directory the context collectors ask for is answered from it.
 
 ### What goes into the prompt
 

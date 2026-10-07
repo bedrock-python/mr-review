@@ -12,6 +12,7 @@ from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PA
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 from mr_review.infra.vcs._pagination import has_next_link, json_list, optional_int, optional_str
+from mr_review.infra.vcs._tree import files_under
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -305,6 +306,10 @@ class GitHubProvider:
         return str(content)
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        return files_under(await self.list_tree(repo_path, ref), dir_path)
+
+    async def list_tree(self, repo_path: str, ref: str = "HEAD") -> list[str]:
+        """Every file path at ``ref``: one recursive git-tree request (GitHub has no per-directory listing)."""
         owner, repo = _split_repo_path(repo_path)
         url = f"{self._base_url}/repos/{owner}/{repo}/git/trees/{ref}"
         response = await self._client.get(url, headers=self._headers, params={"recursive": "1"})
@@ -316,12 +321,7 @@ class GitHubProvider:
             logging.getLogger(__name__).warning(
                 "GitHub git tree for %s@%s is truncated; some files may be missing", repo_path, ref
             )
-        prefix = dir_path.rstrip("/") + "/"
-        return [
-            item["path"]
-            for item in data.get("tree", [])
-            if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
-        ]
+        return [str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob"]
 
     async def get_commits(
         self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10

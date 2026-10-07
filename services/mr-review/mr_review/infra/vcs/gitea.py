@@ -17,6 +17,7 @@ from mr_review.infra.vcs._pagination import (
     optional_int,
     optional_str,
 )
+from mr_review.infra.vcs._tree import files_under
 
 # The pulls API filters by open/closed only; merged vs. closed is told apart per item.
 _UPSTREAM_STATE: dict[MRStateFilter, str] = {
@@ -238,6 +239,10 @@ class GiteaProvider:
         return response.text
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        return files_under(await self.list_tree(repo_path, ref), dir_path)
+
+    async def list_tree(self, repo_path: str, ref: str = "HEAD") -> list[str]:
+        """Every file path at ``ref`` from one recursive git-tree request."""
         owner, repo = _split_repo_path(repo_path)
         url = f"{self._base_url}/api/v1/repos/{owner}/{repo}/git/trees/{ref}"
         response = await self._client.get(url, headers=self._headers, params={"recursive": "true"})
@@ -245,12 +250,7 @@ class GiteaProvider:
             return []
         response.raise_for_status()
         data: dict[str, Any] = response.json()
-        prefix = dir_path.rstrip("/") + "/"
-        return [
-            item["path"]
-            for item in data.get("tree", [])
-            if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
-        ]
+        return [str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob"]
 
     async def get_commits(
         self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
