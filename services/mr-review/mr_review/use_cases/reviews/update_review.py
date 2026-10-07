@@ -8,7 +8,12 @@ from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationSta
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.use_cases.reviews._review_change import apply_review_change
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
-from mr_review.use_cases.reviews.iteration_comments import find_iteration_index, patch_comments, replace_iteration
+from mr_review.use_cases.reviews.iteration_comments import (
+    IterationLockedError,
+    find_iteration_index,
+    patch_comments,
+    replace_iteration,
+)
 from mr_review.use_cases.reviews.posting_registry import PostingRegistry
 
 
@@ -30,7 +35,9 @@ def _apply_brief_config(review: Review, brief_config: BriefConfig) -> Review:
     if not last.reached_post:
         updated_last = last.model_copy(update={"brief_config": brief_config})
         return replace_iteration(review, len(review.iterations) - 1, updated_last)
-    return review
+    # Saving it anyway would be lost silently: an iteration that reached Post — in full or in
+    # part — keeps the brief it was dispatched with. The caller starts a new iteration instead.
+    raise IterationLockedError(f"Iteration {last.id} was already posted; start a new iteration to change the brief")
 
 
 def apply_review_update(
@@ -44,8 +51,8 @@ def apply_review_update(
 
     ``brief_config`` goes to the last open iteration (or a first one is created). The stage
     and the comment patches apply to ``iteration_id`` and are ignored without it. Raises
-    ``ValueError`` for an unknown iteration and ``InvalidCommentPatchError`` for a patch that
-    cannot apply.
+    ``ValueError`` for an unknown iteration, ``InvalidCommentPatchError`` for a patch that
+    cannot apply, and ``IterationLockedError`` for a brief when the last iteration was posted.
     """
     # brief_config first, so the iteration patch below works on the already-updated list.
     if brief_config is not None:

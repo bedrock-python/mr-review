@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,7 +9,7 @@ from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationS
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
-from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError
+from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
@@ -211,3 +212,24 @@ async def test__update_review__no_fields_provided__persists_review_unchanged() -
 
     repo.update.assert_awaited_once()
     assert result == original
+
+
+@pytest.mark.parametrize(
+    "completed_at",
+    [datetime.now(timezone.utc), None],
+    ids=["posted-in-full", "posted-in-part"],
+)
+async def test__update_review__brief_config_on_posted_iteration__raises_iteration_locked(
+    completed_at: datetime | None,
+) -> None:
+    """A brief saved after the last iteration reached Post — all or some of its comments — is refused."""
+    repo = AsyncMock()
+    posted_iter = make_iteration(stage=IterationStage.post, completed_at=completed_at)
+    original = make_review(iterations=[posted_iter])
+    repo.get_by_id.return_value = original
+    use_case = UpdateReviewUseCase(repo)
+
+    with pytest.raises(IterationLockedError, match=str(posted_iter.id)):
+        await use_case.execute(review_id=original.id, brief_config=BriefConfig(preset=BriefPreset.security))
+
+    repo.update.assert_not_awaited()
