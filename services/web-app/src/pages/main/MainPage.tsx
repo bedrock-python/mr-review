@@ -3,31 +3,13 @@ import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
 import { HostsRail, ReposPane } from "@widgets/sidebar";
 import { MRList } from "@widgets/mr-list";
-import { StageBar, useStageBarStore } from "@widgets/stage-bar";
+import { StageBar } from "@widgets/stage-bar";
 import { MRHeader } from "@widgets/mr-header";
 import { HistoryPanel } from "@widgets/history-panel";
 import { IterationHistoryPanel } from "@widgets/iteration-history-panel";
-import { PickStage } from "@features/pick";
-import { BriefStage } from "@features/brief";
-import { DispatchStage } from "@features/dispatch";
-import { PolishStage } from "@features/polish";
-import { PostStage } from "@features/post";
 import { UpdateBanner } from "@features/check-update";
-import type { ReviewStage } from "@entities/review";
-
-const STAGE_COMPONENTS: Record<ReviewStage, () => React.ReactElement> = {
-  pick: PickStage,
-  brief: BriefStage,
-  dispatch: DispatchStage,
-  polish: PolishStage,
-  post: PostStage,
-};
-
-const ActiveStage = (): React.ReactElement => {
-  const activeStage = useStageBarStore((s) => s.activeStage);
-  const Component = STAGE_COMPONENTS[activeStage];
-  return <Component />;
-};
+import { ActiveStage } from "./ui/ActiveStage";
+import { BranchDiffHeader } from "./ui/BranchDiffHeader";
 
 const EmptyState = (): React.ReactElement => (
   <div
@@ -111,19 +93,31 @@ const CollapseToggle = ({ collapsed }: { collapsed: boolean }): React.ReactEleme
 };
 
 export const MainPage = (): React.ReactElement => {
-  const { navCollapsed, setNavCollapsed } = useAppStore();
-  const { selectedHostId, selectedMRIid } = useNav();
-  const { activeIterationId, setStage, setIterationId } = useStageBarStore();
+  // Selectors: a panel toggling elsewhere in the store must not re-render the open stage.
+  const navCollapsed = useAppStore((s) => s.navCollapsed);
+  const setNavCollapsed = useAppStore((s) => s.setNavCollapsed);
+  const {
+    selectedHostId,
+    selectedRepoPath,
+    selectedMRIid,
+    activeReviewId,
+    activeIterationId,
+    goToStage,
+  } = useNav();
+  // A branch diff review has no merge request: it opens on its repository with ?review=.
+  const isBranchDiffOpen =
+    selectedMRIid === null && selectedRepoPath !== null && activeReviewId !== null;
+  const isWorkspaceOpen = selectedMRIid !== null || isBranchDiffOpen;
 
-  // Collapse nav when a MR is opened
+  // Collapse nav when a MR (or a branch diff review) is opened
   useEffect(() => {
-    if (selectedMRIid !== null) setNavCollapsed(true);
-  }, [selectedMRIid, setNavCollapsed]);
+    if (isWorkspaceOpen) setNavCollapsed(true);
+  }, [isWorkspaceOpen, setNavCollapsed]);
 
-  // Expand nav when a host is selected but no MR is open (includes inbox)
+  // Expand nav when a host is selected but nothing is open (includes inbox)
   useEffect(() => {
-    if (selectedHostId !== null && selectedMRIid === null) setNavCollapsed(false);
-  }, [selectedHostId, selectedMRIid, setNavCollapsed]);
+    if (selectedHostId !== null && !isWorkspaceOpen) setNavCollapsed(false);
+  }, [selectedHostId, isWorkspaceOpen, setNavCollapsed]);
 
   return (
     <div
@@ -167,13 +161,11 @@ export const MainPage = (): React.ReactElement => {
         >
           <CollapseToggle collapsed={navCollapsed} />
 
-          {selectedMRIid !== null ? (
+          {isWorkspaceOpen ? (
             <>
-              <MRHeader />
+              {isBranchDiffOpen ? <BranchDiffHeader /> : <MRHeader />}
               <StageBar />
-              <div style={{ flex: 1, overflow: "auto" }}>
-                <ActiveStage />
-              </div>
+              <ActiveStage />
             </>
           ) : (
             <EmptyState />
@@ -184,8 +176,7 @@ export const MainPage = (): React.ReactElement => {
         <IterationHistoryPanel
           activeIterationId={activeIterationId}
           onIterationSelect={(id, stage) => {
-            setIterationId(id);
-            setStage(stage);
+            goToStage({ stage, iterationId: id });
           }}
         />
       </div>

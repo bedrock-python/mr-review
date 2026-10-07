@@ -1,101 +1,82 @@
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import { useNav } from "@app/navigation";
-import { useCreateReview, useReview, reviewApi, reviewKeys } from "@entities/review";
+import { useReview } from "@entities/review";
 import type { ReviewStage } from "@entities/review";
-import { useStageBarStore } from "../model/stageBarStore";
+import {
+  STAGES,
+  STAGE_ORDER,
+  STAGE_PANEL_ID,
+  isStageAvailable,
+  resolveIteration,
+  stageTabId,
+} from "../model/stages";
+import { useStageBarStore } from "../model/useStageBarStore";
+import { useStageNavigation } from "../model/useStageNavigation";
+import { useStageUrlSync } from "../model/useStageUrlSync";
 
-const STAGES: { id: ReviewStage; label: string; short: number }[] = [
-  { id: "pick", label: "Pick", short: 1 },
-  { id: "brief", label: "Brief", short: 2 },
-  { id: "dispatch", label: "Dispatch", short: 3 },
-  { id: "polish", label: "Polish", short: 4 },
-  { id: "post", label: "Post", short: 5 },
-];
+const NODE_SIZE = 26;
+const LOCKED_OPACITY = 0.4;
 
-const STAGE_ORDER: Record<ReviewStage, number> = {
-  pick: 0,
-  brief: 1,
-  dispatch: 2,
-  polish: 3,
-  post: 4,
+const CheckIcon = (): React.ReactElement => (
+  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <polyline points="2,6 5,9 10,3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+type NodeColors = { background: string; color: string; border: string };
+
+const nodeColors = (isActive: boolean, isReached: boolean): NodeColors => {
+  if (isActive) return { background: "var(--accent)", color: "var(--accent-ink)", border: "none" };
+  if (isReached) {
+    return {
+      background: "color-mix(in oklch, var(--accent) 20%, var(--bg-2))",
+      color: "var(--accent)",
+      border: "none",
+    };
+  }
+  return { background: "transparent", color: "var(--fg-3)", border: "1px solid var(--border)" };
+};
+
+const NEXT_KEYS: Record<string, (index: number, count: number) => number> = {
+  ArrowRight: (i, n) => (i + 1) % n,
+  ArrowLeft: (i, n) => (i - 1 + n) % n,
+  Home: () => 0,
+  End: (_, n) => n - 1,
 };
 
 export const StageBar = (): React.ReactElement => {
-  const { activeStage, activeIterationId, setStage, setIterationId, reset } = useStageBarStore();
-  const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId, setReview } = useNav();
-  const createReview = useCreateReview();
-  const qc = useQueryClient();
-  const activeIndex = STAGE_ORDER[activeStage];
-
+  useStageUrlSync();
+  const activeStage = useStageBarStore((s) => s.activeStage);
+  const { activeReviewId, activeIterationId, selectedMRIid } = useNav();
+  const { goToStage, isPending } = useStageNavigation();
   const { data: review } = useReview(activeReviewId);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Compute the furthest stage reached in the current iteration (backend authoritative)
-  const currentIteration =
-    review?.iterations.find((it) => it.id === activeIterationId) ??
-    review?.iterations[review.iterations.length - 1] ??
-    null;
-  const maxAllowedStage: ReviewStage = currentIteration?.stage ?? "pick";
-  const maxAllowedIndex = STAGE_ORDER[maxAllowedStage];
+  const activeIndex = STAGE_ORDER[activeStage];
+  const iteration = resolveIteration(review, activeIterationId);
+  // Furthest stage the server has recorded for this iteration. Brief is always open: it
+  // starts the review (or its next round) when there is nothing further yet.
+  const canStartBrief = activeReviewId !== null || selectedMRIid !== null;
+  const reachedIndex = Math.max(
+    STAGE_ORDER[iteration?.stage ?? "pick"],
+    canStartBrief ? STAGE_ORDER.brief : 0
+  );
 
-  // Auto-navigate to the stage stored in the backend when a review is loaded
-  useEffect(() => {
-    if (!activeReviewId || !review) return;
-    const lastIteration = review.iterations[review.iterations.length - 1];
-    if (!lastIteration) return;
-    // Only jump automatically if the store is still at "pick" (fresh load / reset)
-    if (activeStage === "pick") {
-      setIterationId(lastIteration.id);
-      setStage(lastIteration.stage);
-    }
-  }, [activeReviewId, review, activeStage, setStage, setIterationId]);
+  const isLocked = (stage: ReviewStage, index: number): boolean =>
+    !isStageAvailable(stage, review) || (index > reachedIndex && stage !== activeStage);
 
-  useEffect(() => {
-    reset();
-  }, [selectedMRIid, reset]);
-
-  const handleStageClick = async (stageId: ReviewStage): Promise<void> => {
-    if (stageId === "pick") {
-      setStage("pick");
-      return;
-    }
-
-    // Block navigation to stages beyond the furthest reached
-    if (STAGE_ORDER[stageId] > maxAllowedIndex) return;
-
-    // Need a review first (upsert)
-    let reviewId = activeReviewId;
-    if (reviewId === null) {
-      if (!selectedHostId || !selectedRepoPath || selectedMRIid === null) return;
-      const newReview = await createReview.mutateAsync({
-        host_id: selectedHostId,
-        repo_path: selectedRepoPath,
-        mr_iid: selectedMRIid,
-      });
-      reviewId = newReview.id;
-      setReview(newReview.id);
-    }
-
-    // Need an iteration for non-pick stages
-    let iterationId = activeIterationId;
-    if (iterationId === null && stageId === "brief") {
-      // Create a new iteration when entering brief from pick
-      const updated = await reviewApi.createIteration(reviewId);
-      qc.setQueryData(reviewKeys.detail(reviewId), updated);
-      const newIteration = updated.iterations[updated.iterations.length - 1];
-      if (newIteration) {
-        iterationId = newIteration.id;
-        setIterationId(iterationId);
-      }
-    }
-
-    setStage(stageId);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number): void => {
+    const next = NEXT_KEYS[event.key];
+    if (!next) return;
+    event.preventDefault();
+    tabRefs.current[next(index, STAGES.length)]?.focus();
   };
 
   return (
     <header
       role="tablist"
       aria-label="Review pipeline stages"
+      aria-busy={isPending}
       style={{
         flexShrink: 0,
         display: "flex",
@@ -110,38 +91,16 @@ export const StageBar = (): React.ReactElement => {
     >
       {STAGES.map((stage, index) => {
         const isActive = activeStage === stage.id;
-        // Reached in backend — can navigate back to these freely
-        const isReached = index <= maxAllowedIndex;
-        // Visually "completed" = passed in the current UI view (shows checkmark)
-        const isCompleted = index < activeIndex;
-        // Beyond the furthest stage the backend has recorded — locked
-        const isBeyondReach = index > maxAllowedIndex;
-
-        const nodeSize = 26;
-
-        let nodeBg: string;
-        let nodeColor: string;
-        let nodeBorder: string;
-
-        if (isActive) {
-          nodeBg = "var(--accent)";
-          nodeColor = "var(--accent-ink)";
-          nodeBorder = "none";
-        } else if (isReached) {
-          nodeBg = "color-mix(in oklch, var(--accent) 20%, var(--bg-2))";
-          nodeColor = "var(--accent)";
-          nodeBorder = "none";
-        } else {
-          nodeBg = "transparent";
-          nodeColor = "var(--fg-3)";
-          nodeBorder = "1px solid var(--border)";
-        }
+        const isReached = index <= reachedIndex;
+        const locked = isLocked(stage.id, index);
+        const colors = nodeColors(isActive, isReached && !locked);
+        const showCheck = !isActive && !locked && (index < activeIndex || isReached);
 
         return (
           <div key={stage.id} style={{ display: "flex", alignItems: "center" }}>
-            {/* Connector line before node (skip first) */}
             {index > 0 && (
               <div
+                aria-hidden="true"
                 style={{
                   width: 28,
                   height: 1,
@@ -152,12 +111,25 @@ export const StageBar = (): React.ReactElement => {
             )}
 
             <button
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
               type="button"
               role="tab"
+              id={stageTabId(stage.id)}
+              aria-controls={isActive ? STAGE_PANEL_ID : undefined}
               aria-selected={isActive}
-              aria-disabled={isBeyondReach}
+              aria-disabled={locked}
+              tabIndex={isActive ? 0 : -1}
+              title={
+                isStageAvailable(stage.id, review) ? undefined : "Not available for a branch diff"
+              }
+              onKeyDown={(event) => {
+                handleKeyDown(event, index);
+              }}
               onClick={() => {
-                void handleStageClick(stage.id);
+                if (locked || isActive || isPending) return;
+                void goToStage(stage.id);
               }}
               style={{
                 position: "relative",
@@ -167,20 +139,20 @@ export const StageBar = (): React.ReactElement => {
                 background: "none",
                 border: "none",
                 padding: "0 4px",
-                cursor: isBeyondReach ? "not-allowed" : isReached ? "pointer" : "default",
-                opacity: isBeyondReach ? 0.4 : 1,
+                cursor: locked ? "not-allowed" : isActive ? "default" : "pointer",
+                opacity: locked ? LOCKED_OPACITY : 1,
               }}
             >
-              {/* Pulse ring on active */}
               {isActive && (
                 <span
+                  aria-hidden="true"
                   style={{
                     position: "absolute",
                     left: 4,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    width: nodeSize,
-                    height: nodeSize,
+                    width: NODE_SIZE,
+                    height: NODE_SIZE,
                     borderRadius: "50%",
                     background: "var(--accent)",
                     opacity: 0.3,
@@ -189,42 +161,30 @@ export const StageBar = (): React.ReactElement => {
                 />
               )}
 
-              {/* Node circle */}
-              <div
+              <span
+                aria-hidden="true"
                 style={{
-                  width: nodeSize,
-                  height: nodeSize,
+                  width: NODE_SIZE,
+                  height: NODE_SIZE,
                   borderRadius: "50%",
-                  background: nodeBg,
-                  border: nodeBorder,
+                  background: colors.background,
+                  border: colors.border,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   fontWeight: 600,
-                  color: nodeColor,
+                  color: colors.color,
                   flexShrink: 0,
                   position: "relative",
                   zIndex: 1,
                   transition: "background 0.15s",
                 }}
               >
-                {isCompleted || (isReached && !isActive) ? (
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                    <polyline
-                      points="2,6 5,9 10,3"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                ) : (
-                  stage.short
-                )}
-              </div>
+                {showCheck ? <CheckIcon /> : stage.short}
+              </span>
 
-              {/* Label */}
               <span
                 style={{
                   fontSize: 12,

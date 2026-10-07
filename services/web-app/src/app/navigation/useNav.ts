@@ -1,23 +1,70 @@
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import type { ReviewStage } from "@entities/review";
 
 export type NavState = {
   selectedHostId: string | null;
   selectedRepoPath: string | null;
   selectedMRIid: number | null;
   activeReviewId: string | null;
+  /** The review stage named in the URL; null when the URL names none. */
+  activeStage: ReviewStage | null;
+  /** The iteration named in the URL; null when the URL names none. */
+  activeIterationId: string | null;
   isInbox: boolean;
+};
+
+export type NavigateOptions = {
+  /** Replace the current history entry instead of adding one (redirects, URL clean-up). */
+  replace?: boolean;
+};
+
+export type ReviewStageTarget = {
+  stage: ReviewStage;
+  /** Omitted keeps the iteration in the URL. */
+  iterationId?: string | null;
+  /** Switch to this review as well; omitted keeps the review in the URL. */
+  reviewId?: string;
+};
+
+export type ReviewLocation = {
+  hostId: string;
+  repoPath: string;
+  /** Null for a review that is not backed by a merge request (a branch diff). */
+  mrIid: number | null;
+  reviewId: string;
 };
 
 export type NavActions = {
   setHost: (id: string) => void;
   setRepo: (hostId: string, repoPath: string) => void;
   setMR: (hostId: string, repoPath: string, mrIid: number) => void;
-  setReview: (id: string | null) => void;
+  /**
+   * Opens another review, or none; the stage and iteration of the previous one are dropped
+   * and left for the stage bar to pick.
+   */
+  setReview: (id: string | null, options?: NavigateOptions) => void;
+  /** Moves the open review to a stage and iteration in one history entry. */
+  goToStage: (target: ReviewStageTarget, options?: NavigateOptions) => void;
+  openReview: (target: ReviewLocation) => void;
   setInbox: (hostId: string) => void;
   clearMR: () => void;
 };
 
 const INBOX_SEGMENT = "~inbox";
+const REVIEW_PARAM = "review";
+const STAGE_PARAM = "stage";
+const ITERATION_PARAM = "it";
+
+const REVIEW_STAGES: readonly ReviewStage[] = ["pick", "brief", "dispatch", "polish", "post"];
+
+const parseStage = (raw: string | null): ReviewStage | null =>
+  REVIEW_STAGES.find((stage) => stage === raw) ?? null;
+
+export const buildRepoPath = (hostId: string, repoPath: string): string =>
+  `/${encodeURIComponent(hostId)}/${encodeURIComponent(repoPath)}`;
+
+export const buildMRPath = (hostId: string, repoPath: string, mrIid: number): string =>
+  `${buildRepoPath(hostId, repoPath)}/mrs/${String(mrIid)}`;
 
 const parsePath = (
   pathname: string
@@ -64,40 +111,89 @@ const parsePath = (
   };
 };
 
+type SearchPatch = Partial<Record<string, string | null>>;
+
+type CurrentLocation = { pathname: string; search: string };
+
+// React Router hands out the location of the last render. A stage change issued after an
+// await (a save, a review being created) or right after another navigation would build on
+// that stale copy and undo the newer URL — or, after the user switched MRs meanwhile, move
+// them back. The browser's own URL is always current: BrowserRouter writes it synchronously.
+const readCurrentLocation = (fallback: CurrentLocation): CurrentLocation =>
+  typeof window === "undefined"
+    ? fallback
+    : { pathname: window.location.pathname, search: window.location.search };
+
+const applySearchPatch = (search: string, patch: SearchPatch): string => {
+  const params = new URLSearchParams(search);
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) params.delete(key);
+    else params.set(key, value);
+  }
+  const next = params.toString();
+  return next ? `?${next}` : "";
+};
+
 export const useNav = (): NavState & NavActions => {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const { pathname } = location;
+  const searchParams = new URLSearchParams(location.search);
 
   const { hostId, repoPath, mrIid, isInbox } = parsePath(pathname);
 
   const selectedHostId = hostId;
   const selectedRepoPath = repoPath;
   const selectedMRIid = mrIid;
-  const activeReviewId = searchParams.get("review");
+  const activeReviewId = searchParams.get(REVIEW_PARAM);
+  const activeStage = parseStage(searchParams.get(STAGE_PARAM));
+  const activeIterationId = searchParams.get(ITERATION_PARAM);
+
+  // Changes the query of the page this hook rendered for. A call that arrives after the
+  // user has moved to another page (an await finishing late) is dropped instead of being
+  // applied to, or navigating back from, the page they are on now.
+  const patchSearch = (patch: SearchPatch, options?: NavigateOptions): void => {
+    const current = readCurrentLocation(location);
+    if (current.pathname !== pathname) return;
+    const search = applySearchPatch(current.search, patch);
+    if (search === current.search) return;
+    void navigate({ pathname: current.pathname, search }, { replace: options?.replace ?? false });
+  };
 
   const setHost = (id: string): void => {
     void navigate(`/${encodeURIComponent(id)}/${INBOX_SEGMENT}`);
   };
 
   const setRepo = (hId: string, rPath: string): void => {
-    void navigate(`/${encodeURIComponent(hId)}/${encodeURIComponent(rPath)}`);
+    void navigate(buildRepoPath(hId, rPath));
   };
 
   const setMR = (hId: string, rPath: string, iid: number): void => {
-    void navigate(`/${encodeURIComponent(hId)}/${encodeURIComponent(rPath)}/mrs/${String(iid)}`);
+    void navigate(buildMRPath(hId, rPath, iid));
   };
 
-  const setReview = (id: string | null): void => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (id === null) {
-        next.delete("review");
-      } else {
-        next.set("review", id);
-      }
-      return next;
-    });
+  const setReview = (id: string | null, options?: NavigateOptions): void => {
+    patchSearch({ [REVIEW_PARAM]: id, [STAGE_PARAM]: null, [ITERATION_PARAM]: null }, options);
+  };
+
+  const goToStage = (target: ReviewStageTarget, options?: NavigateOptions): void => {
+    patchSearch(
+      {
+        [REVIEW_PARAM]: target.reviewId,
+        [STAGE_PARAM]: target.stage,
+        [ITERATION_PARAM]: target.iterationId,
+      },
+      options
+    );
+  };
+
+  const openReview = (target: ReviewLocation): void => {
+    const path =
+      target.mrIid === null
+        ? buildRepoPath(target.hostId, target.repoPath)
+        : buildMRPath(target.hostId, target.repoPath, target.mrIid);
+    void navigate({ pathname: path, search: applySearchPatch("", { review: target.reviewId }) });
   };
 
   const setInbox = (hId: string): void => {
@@ -106,9 +202,7 @@ export const useNav = (): NavState & NavActions => {
 
   const clearMR = (): void => {
     if (selectedHostId && selectedRepoPath) {
-      void navigate(
-        `/${encodeURIComponent(selectedHostId)}/${encodeURIComponent(selectedRepoPath)}`
-      );
+      void navigate(buildRepoPath(selectedHostId, selectedRepoPath));
     } else if (selectedHostId) {
       void navigate(`/${encodeURIComponent(selectedHostId)}`);
     } else {
@@ -121,11 +215,15 @@ export const useNav = (): NavState & NavActions => {
     selectedRepoPath,
     selectedMRIid,
     activeReviewId,
+    activeStage,
+    activeIterationId,
     isInbox,
     setHost,
     setRepo,
     setMR,
     setReview,
+    goToStage,
+    openReview,
     setInbox,
     clearMR,
   };
