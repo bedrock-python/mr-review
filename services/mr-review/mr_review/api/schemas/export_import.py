@@ -1,53 +1,58 @@
-"""Export/Import API schemas."""
+"""Export/Import API schemas.
+
+The export file is :class:`~mr_review.core.export_import.entities.ExportData` as JSON. An
+import request is that same file with the merge strategy and the passphrase added, so a
+client can send the file it read back with two extra keys.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from pydantic import ConfigDict, Field, SecretStr, model_validator
 
-from pydantic import BaseModel, Field
-
-
-class ExportRequestSchema(BaseModel):
-    """Request to export data."""
-
-    include_hosts: bool = True
-    include_ai_providers: bool = True
-    include_reviews: bool = True
-    encryption_password: str | None = None
+from mr_review.core.export_import.entities import (
+    ExportData,
+    ImportPreview,
+    ImportResult,
+    MergeStrategy,
+)
+from mr_review.core.export_import.entities import ExportRequest as _ExportRequest
 
 
-class ExportResponseSchema(BaseModel):
-    """Export data response - returns JSON data."""
+class ExportRequestSchema(_ExportRequest):
+    """What to export. Secrets are encrypted with ``encryption_password``, included in
+    plain text only with ``include_plain_secrets``, and left out otherwise."""
 
-    version: str
-    exported_at: datetime
-    encrypted: bool
-    hosts: list[dict[str, Any]] = Field(default_factory=list)
-    ai_providers: list[dict[str, Any]] = Field(default_factory=list)
-    reviews: list[dict[str, Any]] = Field(default_factory=list)
+    model_config = ConfigDict(hide_input_in_errors=True)
 
+    encryption_password: SecretStr | None = Field(default=None, min_length=1)
 
-class ImportRequestSchema(BaseModel):
-    """Request to import data."""
-
-    version: str
-    exported_at: datetime
-    encrypted: bool
-    hosts: list[dict[str, Any]] = Field(default_factory=list)
-    ai_providers: list[dict[str, Any]] = Field(default_factory=list)
-    reviews: list[dict[str, Any]] = Field(default_factory=list)
-    merge_strategy: str = "skip"  # "skip", "replace", or "merge"
-    decryption_password: str | None = None
+    @model_validator(mode="after")
+    def _one_way_to_carry_secrets(self) -> ExportRequestSchema:
+        if self.encryption_password is not None and self.include_plain_secrets:
+            raise ValueError("Choose either encryption_password or include_plain_secrets, not both")
+        return self
 
 
-class ImportResponseSchema(BaseModel):
-    """Result of import operation."""
+class ImportRequestSchema(ExportData):
+    """An export file plus how to merge it and, for an encrypted file, its passphrase."""
 
-    hosts_imported: int
-    hosts_skipped: int
-    ai_providers_imported: int
-    ai_providers_skipped: int
-    reviews_imported: int
-    reviews_skipped: int
-    errors: list[str] = Field(default_factory=list)
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    merge_strategy: MergeStrategy = "skip"
+    decryption_password: SecretStr | None = None
+
+    def package(self) -> ExportData:
+        """The export file part of the request, already validated."""
+        return ExportData.model_construct(
+            _fields_set=self.model_fields_set & set(ExportData.model_fields),
+            **{name: getattr(self, name) for name in ExportData.model_fields},
+        )
+
+
+class ImportResponseSchema(ImportResult):
+    """Result of an import: per kind, new records (``imported``), existing records that
+    changed (``updated``) and existing records left as they were (``skipped``)."""
+
+
+class ImportPreviewResponseSchema(ImportPreview):
+    """What an export file contains and how many of its records already exist here."""

@@ -4,12 +4,15 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 AIProviderType = Literal["claude", "openai", "openai_compat"]
 
 
 class AIProvider(BaseModel):
+    # The API key must never reach a log through a validation error message.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     id: UUID
     name: str
     type: AIProviderType
