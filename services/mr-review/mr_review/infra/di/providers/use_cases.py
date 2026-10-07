@@ -22,8 +22,10 @@ from mr_review.infra.repositories.review import FileReviewRepository
 from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.ai_providers.create_ai_provider import CreateAIProviderUseCase
 from mr_review.use_cases.ai_providers.delete_ai_provider import DeleteAIProviderUseCase
+from mr_review.use_cases.ai_providers.get_model_capabilities import GetModelCapabilitiesUseCase
 from mr_review.use_cases.ai_providers.list_ai_providers import ListAIProvidersUseCase
 from mr_review.use_cases.ai_providers.list_provider_models import ListProviderModelsUseCase
+from mr_review.use_cases.ai_providers.preview_provider_models import PreviewProviderModelsUseCase
 from mr_review.use_cases.ai_providers.update_ai_provider import UpdateAIProviderUseCase
 from mr_review.use_cases.export_data import ExportDataUseCase
 from mr_review.use_cases.hosts.add_repo_by_url import AddRepoByUrlUseCase
@@ -321,6 +323,14 @@ class UseCaseProvider(Provider):
     @provide
     def get_list_provider_models_use_case(self, repo: FileAIProviderRepository) -> ListProviderModelsUseCase:
         return ListProviderModelsUseCase(repo=repo, model_lister=_model_lister)
+
+    @provide
+    def get_preview_provider_models_use_case(self, repo: FileAIProviderRepository) -> PreviewProviderModelsUseCase:
+        return PreviewProviderModelsUseCase(repo=repo, model_lister=_model_lister)
+
+    @provide
+    def get_model_capabilities_use_case(self, repo: FileAIProviderRepository) -> GetModelCapabilitiesUseCase:
+        return GetModelCapabilitiesUseCase(repo)
 
     @provide
     def get_export_data_use_case(

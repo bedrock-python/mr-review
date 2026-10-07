@@ -11,6 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from mr_review.api.ai_errors import register_ai_error_handlers
 from mr_review.api.config import Settings
 from mr_review.api.routers.health import router as health_router
 from mr_review.api.routers.v1.ai_providers import router as ai_providers_v1_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     )
 
     register_vcs_error_handlers(app)
+    register_ai_error_handlers(app)
 
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
