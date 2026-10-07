@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from mr_review.api.routers.v1.hosts import router as hosts_router
 from mr_review.api.routers.v1.repos import router as repos_router
+from mr_review.api.vcs_errors import register_vcs_error_handlers
 
 from tests.factories.vcs_container import make_container
 from tests.factories.vcs_http import RoutedTransport, json_response
@@ -67,6 +68,7 @@ async def api(tmp_path: Path, gitlab: RoutedTransport) -> AsyncGenerator[AsyncCl
     app = FastAPI()
     app.include_router(hosts_router)
     app.include_router(repos_router)
+    register_vcs_error_handlers(app)
     container = make_container(tmp_path, httpx.MockTransport(gitlab))
     setup_dishka(container, app)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

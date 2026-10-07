@@ -559,19 +559,22 @@ base_url: http://host.docker.internal:11434/v1
 
 ## What failure looks like
 
-The API answers with a status and a `detail` string; the UI shows it as-is.
+The API answers with a status and a `detail` string; the UI shows it as-is. A failed call to a
+VCS host is translated the same way on every route — listings, diffs, context, prompt, and
+dispatch before its stream starts — so a host problem never surfaces as a bare 500.
 
 | Status | When |
 |---|---|
 | 400 | `Repo path must include at least 'owner/repo'`, or a host type given a nested path |
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
-| 403 | `Host token cannot access repository` — the token is valid but not entitled |
-| 404 | A host, review, iteration or comment id that does not exist, or a repository the host does not have |
+| 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
+| 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 409 | Posting a review whose source is a branch diff, or adding or deleting a comment on an iteration that was posted |
 | 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token; GitHub's issue search allows 30 requests a minute |
-| 502 | `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
-| 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, timeout |
+| 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
+| 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |
+| 504 | `VCS host timed out (<error>)` — the host took longer than `MR_REVIEW__VCS_TIMEOUT` |
 
 Two failures do not surface as a status code:
 

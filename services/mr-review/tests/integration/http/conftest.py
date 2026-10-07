@@ -12,6 +12,7 @@ from mr_review.api.config import Settings
 from mr_review.api.routers.v1.hosts import router as hosts_router
 from mr_review.api.routers.v1.repos import router as repos_router
 from mr_review.api.routers.v1.reviews import router as reviews_router
+from mr_review.api.vcs_errors import register_vcs_error_handlers
 from mr_review.infra.di.containers.api import create_api_container
 
 
@@ -30,6 +31,7 @@ async def app_fixture(http_settings: Settings) -> AsyncGenerator[FastAPI, None]:
     app.include_router(hosts_router)
     app.include_router(repos_router)
     app.include_router(reviews_router)
+    register_vcs_error_handlers(app)
 
     container = create_api_container(http_settings)
     setup_dishka(container, app)

@@ -19,6 +19,7 @@ from mr_review.api.routers.v1.hosts import router as hosts_v1_router
 from mr_review.api.routers.v1.repos import router as repos_v1_router
 from mr_review.api.routers.v1.reviews import router as reviews_v1_router
 from mr_review.api.routers.v1.system import router as system_v1_router
+from mr_review.api.vcs_errors import register_vcs_error_handlers
 from mr_review.common.constants import SENSITIVE_LOG_FIELDS, SERVICE_NAME
 from mr_review.common.logging import SensitiveDataFilter, configure_logging
 from mr_review.infra.di.containers.api import create_api_container
@@ -56,6 +57,8 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
         lifespan=_lifespan,
     )
+
+    register_vcs_error_handlers(app)
 
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(

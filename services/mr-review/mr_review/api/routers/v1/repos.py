@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import NoReturn
 from uuid import UUID
 
-import httpx
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -27,40 +25,6 @@ from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
 
 router = APIRouter(prefix="/api/v1/hosts/{host_id}", tags=["repos"], route_class=DishkaRoute)
-
-
-def _is_rate_limited(response: httpx.Response) -> bool:
-    # GitHub answers an exhausted (search) quota with 403 and X-RateLimit-Remaining: 0, the others with 429.
-    return response.status_code == status.HTTP_429_TOO_MANY_REQUESTS or (
-        response.status_code == status.HTTP_403_FORBIDDEN and response.headers.get("x-ratelimit-remaining") == "0"
-    )
-
-
-def _handle_vcs_error(exc: httpx.HTTPStatusError) -> NoReturn:
-    code = exc.response.status_code
-    if _is_rate_limited(exc.response):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="VCS rate limit reached — try again shortly"
-        ) from exc
-    if code == 401:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="VCS authentication failed — check your token"
-        ) from exc
-    if code == 403:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="VCS access denied — insufficient permissions"
-        ) from exc
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=f"VCS returned {code}",
-    ) from exc
-
-
-def _handle_vcs_unreachable(exc: httpx.RequestError) -> NoReturn:
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=f"VCS host unreachable ({type(exc).__name__})",
-    ) from exc
 
 
 def _normalize_query(q: str | None) -> str | None:
@@ -151,10 +115,6 @@ async def list_repos(
         result = await use_case.execute(host_id, query=_normalize_query(q), page=page, per_page=per_page)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        _handle_vcs_error(exc)
-    except httpx.RequestError as exc:
-        _handle_vcs_unreachable(exc)
     return RepoPageResponse(
         items=[_repo_to_response(r) for r in result.items],
         page=result.page,
@@ -184,10 +144,6 @@ async def list_mrs(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        _handle_vcs_error(exc)
-    except httpx.RequestError as exc:
-        _handle_vcs_unreachable(exc)
     return MRPageResponse(
         items=[_mr_to_response(m) for m in result.items],
         page=result.page,
@@ -207,10 +163,6 @@ async def get_mr(
         mr = await use_case.execute(host_id=host_id, repo_path=repo_path, mr_iid=mr_iid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        _handle_vcs_error(exc)
-    except httpx.RequestError as exc:
-        _handle_vcs_unreachable(exc)
     return _mr_to_response(mr)
 
 
@@ -225,10 +177,6 @@ async def get_mr_diff(
         diff = await use_case.execute(host_id=host_id, repo_path=repo_path, mr_iid=mr_iid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        _handle_vcs_error(exc)
-    except httpx.RequestError as exc:
-        _handle_vcs_unreachable(exc)
     return [_diff_file_to_response(f) for f in diff]
 
 
@@ -244,10 +192,6 @@ async def list_inbox_mrs(
         result = await use_case.execute(host_id, scope=scope, page=page, per_page=per_page)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        _handle_vcs_error(exc)
-    except httpx.RequestError as exc:
-        _handle_vcs_unreachable(exc)
     return InboxMRPageResponse(
         items=[_inbox_mr_to_response(item) for item in result.items],
         page=result.page,
