@@ -21,6 +21,7 @@ from mr_review.api.routers.v1.repos import router as repos_v1_router
 from mr_review.api.routers.v1.review_presets import router as review_presets_v1_router
 from mr_review.api.routers.v1.reviews import router as reviews_v1_router
 from mr_review.api.routers.v1.system import router as system_v1_router
+from mr_review.api.security_headers import SecurityHeadersMiddleware, build_ui_security_headers
 from mr_review.api.vcs_errors import register_vcs_error_handlers
 from mr_review.common.constants import SENSITIVE_LOG_FIELDS, SERVICE_NAME
 from mr_review.common.logging import SensitiveDataFilter, configure_logging
@@ -106,6 +107,15 @@ def _mount_spa(app: FastAPI, settings: Settings) -> None:
     # API base URL must be relative (empty string) — the browser will resolve
     # /api/v1/... against the same host:port the user accessed the UI from.
     api_base_url = os.environ.get("MR_REVIEW__API_BASE_URL", "")
+
+    # The headers the standard deployment's nginx sends with the UI. The JSON API, its SSE
+    # stream and the Swagger pages (which load their assets from a CDN) are left as they are.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        headers=build_ui_security_headers(api_base_url),
+        skip_prefixes=(_API_PREFIX, "/system"),
+    )
+
     config_js_content = (
         f"window.__APP_CONFIG__ = {{\n"
         f"  API_BASE_URL: {json.dumps(api_base_url)},\n"
