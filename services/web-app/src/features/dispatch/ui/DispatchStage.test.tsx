@@ -7,7 +7,7 @@ import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
 import { DispatchStage } from "./DispatchStage";
 import type * as ReviewApiModule from "@entities/review/api/reviewApi";
 import type { AIProvider } from "@entities/ai-provider";
-import type { DispatchStreamEvent, Review } from "@entities/review";
+import type { DispatchStreamEvent, ImportResponseResult, Review } from "@entities/review";
 
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   getContext: vi.fn(),
   dispatchStream: vi.fn(),
   getRawResponse: vi.fn(),
+  importResponse: vi.fn(),
 }));
 
 const stage = vi.hoisted(() => ({ setStage: vi.fn() }));
@@ -273,6 +274,61 @@ describe("DispatchStage — run in app", () => {
     await user.click(within(notice).getByRole("button", { name: "Fix in Copy & paste mode" }));
     expect(await screen.findByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
       "Sure! Here are my comments: [{oops"
+    );
+  });
+});
+
+describe("DispatchStage — copy & paste import", () => {
+  beforeEach(resetMocks);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const importResponse = async (
+    user: ReturnType<typeof userEvent.setup>,
+    result: ImportResponseResult
+  ): Promise<void> => {
+    api.importResponse.mockResolvedValue(result);
+    renderStage();
+    await user.click(await screen.findByRole("button", { name: "Copy & paste" }));
+    await user.click(screen.getByRole("button", { name: "paste text" }));
+    await user.click(screen.getByPlaceholderText("Paste AI response JSON here…"));
+    await user.paste('[{"severity": "minor", "body": "ok"}, {}]');
+    await user.click(screen.getByRole("button", { name: "Import comments" }));
+  };
+
+  it("lists every skipped item with its reason", async () => {
+    const user = userEvent.setup();
+    await importResponse(user, {
+      imported: 1,
+      errors: [{ index: 1, reason: "body: Field required", raw: "{}" }],
+      json_error: null,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "1 comment imported, 1 item skipped"
+    );
+    const skipped = screen.getByRole("region", { name: "Skipped items" });
+    expect(within(skipped).getByText("item #2")).toBeInTheDocument();
+    expect(within(skipped).getByText("body: Field required")).toBeInTheDocument();
+  });
+
+  it("explains a JSON error and lets the user fix the response", async () => {
+    const user = userEvent.setup();
+    await importResponse(user, {
+      imported: 1,
+      errors: [],
+      json_error: "Expecting ',' delimiter: line 1 column 40 (char 39)",
+    });
+
+    const report = await screen.findByRole("alert");
+    expect(report).toHaveTextContent("The response isn't valid JSON");
+    expect(report).toHaveTextContent("saved as one general comment");
+    expect(report).toHaveTextContent("Expecting ',' delimiter: line 1 column 40");
+
+    await user.click(screen.getByRole("button", { name: "Edit & re-import" }));
+    expect(screen.getByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
+      '[{"severity": "minor", "body": "ok"}, {}]'
     );
   });
 });

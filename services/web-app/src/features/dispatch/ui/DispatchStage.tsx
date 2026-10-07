@@ -22,6 +22,7 @@ import { useStageBarStore } from "@widgets/stage-bar";
 import { createDispatchSession } from "../model/dispatchSession";
 import { DispatchOutcome } from "./DispatchOutcome";
 import { DispatchStreamPanel } from "./DispatchStreamPanel";
+import { ImportReport } from "./ImportReport";
 
 import type { DispatchRunInfo, DispatchRunStatus } from "./DispatchStreamPanel";
 
@@ -178,7 +179,6 @@ const ManualDispatch = ({
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
   const [importResult, setImportResult] = useState<ImportResponseResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [showErrors, setShowErrors] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const diffSize = useDiffSize(reviewId);
   const contextSize = useContextSize(reviewId);
@@ -234,7 +234,6 @@ const ManualDispatch = ({
     setImportStatus("idle");
     setImportResult(null);
     setImportError(null);
-    setShowErrors(false);
   };
 
   const handleDrop = (e: React.DragEvent): void => {
@@ -662,152 +661,18 @@ const ManualDispatch = ({
           </div>
         )}
 
-        {importStatus === "done" &&
-          importResult &&
-          (() => {
-            const hasJsonError = Boolean(importResult.json_error);
-            const hasItemErrors = importResult.errors.length > 0;
-            const succeeded = importResult.imported > 0;
-            return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 14px",
-                    borderRadius: 6,
-                    border: `1px solid color-mix(in oklch, ${succeeded ? "var(--accent)" : "var(--c-critical)"} 35%, transparent)`,
-                    background: `color-mix(in oklch, ${succeeded ? "var(--accent)" : "var(--c-critical)"} 8%, var(--bg-2))`,
-                  }}
-                >
-                  <span style={{ fontSize: 18 }}>{succeeded ? "✓" : "✗"}</span>
-                  <div style={{ flex: 1 }}>
-                    {succeeded ? (
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-0)" }}>
-                        {importResult.imported} comment{importResult.imported !== 1 ? "s" : ""}{" "}
-                        imported
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-critical)" }}>
-                        Import failed — no valid comments found
-                      </span>
-                    )}
-                    {hasItemErrors && (
-                      <span style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 8 }}>
-                        · {importResult.errors.length} skipped
-                      </span>
-                    )}
-                  </div>
-                  {hasItemErrors && (
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: 11, padding: "3px 8px" }}
-                      onClick={() => {
-                        setShowErrors((v) => !v);
-                      }}
-                    >
-                      {showErrors ? "Hide" : "Show"} errors
-                    </button>
-                  )}
-                  {!succeeded && (
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: 11, padding: "3px 8px" }}
-                      onClick={() => {
-                        setImportStatus("idle");
-                        setImportResult(null);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-                {hasJsonError && (
-                  <div
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 6,
-                      border: "1px solid color-mix(in oklch, var(--c-critical) 35%, transparent)",
-                      background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
-                      fontSize: 11,
-                      color: "var(--c-critical)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    <strong style={{ fontFamily: "var(--font-sans)" }}>JSON error: </strong>
-                    {importResult.json_error}
-                  </div>
-                )}
-                {showErrors && hasItemErrors && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        color: "var(--fg-3)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      Skipped items
-                    </div>
-                    {importResult.errors.map((err) => (
-                      <div
-                        key={err.index}
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: 6,
-                          border: "1px solid var(--border)",
-                          background: "var(--bg-2)",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 4,
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                            #{err.index + 1}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--c-major)", fontWeight: 500 }}>
-                            {err.reason}
-                          </span>
-                        </div>
-                        <pre
-                          style={{
-                            margin: 0,
-                            fontSize: 10,
-                            color: "var(--fg-3)",
-                            fontFamily: "var(--font-mono)",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-all",
-                            maxHeight: 80,
-                            overflowY: "auto",
-                          }}
-                        >
-                          {err.raw}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {succeeded && (
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ alignSelf: "flex-end", gap: 6 }}
-                    onClick={() => {
-                      setStage("polish");
-                    }}
-                  >
-                    Polish comments →
-                  </button>
-                )}
-              </div>
-            );
-          })()}
+        {importStatus === "done" && importResult && (
+          <ImportReport
+            result={importResult}
+            onEdit={() => {
+              setImportStatus("idle");
+              setImportResult(null);
+            }}
+            onContinue={() => {
+              setStage("polish");
+            }}
+          />
+        )}
       </div>
     </div>
   );
