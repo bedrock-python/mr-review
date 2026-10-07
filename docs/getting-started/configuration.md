@@ -17,22 +17,26 @@ these names.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MR_REVIEW_BIND` | `127.0.0.1` | Host address the port is published on — `0.0.0.0` for every interface; read the warning in [Installation](installation.md#opening-it-from-another-machine) first |
 | `PORT` | `17240` | Host port mapped to the container's `8000` |
 | `DATA_DIR` | `./data` | Host path for the data volume |
+| `PUID` / `PGID` | `1000` / `1000` | User and group the application runs as and owns `DATA_DIR` |
 
 ### Standard deployment
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_PORT` | `17241` | Host port for the API container |
-| `WEB_PORT` | `17242` | Host port for the web UI container |
+| `MR_REVIEW_BIND` | `127.0.0.1` | Host address both ports are published on |
+| `WEB_PORT` | `17242` | Host port for the web UI container — the only one a browser needs |
+| `API_PORT` | `17241` | Host port the API is published on directly, for scripts and `/system/docs` |
 | `DATA_DIR` | `./data` | Host path for the data volume |
+| `PUID` / `PGID` | `1000` / `1000` | User and group the API runs as and owns `DATA_DIR` |
 
 Example `.env` for the standard deployment:
 
 ```env
-API_PORT=9000
 WEB_PORT=9080
+API_PORT=9000
 DATA_DIR=/opt/mr-review/data
 ```
 
@@ -56,13 +60,23 @@ The ones worth knowing:
 |----------|---------|-------------|
 | `MR_REVIEW__LOGGING__LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `MR_REVIEW__LOGGING__USE_JSON` | `false` | Both shipped compose files set it to `true` |
-| `MR_REVIEW__DATA_DIR` | `~/.mr-review` | Path *inside* the container; both compose files set `/data` |
+| `MR_REVIEW__DATA_DIR` | `/data` in the images | Path *inside* the container (`~/.mr-review` when run outside Docker) |
 | `MR_REVIEW__VCS_TIMEOUT` | `60.0` | HTTP timeout in seconds for calls to a VCS host |
 | `MR_REVIEW__AI_THROTTLE__DEFAULT_MAX_CONCURRENT` | `4` | Dispatches in flight per AI provider |
-| `MR_REVIEW__CORS__ALLOW_ORIGINS` | dev ports | JSON array — see below |
+| `MR_REVIEW__CORS__ALLOW_ORIGINS` | dev ports | JSON array; needed only when the UI calls the API on another origin — see below |
 
 The complete list, with the server and CORS settings, is on the
 [For AI agents](../agents.md) page.
+
+### Web container (standard deployment)
+
+The `web` container is nginx. It serves the UI and forwards every `/api/` request to the
+API container, so the UI and the API share one origin and CORS never comes into it.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_UPSTREAM` | `http://api:8000` | Where nginx forwards `/api/`, resolved inside the Docker network. `scheme://host:port`, no path |
+| `API_BASE_URL` | empty | Where the **browser** sends API calls. Empty means the UI's own origin, through the proxy above. Set it only to serve the API from another origin, which must then allow the UI's origin in `MR_REVIEW__CORS__ALLOW_ORIGINS` |
 
 ## Where data is stored
 
@@ -109,11 +123,18 @@ When deploying on a server rather than a local machine:
 
 - Use an **absolute path** for `DATA_DIR` (e.g. `/opt/mr-review/data`) to avoid path
   resolution issues.
-- Put **nginx or Caddy** in front for HTTPS termination. There is no authentication in
-  mr-review itself, so the port must not be reachable by anyone you would not hand the
-  tokens to.
-- If the UI and API are served from different origins, set `MR_REVIEW__CORS__ALLOW_ORIGINS`
-  in the compose file to a JSON array of allowed origins:
+- Put **nginx or Caddy** in front for HTTPS termination, and leave `MR_REVIEW_BIND` at
+  `127.0.0.1` so the proxy is the only way in. There is no authentication in mr-review
+  itself, so the port must not be reachable by anyone you would not hand the tokens to.
+  Point the proxy at the all-in-one port or at the standard deployment's web port; the
+  API needs no separate route.
+- A review is streamed back as Server-Sent Events. The API marks the stream
+  `X-Accel-Buffering: no`, which nginx honours, and sends a keep-alive every 15 seconds; a
+  proxy that ignores that header must be told not to buffer `text/event-stream`, or the
+  comments arrive all at once at the end.
+- If the UI and API are served from different origins (`API_BASE_URL` set on the web
+  container), set `MR_REVIEW__CORS__ALLOW_ORIGINS` in the compose file to a JSON array of
+  allowed origins:
 
   ```yaml
   environment:

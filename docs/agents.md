@@ -10,7 +10,7 @@
 | Images | `ghcr.io/bedrock-python/mr-review/all-in-one`, `.../api`, `.../web-app` — each tagged with the exact version and `latest` |
 | Compose | `deploy/all-in-one/docker-compose.yml` (one container) · `deploy/standard/docker-compose.yml` (API and UI apart) |
 | Requires | Docker with the Compose plugin. No Python, no Node, no database, no accounts |
-| Ports | all-in-one `17240 → 8000` · standard API `17241 → 8000`, UI `17242 → 8080` |
+| Ports | all-in-one `17240 → 8000` · standard UI `17242 → 8080` (proxies `/api/` to the API), API `17241 → 8000` — all published on `127.0.0.1` |
 | State | one host directory mounted at `/data`: `hosts.yaml`, `ai_providers.yaml`, `reviews/<uuid>.yaml` |
 | Env prefix | `MR_REVIEW__`, `__` between levels — `MR_REVIEW__SERVER__PORT` |
 | AI providers | `claude` (Anthropic Messages API) · `openai` and `openai_compat` (any OpenAI chat-completions endpoint) |
@@ -100,10 +100,8 @@ services:
     image: ghcr.io/bedrock-python/mr-review/all-in-one:latest
     ports:
       - "127.0.0.1:17240:8000"          # the app has no auth — do not publish this
-    environment:
-      MR_REVIEW__DATA_DIR: "/data"      # without it, state lands inside the container
     volumes:
-      - ./data:/data                    # and dies with it
+      - ./data:/data                    # the image keeps all state in /data
 ```
 
 ```bash
@@ -112,35 +110,44 @@ docker compose up -d          # then open http://localhost:17240
 
 The image already sets `MR_REVIEW__STATIC_DIR=/app/static`, which is what makes it
 all-in-one: the same server that answers `/api/v1/...` also serves the built UI, and any
-unmatched path falls back to `index.html`. The bind address defaults to `0.0.0.0` and the
-port to `8000`, so neither needs setting inside the container.
+unmatched path falls back to `index.html`. It also sets `MR_REVIEW__DATA_DIR=/data`; tags
+built before that default existed keep state in `~/.mr-review` inside the container, so a
+pinned older tag needs `MR_REVIEW__DATA_DIR: "/data"` as well — the shipped compose files
+always set it. The bind address defaults to `0.0.0.0` and the port to `8000`, so neither
+needs setting inside the container; who can reach it is decided by the published port.
+
+The container starts as root, gives `/data` to `PUID:PGID` (`1000:1000` by default) and
+runs the application as that user, so a bind-mount directory Docker created as root on
+Linux still works — see rule 19.
 
 Everything else — hosts, tokens, providers, models — is added in the UI and written to
 `/data`. There are no environment variables for them.
 
 The shipped `deploy/all-in-one/docker-compose.yml` adds `restart: unless-stopped`,
-`MR_REVIEW__LOGGING__USE_JSON: "true"`, and `MR_REVIEW__HOST_DATA_DIR`, which is display
-only: the UI shows that path instead of the container's, and hides the "open in file
-manager" button when it is set.
+`MR_REVIEW__LOGGING__USE_JSON: "true"`, `PUID`/`PGID`, the `MR_REVIEW_BIND` switch for the
+published address, and `MR_REVIEW__HOST_DATA_DIR`, which is display only: the UI shows that
+path instead of the container's, and hides the "open in file manager" button when it is
+set.
 
-The standard deployment splits the API and the UI, and pays for it with two settings that
-have to agree with each other and with the browser:
+The standard deployment splits the API and the UI. The web container's nginx serves the UI
+and forwards every `/api/` request to the API container, so the browser sees one origin —
+no CORS, no API URL for the browser to resolve, and the UI works under any hostname:
 
 ```yaml
 services:
   api:
     image: ghcr.io/bedrock-python/mr-review/api:latest
-    ports: ["127.0.0.1:17241:8000"]
-    environment:
-      MR_REVIEW__DATA_DIR: "/data"
-      MR_REVIEW__CORS__ALLOW_ORIGINS: '["http://localhost:17242"]'   # the UI's origin
     volumes: ["./data:/data"]
   web:
     image: ghcr.io/bedrock-python/mr-review/web-app:latest
     ports: ["127.0.0.1:17242:8080"]
     environment:
-      API_BASE_URL: "http://localhost:17241"   # resolved by the browser, not by Docker
+      API_UPSTREAM: "http://api:8000"   # the default: the api service, resolved on the compose network
+    depends_on: [api]
 ```
+
+The shipped `deploy/standard/docker-compose.yml` also publishes the API itself on
+`127.0.0.1:17241`, for scripts and `/system/docs`; the UI does not use it.
 
 ## The configuration surface
 
@@ -151,11 +158,11 @@ insensitive, unknown keys ignored. They belong in the compose file's `environmen
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MR_REVIEW__DATA_DIR` | `~/.mr-review` | Where hosts, providers and reviews are written. Set it to `/data` and mount `/data` |
+| `MR_REVIEW__DATA_DIR` | `/data` in the images, `~/.mr-review` outside them | Where hosts, providers and reviews are written. Mount `/data` |
 | `MR_REVIEW__STATIC_DIR` | unset | Serve the built UI from this directory. The all-in-one image sets `/app/static`; leaving it unset is what makes an API-only container |
 | `MR_REVIEW__HOST_DATA_DIR` | unset | Display only — the host path the UI shows in place of the container's |
 | `MR_REVIEW__VCS_TIMEOUT` | `60.0` | HTTP timeout in seconds for every VCS call |
-| `MR_REVIEW__SERVER__HOST` | `0.0.0.0` | Bind address inside the container |
+| `MR_REVIEW__SERVER__HOST` | `0.0.0.0` | Bind address inside the container. Leave it; limit exposure with the published port instead |
 | `MR_REVIEW__SERVER__PORT` | `8000` | Port inside the container |
 | `MR_REVIEW__SERVER__WORKERS` | `1` | Leave it at 1 — see rule 4 |
 | `MR_REVIEW__SERVER__ACCESS_LOG` | `false` | uvicorn access log |
@@ -163,7 +170,7 @@ insensitive, unknown keys ignored. They belong in the compose file's `environmen
 | `MR_REVIEW__SERVER__FORWARDED_ALLOW_IPS` | `*` | Which proxies are trusted to set them |
 | `MR_REVIEW__SERVER__TIMEOUT_KEEP_ALIVE` | `5` | Seconds |
 | `MR_REVIEW__SERVER__TIMEOUT_GRACEFUL_SHUTDOWN` | `10` | Seconds |
-| `MR_REVIEW__CORS__ALLOW_ORIGINS` | `["http://localhost:5173","http://localhost:3000"]` | JSON array. The dev defaults — a split deployment must override it |
+| `MR_REVIEW__CORS__ALLOW_ORIGINS` | `["http://localhost:5173","http://localhost:3000"]` | JSON array. The dev defaults. Both shipped deployments are same-origin and never need it; only an `API_BASE_URL` on another origin does |
 | `MR_REVIEW__CORS__ALLOW_CREDENTIALS` | `true` | |
 | `MR_REVIEW__CORS__ALLOW_METHODS` | `["*"]` | JSON array |
 | `MR_REVIEW__CORS__ALLOW_HEADERS` | `["*"]` | JSON array |
@@ -172,6 +179,19 @@ insensitive, unknown keys ignored. They belong in the compose file's `environmen
 | `MR_REVIEW__AI_THROTTLE__DEFAULT_MAX_CONCURRENT` | `4` | In-flight dispatches per provider, unless the provider overrides it |
 | `MR_REVIEW__API_BASE_URL` | `""` | All-in-one only, and read straight from the environment rather than from settings: what the served `config.js` tells the browser. Empty means same origin, which is what you want |
 
+### API and all-in-one container entrypoint
+
+Read by the entrypoint of the `api` and `all-in-one` images before the application starts.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PUID` | `1000` | User the application runs as. Started as root, the entrypoint gives the data directory to `PUID:PGID` and drops to that user |
+| `PGID` | `1000` | Its group |
+
+Started as a non-root user instead (`user:`, `--user`, `runAsUser`), the entrypoint ignores
+both, changes no ownership, and exits with a message if the data directory is not writable.
+Whatever the application writes there is created mode `600`.
+
 ### Web-app container environment variables
 
 The UI image is nginx on port 8080 with an entrypoint that writes `config.js` and the nginx
@@ -179,8 +199,10 @@ config at start-up. These have no `MR_REVIEW__` prefix.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `API_BASE_URL` | `http://localhost:8000` | The API URL the **browser** will call |
-| `API_URL` | `$API_BASE_URL` | The API origin allowed by the CSP |
+| `API_UPSTREAM` | `http://api:8000` | Where nginx forwards `/api/`. Resolved inside the container network per request, so the API may start later or move. `scheme://host:port`, no path |
+| `API_BASE_URL` | `""` | Where the **browser** sends API calls. Empty is the UI's own origin, through `API_UPSTREAM`. An origin, without `/api` — the UI appends `/api/v1/...` |
+| `API_URL` | the origin of `API_BASE_URL` | Extra origin allowed by the CSP `connect-src`; empty when `API_BASE_URL` is |
+| `NGINX_RESOLVER` | the container's nameservers | DNS server nginx resolves `API_UPSTREAM` through — Docker's `127.0.0.11` on a compose network |
 | `APP_ENV` | `production` | `production`, `staging` and `pre` also turn on an HSTS header |
 | `APP_VERSION` | `unknown` | Shown in the UI |
 | `VITE_USE_MOCKS` | `false` | |
@@ -192,10 +214,12 @@ the compose file.
 
 | Variable | Default | Used by |
 |---|---|---|
+| `MR_REVIEW_BIND` | `127.0.0.1` | both — host address every port is published on. `0.0.0.0` exposes it to the network; see rule 1 |
 | `PORT` | `17240` | all-in-one — host port mapped to container `8000` |
-| `API_PORT` | `17241` | standard — host port for the API |
-| `WEB_PORT` | `17242` | standard — host port for the UI |
+| `WEB_PORT` | `17242` | standard — host port for the UI, which also carries the API under `/api/` |
+| `API_PORT` | `17241` | standard — host port for the API itself |
 | `DATA_DIR` | `./data` | both — host path bound to `/data` |
+| `PUID` / `PGID` | `1000` / `1000` | both — passed to the API container's entrypoint |
 
 ### VCS hosts
 
@@ -289,11 +313,12 @@ wall-clock time before the model is called at all.
 1. **There is no authentication.** Not one route requires a credential. Anyone who can
    reach the port can read every host token and every API key through
    `POST /api/v1/data/export`, and can post comments to your repositories under your token.
-   Bind the published port to `127.0.0.1`, or put an authenticating proxy in front. Never
+   Bind the published port to `127.0.0.1` — the shipped compose files do, unless
+   `MR_REVIEW_BIND` says otherwise — or put an authenticating proxy in front. Never
    expose it to a network you do not control.
-2. **Set `MR_REVIEW__DATA_DIR` and mount it.** The default is `~/.mr-review`, which inside
-   a container is neither a volume nor reliably writable — the state goes when the
-   container is recreated, if it can be written at all.
+2. **Mount `/data`.** The images keep all state there (`MR_REVIEW__DATA_DIR=/data`);
+   without a volume it goes when the container is recreated. Older tags default to
+   `~/.mr-review` instead — set `MR_REVIEW__DATA_DIR` explicitly when pinning one.
 3. **The data directory is a secret.** Host tokens and provider API keys are stored in
    plain text in `hosts.yaml` and `ai_providers.yaml`. The password on export/import
    encrypts the export file, not the store.
@@ -305,17 +330,21 @@ wall-clock time before the model is called at all.
    `max_concurrent` afterwards takes effect on restart.
 6. **`MR_REVIEW__*` in a compose `.env` does nothing on its own.** Compose reads `.env` to
    substitute `${...}` in the compose file; it does not pass those names into the container.
-   The shipped compose files substitute only `PORT`, `API_PORT`, `WEB_PORT` and `DATA_DIR`.
+   The shipped compose files substitute only `MR_REVIEW_BIND`, `PORT`, `API_PORT`,
+   `WEB_PORT`, `DATA_DIR`, `PUID` and `PGID`.
    To change an application setting, add it to the `environment:` block or point
    `env_file:` at the file.
-7. **`API_BASE_URL` is resolved by the browser.** The web container writes it verbatim into
-   `config.js`. `http://api:8000` resolves inside the Docker network and nowhere else; it
-   must be a URL the user's browser can reach. In all-in-one mode leave
-   `MR_REVIEW__API_BASE_URL` empty so the UI calls its own origin.
-8. **Split the API and the UI and you own CORS.** The default `allow_origins` is the two
-   dev-server ports. Change `WEB_PORT`, or serve the UI from a hostname,
-   and `MR_REVIEW__CORS__ALLOW_ORIGINS` has to be changed to match or every request fails
-   in the browser and succeeds in `curl`.
+7. **Leave `API_BASE_URL` empty.** The UI then calls its own origin and the web
+   container's nginx forwards `/api/` to `API_UPSTREAM`, which is resolved inside the
+   Docker network. `API_BASE_URL` is the opposite: written verbatim into `config.js` and
+   resolved by the browser, so `http://api:8000` there resolves nowhere the user is. It is
+   an origin — the UI appends `/api/v1/...` — and it is only for an API served from
+   another origin. In all-in-one mode leave `MR_REVIEW__API_BASE_URL` empty for the same
+   reason.
+8. **Point the UI at another origin and you own CORS.** With `API_BASE_URL` set, the API's
+   default `allow_origins` (the two dev-server ports) rejects the UI, and
+   `MR_REVIEW__CORS__ALLOW_ORIGINS` has to list the UI's origin or every request fails in
+   the browser and succeeds in `curl`. Neither shipped deployment needs it.
 9. **The all-in-one image is `linux/amd64` only.** The `api` and `web-app` images are built
    for `amd64` and `arm64`; the combined one is not. On Apple Silicon it runs emulated —
    use the standard deployment if that matters.
@@ -345,6 +374,14 @@ wall-clock time before the model is called at all.
     `/system/health/livez` and `/system/health/readyz`. A probe on `/health` is answered by
     the SPA fallback in the all-in-one image, so it returns 200 whatever the state of the
     application, and 404s in the API-only image.
+19. **The API containers start as root and drop to `PUID:PGID`.** That is how a
+    root-owned bind mount becomes writable. Run them with `user:` instead and the data
+    directory must already be writable by that user — the container exits at start with
+    a `chown` hint if it is not. `PUID=0` keeps the application running as root; do not.
+20. **`API_UPSTREAM` must resolve as written.** nginx looks it up per request through
+    `NGINX_RESOLVER` and applies no `resolv.conf` search domains: a compose service name
+    works, a Kubernetes short name does not — use
+    `http://<service>.<namespace>.svc.cluster.local:8000` there.
 
 ## Common mistakes
 
@@ -376,10 +413,16 @@ web:
   environment:
     API_BASE_URL: "http://api:8000"
 
-# RIGHT — the URL the user's browser will use, and the API told to accept that origin
+# RIGHT — leave it out: the browser calls the UI's own origin and nginx forwards /api/
+# to API_UPSTREAM (default http://api:8000), which Docker resolves
+web:
+  image: ghcr.io/bedrock-python/mr-review/web-app:latest
+
+# RIGHT, only when the API really lives on another origin — an origin, no /api suffix,
+# and the API told to accept the UI's origin
 web:
   environment:
-    API_BASE_URL: "https://mr-review.example.com/api"
+    API_BASE_URL: "https://api.mr-review.example.com"
 api:
   environment:
     MR_REVIEW__CORS__ALLOW_ORIGINS: '["https://mr-review.example.com"]'
@@ -446,7 +489,7 @@ Fetch a page when the task is the one named beside it.
 | Page | Read it when |
 |---|---|
 | [Home](index.md) | a one-screen description of what the tool is for |
-| [Installation](getting-started/installation.md) | picking all-in-one or standard, the `docker run` one-liner, updating, data persistence |
+| [Installation](getting-started/installation.md) | picking all-in-one or standard, the `docker run` one-liner, opening it to a network, updating, data persistence and file ownership |
 | [Quick start](getting-started/quickstart.md) | adding the first provider and host through the UI |
 | [Configuration](getting-started/configuration.md) | the environment variables as a user meets them, reverse proxy and TLS notes |
 | [Review pipeline](features/pipeline.md) | what each stage does from the UI's side |
