@@ -1,5 +1,6 @@
 import { cn } from "@shared/lib";
 import { Markdown } from "@shared/ui";
+import { getDiffStats } from "@entities/mr";
 import type { MR, PipelineStatus } from "@entities/mr";
 
 export type MRMetaProps = {
@@ -83,6 +84,7 @@ const Label = ({ children }: LabelProps): React.ReactElement => (
 );
 
 export const MRMeta = ({ mr, totalFiles }: MRMetaProps): React.ReactElement => {
+  const diffStats = getDiffStats(mr);
   return (
     <div className="text-sm">
       {/* Header: iid + status badges */}
@@ -136,8 +138,12 @@ export const MRMeta = ({ mr, totalFiles }: MRMetaProps): React.ReactElement => {
       <Section>
         <Label>Changes</Label>
         <div className="flex items-center gap-4 font-mono text-xs">
-          <span className="text-green-400">+{mr.additions}</span>
-          <span className="text-red-400">-{mr.deletions}</span>
+          {diffStats && (
+            <>
+              <span className="text-green-400">+{diffStats.additions}</span>
+              <span className="text-red-400">-{diffStats.deletions}</span>
+            </>
+          )}
           <span className="text-[var(--text-muted)]">{totalFiles} files</span>
         </div>
       </Section>

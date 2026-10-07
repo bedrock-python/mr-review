@@ -1,2 +1,2 @@
-export { MRList, MRListItem } from "./ui";
-export type { MRListItemProps } from "./ui";
+export { MRList, MRListItem, InboxMRListItem } from "./ui";
+export type { MRListItemProps, InboxMRListItemProps } from "./ui";

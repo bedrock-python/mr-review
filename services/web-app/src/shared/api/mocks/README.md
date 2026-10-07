@@ -19,6 +19,31 @@ When backend implementation for a given endpoint becomes available, **no code
 change is required** — flip the env var and the MSW worker stops handling
 matching paths, requests pass through to the real backend.
 
+## Paginated lists — repositories, MRs, inbox
+
+`handlers/mrs.ts` serves the list endpoints with the backend page envelope
+`{ items, page, per_page, has_more }` from deterministic data in
+`fixtures/mrs.ts`, sized to span several pages:
+
+| Endpoint                                  | Data                                                      | Default `per_page` |
+| ----------------------------------------- | --------------------------------------------------------- | :----------------: |
+| `GET /hosts/{id}/repos?q=`                | 137 repos in nested namespaces; `q` matches path or name  |         50         |
+| `GET /hosts/{id}/repos/{path}/mrs?state=` | 0–95 MRs per repo (`MOCK_BUSY_REPO` has 95); `q` on title |         30         |
+| `GET /hosts/{id}/inbox?scope=`            | open MRs across all repos, filtered by `scope`            |         30         |
+| `GET /hosts/{id}/repos/{path}/mrs/{iid}`  | the matching generated MR, 404 otherwise                  |         —          |
+
+Behaviour worth knowing when testing the UI against mocks:
+
+- `MOCK_EXTERNAL_PINNED_REPO` is a favourite the listing never returns, so it
+  is prepended to page 1 only (as the backend does for pinned repositories).
+- Every 7th MR has `additions` / `deletions` / `file_count` set to `null`
+  (hosts that do not report stats in list views).
+- `scope=review_requested` mimics GitHub search results: empty
+  `source_branch` / `target_branch` and no diff stats.
+- `page < 1` or `per_page` outside `1..100` answer 422, like the backend.
+
+Routes are RegExps so they match any origin and repository paths with slashes.
+
 ## C1 Inline Fix Suggestions — patch endpoints
 
 Four endpoints are mocked in `handlers/patch.ts`, branching off the

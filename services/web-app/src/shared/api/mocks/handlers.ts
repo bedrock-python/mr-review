@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
+import { MOCK_FAVOURITE_REPOS, MOCK_HOST_ID } from "./fixtures/mrs";
+import { mrHandlers } from "./handlers/mrs";
 import { patchHandlers } from "./handlers/patch";
-
-const MOCK_HOST_ID = "00000000-0000-0000-0000-000000000001";
 
 const reviewHandlers = [
   // Hosts
@@ -12,6 +12,7 @@ const reviewHandlers = [
         name: "GitLab (mock)",
         type: "gitlab",
         base_url: "https://gitlab.example.com",
+        favourite_repos: MOCK_FAVOURITE_REPOS,
         created_at: "2024-01-01T00:00:00Z",
       },
     ]);
@@ -48,88 +49,6 @@ const reviewHandlers = [
 
   http.get("/api/v1/hosts/:id/test", () => {
     return HttpResponse.json({ ok: true, user: "mock-user" });
-  }),
-
-  // Repos
-  http.get(`/api/v1/hosts/${MOCK_HOST_ID}/repos`, () => {
-    return HttpResponse.json([
-      { id: "1", path: "group/awesome-repo", name: "awesome-repo", description: "Mock repo" },
-      { id: "2", path: "group/another-repo", name: "another-repo", description: null },
-    ]);
-  }),
-
-  http.get("/api/v1/hosts/:hostId/repos", () => {
-    return HttpResponse.json([]);
-  }),
-
-  // MRs
-  http.get("/api/v1/hosts/:hostId/repos/:repoPath/mrs", () => {
-    return HttpResponse.json([
-      {
-        iid: 42,
-        title: "feat: add awesome feature",
-        description: "This MR adds something great",
-        author: "john.doe",
-        source_branch: "feat/awesome",
-        target_branch: "main",
-        status: "opened",
-        draft: false,
-        pipeline: null,
-        additions: 150,
-        deletions: 30,
-        file_count: 5,
-        created_at: "2024-06-01T10:00:00Z",
-        updated_at: "2024-06-02T12:00:00Z",
-      },
-    ]);
-  }),
-
-  http.get("/api/v1/hosts/:hostId/repos/:repoPath/mrs/:mrIid", () => {
-    return HttpResponse.json({
-      iid: 42,
-      title: "feat: add awesome feature",
-      description: "This MR adds something great",
-      author: "john.doe",
-      source_branch: "feat/awesome",
-      target_branch: "main",
-      status: "opened",
-      draft: false,
-      pipeline: null,
-      additions: 150,
-      deletions: 30,
-      file_count: 5,
-      created_at: "2024-06-01T10:00:00Z",
-      updated_at: "2024-06-02T12:00:00Z",
-    });
-  }),
-
-  http.get("/api/v1/hosts/:hostId/repos/:repoPath/mrs/:mrIid/diff", () => {
-    return HttpResponse.json([
-      {
-        path: "src/main.py",
-        old_path: "src/main.py",
-        additions: 10,
-        deletions: 2,
-        hunks: [
-          {
-            old_start: 1,
-            new_start: 1,
-            old_count: 5,
-            new_count: 13,
-            lines: [
-              { type: "context", old_line: 1, new_line: 1, content: " def hello():" },
-              {
-                type: "added",
-                old_line: null,
-                new_line: 2,
-                content: '+    print("Hello, world!")',
-              },
-              { type: "removed", old_line: 2, new_line: null, content: "-    pass" },
-            ],
-          },
-        ],
-      },
-    ]);
   }),
 
   // Reviews
@@ -210,4 +129,4 @@ const reviewHandlers = [
   }),
 ];
 
-export const handlers = [...reviewHandlers, ...patchHandlers];
+export const handlers = [...reviewHandlers, ...mrHandlers, ...patchHandlers];

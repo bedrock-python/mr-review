@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
-import { useMR, useRepos, mrKeys } from "@entities/mr";
+import { useMR, useCachedRepo, mrKeys, getRepoNameFromPath } from "@entities/mr";
 import { useHosts } from "@entities/host";
 import { useReview } from "@entities/review";
 
@@ -95,16 +95,17 @@ export const MRHeader = (): React.ReactElement | null => {
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId } = useNav();
   const queryClient = useQueryClient();
   const { data: hosts } = useHosts();
-  const { data: repos } = useRepos(selectedHostId);
+  // Only reuses repo data the sidebar already loaded: fetching the repository
+  // list (potentially thousands of entries) just for a breadcrumb is wasteful.
+  const cachedRepo = useCachedRepo(selectedHostId, selectedRepoPath);
   const { data: mr } = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
   const { data: review } = useReview(activeReviewId);
 
   if (!mr || !selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
   const host = hosts?.find((h) => h.id === selectedHostId);
-  const repo = repos?.find((r) => r.path === selectedRepoPath);
   const hostName = host?.name ?? selectedHostId;
-  const repoName = repo?.name ?? selectedRepoPath;
+  const repoName = cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath);
 
   const sha = (mr as typeof mr & { sha?: string }).sha;
 
@@ -172,7 +173,7 @@ export const MRHeader = (): React.ReactElement | null => {
         )}
         <span>{hostName}</span>
         <span>›</span>
-        <span>{repoName}</span>
+        <span title={selectedRepoPath}>{repoName}</span>
         <span>›</span>
         <span style={{ color: "var(--fg-2)" }}>!{mr.iid}</span>
       </div>

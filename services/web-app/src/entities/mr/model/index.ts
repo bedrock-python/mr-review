@@ -3,19 +3,45 @@ export {
   MRSchema,
   InboxMRSchema,
   MRStatusSchema,
+  MRStateFilterSchema,
+  InboxScopeSchema,
   PipelineStatusSchema,
   DiffLineSchema,
   DiffHunkSchema,
   DiffFileSchema,
+  RepoPageSchema,
+  MRPageSchema,
+  InboxMRPageSchema,
 } from "./mr.schema";
 export type {
   Repo,
   MR,
   InboxMR,
   MRStatus,
+  MRStateFilter,
+  InboxScope,
   PipelineStatus,
   DiffLine,
   DiffHunk,
   DiffFile,
+  RepoPage,
+  MRPage,
+  InboxMRPage,
 } from "./mr.schema";
-export { useRepos, useMRs, useMR, useInboxMRs, useDiff, mrKeys } from "./useMRs";
+export {
+  useInfiniteRepos,
+  useInfiniteMRs,
+  useInfiniteInboxMRs,
+  useCachedRepo,
+  useMR,
+  useDiff,
+  mrKeys,
+  MIN_REPO_QUERY_LENGTH,
+} from "./useMRs";
+export type {
+  InfiniteListResult,
+  RepoListFilters,
+  MRListFilters,
+  InboxListFilters,
+  UseInfiniteMRsParams,
+} from "./useMRs";
