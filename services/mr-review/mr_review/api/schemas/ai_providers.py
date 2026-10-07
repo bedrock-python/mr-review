@@ -3,10 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from mr_review.api.schemas.hosts import validate_http_base_url
 from mr_review.core.ai.entities import ReasoningEffort, ReasoningMode, ThinkingSupport
 from mr_review.core.ai_providers.entities import AIProviderType
+
+
+def _optional_http_base_url(value: str) -> str:
+    # Empty means "the provider's own endpoint"; anything else has to be a usable URL.
+    if not value.strip():
+        return ""
+    return validate_http_base_url(value)
 
 
 class CreateAIProviderRequest(BaseModel):
@@ -16,12 +24,17 @@ class CreateAIProviderRequest(BaseModel):
     base_url: str = ""
     models: list[str] = Field(default_factory=list)
     ssl_verify: bool = True
-    timeout: int = 60
+    timeout: int = Field(default=60, gt=0)
     max_concurrent: int | None = Field(
         default=None,
         ge=1,
         description="Per-provider in-flight AI dispatch cap; null uses the service-wide default.",
     )
+
+    @field_validator("base_url")
+    @classmethod
+    def check_base_url(cls, v: str) -> str:
+        return _optional_http_base_url(v)
 
 
 class UpdateAIProviderRequest(BaseModel):
@@ -30,12 +43,19 @@ class UpdateAIProviderRequest(BaseModel):
     base_url: str | None = None
     models: list[str] | None = None
     ssl_verify: bool | None = None
-    timeout: int | None = None
+    timeout: int | None = Field(default=None, gt=0)
     max_concurrent: int | None = Field(default=None, ge=1)
     clear_max_concurrent: bool = Field(
         default=False,
         description="Reset the per-provider cap so the service-wide default applies again.",
     )
+
+    @field_validator("base_url")
+    @classmethod
+    def check_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return _optional_http_base_url(v)
 
 
 class AIProviderResponse(BaseModel):
