@@ -4,7 +4,7 @@ import { env } from "@shared/config";
 import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
 import { parseDispatchStreamEvent } from "./parseDispatchStreamEvent";
-import type { DispatchStreamEvent } from "../model/dispatch.schema";
+import type { DispatchRequest, DispatchStreamEvent } from "../model/dispatch.schema";
 import type { Review, BriefConfig, Comment } from "../model/review.schema";
 
 const HTTP_NOT_FOUND = 404;
@@ -109,24 +109,22 @@ export const reviewApi = {
   // `done` or `error` event; throws if the stream ends without one.
   dispatchStream: async function* (
     reviewId: string,
-    aiProviderId: string,
-    signal?: AbortSignal,
-    model?: string,
-    temperature?: number | null,
-    reasoningBudget?: number | null,
-    reasoningEffort?: string | null,
-    iterationId?: string | null
+    request: DispatchRequest,
+    signal?: AbortSignal
   ): AsyncGenerator<DispatchStreamEvent, void, undefined> {
     const response = await fetch(`${env.VITE_API_BASE_URL}/api/v1/reviews/${reviewId}/dispatch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ai_provider_id: aiProviderId,
-        model: model ?? null,
-        temperature: temperature ?? null,
-        reasoning_budget: reasoningBudget ?? null,
-        reasoning_effort: reasoningEffort ?? null,
-        iteration_id: iterationId ?? null,
+        ai_provider_id: request.aiProviderId,
+        model: request.model ?? null,
+        temperature: request.temperature ?? null,
+        reasoning_budget: request.reasoningBudget ?? null,
+        reasoning_effort: request.reasoningEffort ?? null,
+        max_output_tokens: request.maxOutputTokens ?? null,
+        structured_output: request.structuredOutput ?? null,
+        system_prompt: request.systemPrompt ?? null,
+        iteration_id: request.iterationId ?? null,
       }),
       signal: signal ?? null,
     });

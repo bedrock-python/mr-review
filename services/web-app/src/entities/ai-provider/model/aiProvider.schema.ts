@@ -32,7 +32,59 @@ export const UpdateAIProviderSchema = z.object({
   timeout: z.number().int().min(1).max(600).optional(),
 });
 
+/** Every reasoning level a backend knows, weakest first; a model accepts a subset. */
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export const ReasoningEffortSchema = z.enum(REASONING_EFFORTS);
+export const ReasoningModeSchema = z.enum(["effort", "budget"]);
+
+/**
+ * `GET /ai-providers/{id}/capabilities` — which dispatch settings a model accepts.
+ * `thinking`: `always` — reasoning cannot be turned off, only tuned; `optional` — off unless
+ * asked for; `none` — the model does not reason. Temperature is only ever sent while reasoning
+ * is off.
+ */
+export const ModelCapabilitiesSchema = z.object({
+  provider_type: AIProviderTypeSchema,
+  model: z.string(),
+  known_model: z.boolean(),
+  thinking: z.enum(["always", "optional", "none"]),
+  reasoning_modes: z.array(ReasoningModeSchema),
+  effort_levels: z.array(ReasoningEffortSchema),
+  default_effort: ReasoningEffortSchema.nullable(),
+  min_reasoning_budget: z.number().int().nullable(),
+  temperature: z.boolean(),
+  max_temperature: z.number(),
+  max_output_tokens: z.number().int().nullable(),
+  default_max_output_tokens: z.number().int().nullable(),
+  structured_output: z.boolean(),
+  structured_output_default: z.boolean(),
+});
+
+/**
+ * `POST /ai-providers/preview/models` — connection settings that may not be saved yet. With
+ * `provider_id` the saved provider fills in what is left out; a blank `api_key` keeps the saved key.
+ */
+export type PreviewModelsRequest = {
+  provider_id?: string;
+  type?: AIProviderType;
+  api_key?: string;
+  base_url?: string;
+  ssl_verify?: boolean;
+  timeout?: number;
+};
+
 export type AIProviderType = z.infer<typeof AIProviderTypeSchema>;
 export type AIProvider = z.infer<typeof AIProviderSchema>;
 export type CreateAIProvider = z.infer<typeof CreateAIProviderSchema>;
 export type UpdateAIProvider = z.infer<typeof UpdateAIProviderSchema>;
+export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
+export type ReasoningMode = z.infer<typeof ReasoningModeSchema>;
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;

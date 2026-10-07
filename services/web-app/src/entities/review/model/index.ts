@@ -65,6 +65,7 @@ export {
 } from "./dispatch.schema";
 export type {
   DispatchCommentPreview,
+  DispatchRequest,
   DispatchResult,
   DispatchStreamEvent,
 } from "./dispatch.schema";

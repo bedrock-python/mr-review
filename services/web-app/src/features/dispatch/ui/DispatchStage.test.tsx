@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -6,8 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
 import { DispatchStage } from "./DispatchStage";
 import type * as ReviewApiModule from "@entities/review/api/reviewApi";
-import type { AIProvider } from "@entities/ai-provider";
-import type { DispatchStreamEvent, ImportResponseResult, Review } from "@entities/review";
+import type * as AIProviderEntity from "@entities/ai-provider";
+import type { AIProvider, ModelCapabilities } from "@entities/ai-provider";
+import type {
+  DispatchRequest,
+  DispatchStreamEvent,
+  ImportResponseResult,
+  Review,
+} from "@entities/review";
 
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -29,6 +35,9 @@ const providersQuery = vi.hoisted(() => ({
   data: undefined as AIProvider[] | undefined,
   isPending: false,
 }));
+
+// Capabilities per model id; a model missing here has none loaded (every control is offered).
+const capabilitiesByModel = vi.hoisted(() => new Map<string, ModelCapabilities>());
 
 vi.mock("@entities/review/api/reviewApi", async (importOriginal) => {
   const actual = await importOriginal<typeof ReviewApiModule>();
@@ -64,9 +73,48 @@ const OTHER_PROVIDER: AIProvider = {
   models: ["gpt-a", "gpt-b"],
 };
 
-vi.mock("@entities/ai-provider", () => ({
-  useAIProviders: () => ({ ...providersQuery }),
-}));
+vi.mock("@entities/ai-provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof AIProviderEntity>();
+  return {
+    ...actual,
+    useAIProviders: () => ({ ...providersQuery }),
+    useModelCapabilities: (_providerId: string, model: string) => ({
+      data: capabilitiesByModel.get(model),
+    }),
+  };
+});
+
+const ALWAYS_THINKING: ModelCapabilities = {
+  provider_type: "claude",
+  model: "claude-model",
+  known_model: true,
+  thinking: "always",
+  reasoning_modes: ["effort"],
+  effort_levels: ["low", "medium", "high", "xhigh", "max"],
+  default_effort: "medium",
+  min_reasoning_budget: null,
+  temperature: false,
+  max_temperature: 1,
+  max_output_tokens: 128_000,
+  default_max_output_tokens: 32_000,
+  structured_output: true,
+  structured_output_default: true,
+};
+
+const BUDGET_THINKING: ModelCapabilities = {
+  ...ALWAYS_THINKING,
+  model: "claude-legacy",
+  thinking: "optional",
+  reasoning_modes: ["budget"],
+  effort_levels: [],
+  default_effort: null,
+  min_reasoning_budget: 1024,
+  temperature: true,
+  max_output_tokens: 64_000,
+};
+
+const dispatchedRequest = (call = 0): DispatchRequest =>
+  api.dispatchStream.mock.calls[call]?.[1] as DispatchRequest;
 
 const REVIEW: Review = {
   id: REVIEW_ID,
@@ -164,6 +212,7 @@ const createMemoryStorage = (overrides: Partial<Storage> = {}): Storage => {
 const resetMocks = (): void => {
   vi.clearAllMocks();
   vi.stubGlobal("localStorage", createMemoryStorage());
+  capabilitiesByModel.clear();
   api.get.mockResolvedValue(REVIEW);
   api.getPrompt.mockResolvedValue("prompt");
   api.getDiff.mockResolvedValue("");
@@ -279,7 +328,10 @@ describe("DispatchStage — run in app", () => {
 
   it("waits for the providers, then restores the saved provider and model", async () => {
     localStorage.setItem("mr-review:dispatch:last-provider", OTHER_PROVIDER.id);
-    localStorage.setItem("mr-review:dispatch:last-model", "gpt-b");
+    localStorage.setItem(
+      "mr-review:dispatch:settings",
+      JSON.stringify({ [OTHER_PROVIDER.id]: { model: "gpt-b" } })
+    );
     providersQuery.data = undefined;
     providersQuery.isPending = true;
     const user = userEvent.setup();
@@ -297,13 +349,18 @@ describe("DispatchStage — run in app", () => {
     await user.click(generate);
     expect(api.dispatchStream).toHaveBeenCalledWith(
       REVIEW_ID,
-      OTHER_PROVIDER.id,
-      expect.any(AbortSignal),
-      "gpt-b",
-      null,
-      null,
-      null,
-      ITERATION_ID
+      {
+        aiProviderId: OTHER_PROVIDER.id,
+        model: "gpt-b",
+        temperature: null,
+        reasoningEffort: null,
+        reasoningBudget: null,
+        maxOutputTokens: null,
+        structuredOutput: null,
+        systemPrompt: null,
+        iterationId: ITERATION_ID,
+      },
+      expect.any(AbortSignal)
     );
   });
 
@@ -563,6 +620,125 @@ describe("DispatchStage — after a run", () => {
     expect(await screen.findByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
       "Sorry, I can't review this."
     );
+  });
+});
+
+describe("DispatchStage — generation settings", () => {
+  beforeEach(resetMocks);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const generate = async (user: ReturnType<typeof userEvent.setup>): Promise<void> => {
+    createDispatchChannel();
+    await user.click(screen.getByRole("button", { name: /Generate with/ }));
+    await screen.findByRole("button", { name: "Stop" });
+  };
+
+  it("shows an unset temperature as the model's default rather than 0.7", async () => {
+    renderStage();
+
+    expect(await screen.findByTestId("temperature-value")).toHaveTextContent("Default");
+    expect(screen.queryByText("0.7 — Default")).not.toBeInTheDocument();
+  });
+
+  it("offers the model's effort levels and no temperature when it always reasons", async () => {
+    capabilitiesByModel.set("claude-model", ALWAYS_THINKING);
+    const user = userEvent.setup();
+    renderStage();
+
+    expect(await screen.findByText(/not accepted by this model/)).toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Temperature" })).not.toBeInTheDocument();
+    const efforts = screen.getByRole("group", { name: "Reasoning effort" });
+    expect(within(efforts).getByRole("button", { name: "Default (medium)" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await user.click(within(efforts).getByRole("button", { name: "xhigh" }));
+    await generate(user);
+
+    expect(dispatchedRequest()).toMatchObject({
+      model: "claude-model",
+      reasoningEffort: "xhigh",
+      reasoningBudget: null,
+      temperature: null,
+    });
+  });
+
+  it("sends a thinking budget on a budget model and no temperature while reasoning is on", async () => {
+    capabilitiesByModel.set("claude-legacy", BUDGET_THINKING);
+    providersQuery.data = [{ ...PROVIDER, models: ["claude-legacy"] }];
+    const user = userEvent.setup();
+    renderStage();
+
+    fireEvent.change(await screen.findByRole("slider", { name: "Temperature" }), {
+      target: { value: "0.4" },
+    });
+    await user.click(screen.getByRole("button", { name: "Reasoning" }));
+    expect(screen.getByRole("slider", { name: "Temperature" })).toBeDisabled();
+    expect(screen.getByRole("slider", { name: "Thinking budget" })).toHaveAttribute("max", "59904");
+    await generate(user);
+
+    expect(dispatchedRequest()).toMatchObject({
+      reasoningBudget: 8192,
+      reasoningEffort: null,
+      temperature: null,
+    });
+  });
+
+  it("takes a model id typed into the picker", async () => {
+    const user = userEvent.setup();
+    renderStage();
+
+    await user.type(
+      await screen.findByRole("textbox", { name: "Model" }),
+      "my-gateway-model{Enter}"
+    );
+    await generate(user);
+
+    expect(dispatchedRequest().model).toBe("my-gateway-model");
+  });
+
+  it("sends the advanced settings", async () => {
+    capabilitiesByModel.set("claude-model", ALWAYS_THINKING);
+    const user = userEvent.setup();
+    renderStage();
+
+    await user.click(await screen.findByRole("button", { name: /Advanced/ }));
+    await user.type(screen.getByRole("spinbutton", { name: "Max output tokens" }), "20000");
+    await user.click(screen.getByRole("checkbox", { name: /Structured output/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "System prompt" }),
+      "Only security issues."
+    );
+    await generate(user);
+
+    expect(dispatchedRequest()).toMatchObject({
+      maxOutputTokens: 20_000,
+      structuredOutput: false,
+      systemPrompt: "Only security issues.",
+    });
+  });
+
+  it("remembers the settings of each provider separately", async () => {
+    providersQuery.data = [PROVIDER, OTHER_PROVIDER];
+    const user = userEvent.setup();
+    renderStage();
+
+    fireEvent.change(await screen.findByRole("slider", { name: "Temperature" }), {
+      target: { value: "0.3" },
+    });
+    await user.click(screen.getByRole("button", { name: /OpenAI/ }));
+    expect(screen.getByTestId("temperature-value")).toHaveTextContent("Default");
+    expect(screen.getByTestId("selected-model")).toHaveTextContent("gpt-a");
+
+    await user.click(screen.getByRole("button", { name: /^Claude/ }));
+    expect(screen.getByTestId("temperature-value")).toHaveTextContent("0.3");
+    const saved = JSON.parse(localStorage.getItem("mr-review:dispatch:settings") ?? "{}") as Record<
+      string,
+      { temperature: number | null }
+    >;
+    expect(saved[PROVIDER.id]?.temperature).toBe(0.3);
   });
 });
 

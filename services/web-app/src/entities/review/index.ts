@@ -61,6 +61,7 @@ export type {
   PatchErrorCode,
   PatchErrorEnvelope,
   DispatchCommentPreview,
+  DispatchRequest,
   DispatchResult,
   DispatchStreamEvent,
 } from "./model";
