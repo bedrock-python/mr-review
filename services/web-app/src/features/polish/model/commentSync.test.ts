@@ -98,6 +98,7 @@ const createControlledServer = (initial: Comment[]) => {
   return {
     transport,
     calls,
+    snapshot: (): Review => review(comments),
     inFlight: () => pending.length,
     release: async (): Promise<void> => {
       pending.shift()?.resolve();
@@ -126,7 +127,7 @@ const setup = (initial: Comment[]) => {
   const cached = (): Comment[] =>
     queryClient.getQueryData<Review>(reviewKeys.detail(REVIEW_ID))?.iterations[0]?.comments ?? [];
   const statusOf = (id: string): string | undefined => cached().find((c) => c.id === id)?.status;
-  return { sync, server, onError, cached, statusOf };
+  return { sync, server, onError, cached, statusOf, queryClient };
 };
 
 const patches = (entries: [string, Partial<UpdateCommentInput>][]) => new Map(entries);
@@ -248,6 +249,45 @@ describe("createCommentSync", () => {
     expect(isFlushed).toBe(false);
     await server.release();
     expect(isFlushed).toBe(true);
+  });
+});
+
+describe("createCommentSync — merging and refetches", () => {
+  it("clearing the file in a later patch also clears a line set earlier in the batch", async () => {
+    const { sync, server, onError, cached } = setup([comment("x"), comment("y")]);
+
+    sync.patch(ITERATION_ID, patches([["y", { status: "dismissed" }]]));
+    sync.patch(ITERATION_ID, patches([["x", { line: 7 }]]));
+    sync.patch(ITERATION_ID, patches([["x", { file: null }]]));
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+
+    expect(server.calls[0]?.payload).toEqual([
+      { id: "y", status: "dismissed" },
+      { id: "x", line: null, file: null },
+    ]);
+    await server.release();
+    expect(onError).not.toHaveBeenCalled();
+    expect(cached().find((c) => c.id === "x")).toMatchObject({ file: null, line: null });
+  });
+
+  it("a refetch that lands mid-write keeps the queued optimistic changes", async () => {
+    const { sync, server, statusOf, queryClient } = setup([comment("x"), comment("y")]);
+
+    sync.patch(ITERATION_ID, patches([["x", { status: "dismissed" }]]));
+    await vi.advanceTimersByTimeAsync(COALESCE_MS);
+    sync.patch(ITERATION_ID, patches([["y", { status: "dismissed" }]]));
+    await queryClient.fetchQuery({
+      queryKey: reviewKeys.detail(REVIEW_ID),
+      queryFn: () => Promise.resolve(server.snapshot()),
+      staleTime: 0,
+    });
+
+    expect(statusOf("x")).toBe("dismissed");
+    expect(statusOf("y")).toBe("dismissed");
+    await server.release();
+    await server.release();
+    expect(statusOf("x")).toBe("dismissed");
+    expect(statusOf("y")).toBe("dismissed");
   });
 });
 

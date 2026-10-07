@@ -1,3 +1,4 @@
+import { hashKey } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { reviewApi, reviewKeys } from "@entities/review";
 import type { QueryClient } from "@tanstack/react-query";
@@ -84,6 +85,20 @@ export const applyCommentPatch = (comment: Comment, patch: CommentFieldPatch): C
   return next;
 };
 
+/**
+ * Fold `later` into `earlier` so that sending the result equals applying both in order.
+ * A plain spread is not enough: clearing the file also clears the line, even one that an
+ * earlier patch in the same batch set — and the server rejects a line without a file.
+ */
+export const mergeCommentPatches = (
+  earlier: CommentFieldPatch,
+  later: CommentFieldPatch
+): CommentFieldPatch => {
+  const merged: CommentFieldPatch = { ...earlier, ...later };
+  if (later.file === null && later.line === undefined) merged.line = null;
+  return merged;
+};
+
 const mapComments = (
   review: Review,
   iterationId: string,
@@ -151,6 +166,8 @@ export const createCommentSync = ({
   let isPumping = false;
   let drainWaiters: (() => void)[] = [];
   let state: CommentSyncState = { isSaving: false };
+  // Set when a refetch landed mid-write and was painted over; refetch once the queue drains.
+  let isRefetchOwed = false;
 
   const notify = (): void => {
     const isSaving = isPumping || timer !== null || queue.length > 0;
@@ -210,6 +227,10 @@ export const createCommentSync = ({
     isPumping = false;
     // Idle again: the cache is the source of truth until the next operation starts.
     confirmed = undefined;
+    if (isRefetchOwed) {
+      isRefetchOwed = false;
+      void queryClient.invalidateQueries({ queryKey });
+    }
     notify();
     const waiters = drainWaiters;
     drainWaiters = [];
@@ -240,7 +261,7 @@ export const createCommentSync = ({
     const last = queue[queue.length - 1];
     if (op.kind === "patch" && last?.kind === "patch" && last.iterationId === op.iterationId) {
       op.patches.forEach((patch, id) => {
-        last.patches.set(id, { ...last.patches.get(id), ...patch });
+        last.patches.set(id, mergeCommentPatches(last.patches.get(id) ?? {}, patch));
       });
     } else {
       queue.push(op);
@@ -252,6 +273,19 @@ export const createCommentSync = ({
     schedule(isImmediate);
     notify();
   };
+
+  // A fetch that completes while writes are pending carries a snapshot that may predate them
+  // and would wipe the optimistic state. Cache listeners run synchronously inside the update,
+  // so painting our state straight back means the stale snapshot is never shown; one refetch
+  // after the queue drains then picks up anything that really changed elsewhere.
+  const queryHash = hashKey(queryKey);
+  queryClient.getQueryCache().subscribe((event) => {
+    if (confirmed === undefined || event.type !== "updated") return;
+    if (event.query.queryHash !== queryHash) return;
+    if (event.action.type !== "success" || event.action.manual === true) return;
+    isRefetchOwed = true;
+    render();
+  });
 
   return {
     patch: (iterationId, patches) => {
