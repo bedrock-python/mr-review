@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import anyio
 import pytest
+from mr_review.core.ai.entities import DispatchOptions
 from mr_review.core.reviews.entities import Iteration, IterationStage, Review
 from mr_review.use_cases.reviews.dispatch_review import (
     DispatchChunk,
@@ -79,7 +80,9 @@ def _use_case(repo: AsyncMock, model: object) -> DispatchReviewUseCase:
 
 
 def _stream(use_case: DispatchReviewUseCase, iteration: Iteration) -> AsyncIterator[DispatchEvent]:
-    return use_case._stream_and_save(uuid4(), iteration.id, "prompt", _PROVIDER, model="new-model")  # noqa: SLF001
+    return use_case._stream_and_save(  # noqa: SLF001
+        uuid4(), iteration.id, "prompt", _PROVIDER, options=DispatchOptions(model="new-model")
+    )
 
 
 async def _drain(stream: AsyncIterator[DispatchEvent], into: list[DispatchEvent] | None = None) -> None:

@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from mr_review.api.config import Settings
 from mr_review.api.routers.v1.reviews import router as reviews_router
+from mr_review.core.ai.entities import AIStreamEnd, AIStreamItem, DispatchOptions
 from mr_review.core.mrs.entities import DiffFile
 from mr_review.core.reviews.entities import BriefConfig, Comment, Iteration, IterationStage, Review
 from mr_review.core.reviews.sources import BranchDiffSource
@@ -37,19 +38,31 @@ pytestmark = [pytest.mark.integration, pytest.mark.http]
 
 
 class _Model:
-    """A scripted AI stream: yields ``chunks``, then raises ``error`` or waits forever if asked to."""
+    """A scripted AI stream: yields ``chunks`` and ``end``, then raises ``error`` or waits forever if asked to."""
 
-    def __init__(self, chunks: list[str], *, error: Exception | None = None, hang: bool = False) -> None:
+    def __init__(
+        self,
+        chunks: list[str],
+        *,
+        error: Exception | None = None,
+        hang: bool = False,
+        end: AIStreamEnd | None = None,
+    ) -> None:
         self.chunks = chunks
         self.error = error
         self.hang = hang
+        self.end = end
+        self.options: list[DispatchOptions] = []
 
-    async def __call__(self, *_args: object) -> AsyncIterator[str]:
+    async def __call__(self, _provider: object, _prompt: str, options: DispatchOptions) -> AsyncIterator[AIStreamItem]:
+        self.options.append(options)
         return self._stream()
 
-    async def _stream(self) -> AsyncIterator[str]:
+    async def _stream(self) -> AsyncIterator[AIStreamItem]:
         for chunk in self.chunks:
             yield chunk
+        if self.end is not None:
+            yield self.end
         if self.error is not None:
             raise self.error
         if self.hang:
@@ -80,15 +93,16 @@ class _FakeDispatchProvider(Provider):
 
     def __init__(self) -> None:
         super().__init__()
-        self.model: Callable[..., Awaitable[AsyncIterator[str]]] = _Model([])
+        self.model: Callable[..., Awaitable[AsyncIterator[AIStreamItem]]] = _Model([])
         self.on_fetch_diff: Callable[[], Awaitable[None]] | None = None
+        self.provider = make_ai_provider()
 
     @provide(override=True)
     def get_dispatch_review_use_case(self, review_repo: FileReviewRepository) -> DispatchReviewUseCase:
         return DispatchReviewUseCase(
             review_repo=review_repo,
             host_repo=_Found(make_host()),  # type: ignore[arg-type]
-            ai_provider_repo=_Found(make_ai_provider()),  # type: ignore[arg-type]
+            ai_provider_repo=_Found(self.provider),  # type: ignore[arg-type]
             vcs_factory=lambda _host: _BranchDiffVCS(self.on_fetch_diff),  # type: ignore[arg-type,return-value]
             ai_dispatcher_factory=self.model,
         )
@@ -227,6 +241,92 @@ async def test__dispatch__truncated_answer__done_flags_truncation(harness: _Harn
 
     assert events[-1][0] == "done"
     assert (events[-1][1]["comments"], events[-1][1]["truncated"]) == (1, True)
+
+
+async def test__dispatch__provider_stopped_at_its_limit__done_flags_truncation_even_if_the_json_closed(
+    harness: _Harness,
+) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.model = _Model(['[{"body": "One"}]'], end=AIStreamEnd(truncated=True))
+
+    events = await _dispatch(harness, review.id)
+
+    assert [name for name, _ in events] == ["chunk", "comment", "done"]
+    assert (events[-1][1]["comments"], events[-1][1]["truncated"]) == (1, True)
+
+
+async def test__dispatch__settings__reach_the_dispatcher_as_one_options_object(harness: _Harness) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.model = _Model(["[]"], end=AIStreamEnd(truncated=False))
+    body = {
+        "ai_provider_id": str(uuid4()),
+        "model": "claude-opus-5-5",
+        "temperature": 0.3,
+        "reasoning_effort": "xhigh",
+        "reasoning_budget": 4000,
+        "max_output_tokens": 40_000,
+        "structured_output": False,
+        "system_prompt": "Only security issues.",
+    }
+
+    response = await harness.client.post(f"/api/v1/reviews/{review.id}/dispatch", json=body)
+
+    assert response.status_code == 200
+    assert harness.dispatch.model.options == [
+        DispatchOptions(
+            model="claude-opus-5-5",
+            temperature=0.3,
+            reasoning_effort="xhigh",
+            reasoning_budget=4000,
+            max_output_tokens=40_000,
+            structured_output=False,
+            system_prompt="Only security issues.",
+        )
+    ]
+
+
+async def test__dispatch__no_model_named__provider_first_model_used_and_recorded(harness: _Harness) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.provider = make_ai_provider(models=["claude-opus-5-5", "claude-haiku-4-5"])
+    harness.dispatch.model = _Model(["[]"])
+
+    await _dispatch(harness, review.id)
+
+    assert harness.dispatch.model.options[0].model == "claude-opus-5-5"
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].model == "claude-opus-5-5"
+
+
+async def test__dispatch__no_model_anywhere__422_instead_of_a_silent_default(harness: _Harness) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.provider = make_ai_provider(models=[])
+
+    response = await harness.client.post(f"/api/v1/reviews/{review.id}/dispatch", json={"ai_provider_id": str(uuid4())})
+
+    assert response.status_code == 422
+    assert "no models configured" in response.json()["detail"]
+    assert harness.dispatch.model.options == []
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        {"temperature": 2.5},
+        {"temperature": -0.1},
+        {"max_output_tokens": 10},
+        {"max_output_tokens": 1_000_000},
+        {"reasoning_effort": "extreme"},
+    ],
+)
+async def test__dispatch__out_of_range_settings__422(harness: _Harness, field: dict[str, object]) -> None:
+    review, _ = await _seed(harness.reviews)
+
+    response = await harness.client.post(
+        f"/api/v1/reviews/{review.id}/dispatch", json={"ai_provider_id": str(uuid4()), **field}
+    )
+
+    assert response.status_code == 422
 
 
 async def test__dispatch__provider_fails__error_event_without_done_and_comments_kept(harness: _Harness) -> None:

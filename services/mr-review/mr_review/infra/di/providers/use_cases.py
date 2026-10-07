@@ -6,6 +6,10 @@ from collections.abc import AsyncGenerator, AsyncIterator
 
 from dishka import Provider, Scope, provide
 
+from mr_review.core.ai.capabilities import resolve_capabilities
+from mr_review.core.ai.entities import AIStreamItem, DispatchOptions
+from mr_review.core.ai.errors import AIProviderError
+from mr_review.core.ai.generation import plan_generation
 from mr_review.core.ai.protocols import AIDispatcherFactory, AIFenceRegistry
 from mr_review.core.ai_providers.entities import AIProvider as AIProviderEntity
 from mr_review.core.hosts.entities import Host
@@ -55,83 +59,58 @@ from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCas
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 
-def _build_ai_backend(
-    ai_provider: AIProviderEntity,
-    model: str | None,
-    temperature: float | None,
-    reasoning_budget: int | None,
-    reasoning_effort: str | None,
-) -> ClaudeProvider | OpenAICompatProvider:
-    """Resolve the correct AI backend for ``ai_provider``."""
+def _build_ai_backend(ai_provider: AIProviderEntity) -> ClaudeProvider | OpenAICompatProvider:
+    """The backend client for ``ai_provider``, configured from its saved (or previewed) settings."""
     api_key = ai_provider.api_key.get_secret_value()
     if ai_provider.type == "claude":
-        resolved_model = model or (ai_provider.models[0] if ai_provider.models else "claude-opus-4-5")
         return ClaudeProvider(
-            api_key=api_key,
-            model=resolved_model,
+            api_key,
+            base_url=ai_provider.base_url or None,
             ssl_verify=ai_provider.ssl_verify,
             timeout=ai_provider.timeout,
-            temperature=temperature,
-            reasoning_budget=reasoning_budget,
         )
-    resolved_model = model or (ai_provider.models[0] if ai_provider.models else "gpt-4o")
     return OpenAICompatProvider(
-        api_key=api_key,
-        model=resolved_model,
+        api_key,
+        provider_type=ai_provider.type,
         base_url=ai_provider.base_url or None,
         ssl_verify=ai_provider.ssl_verify,
         timeout=ai_provider.timeout,
-        temperature=temperature,
-        reasoning_budget=reasoning_budget,
-        reasoning_effort=reasoning_effort,
     )
 
 
 async def _fenced_stream(
     fence_registry: AIFenceRegistry,
     ai_provider: AIProviderEntity,
-    inner: AsyncIterator[str],
-) -> AsyncGenerator[str, None]:
+    inner: AsyncIterator[AIStreamItem],
+) -> AsyncGenerator[AIStreamItem, None]:
     """Hold one fence slot for ``ai_provider`` from first chunk through close/error/cancel."""
     async with fence_registry.acquire(ai_provider):
-        async for chunk in inner:
-            yield chunk
+        async for item in inner:
+            yield item
 
 
 def _make_ai_dispatcher_factory(fence_registry: AIFenceRegistry) -> AIDispatcherFactory:
-    """Build a streaming AI dispatcher factory whose output is fenced per provider."""
+    """Build a streaming AI dispatcher factory whose output is fenced per provider.
+
+    The options are planned against the model's capabilities first, so the backend only ever
+    sends settings the model accepts.
+    """
 
     async def factory(
-        ai_provider: AIProviderEntity,
-        prompt: str,
-        model: str | None,
-        temperature: float | None,
-        reasoning_budget: int | None,
-        reasoning_effort: str | None,
-    ) -> AsyncIterator[str]:
-        backend = _build_ai_backend(ai_provider, model, temperature, reasoning_budget, reasoning_effort)
-        return _fenced_stream(fence_registry, ai_provider, backend.dispatch(prompt))
+        ai_provider: AIProviderEntity, prompt: str, options: DispatchOptions
+    ) -> AsyncIterator[AIStreamItem]:
+        if not options.model:
+            raise AIProviderError("No model selected — pick one in the dispatch settings")
+        plan = plan_generation(resolve_capabilities(ai_provider.type, options.model), options)
+        backend = _build_ai_backend(ai_provider)
+        return _fenced_stream(fence_registry, ai_provider, backend.dispatch(prompt, plan))
 
     return factory
 
 
 async def _model_lister(ai_provider: AIProviderEntity) -> list[str]:
     """Resolve the correct AI backend and list its available models."""
-    api_key = ai_provider.api_key.get_secret_value()
-    if ai_provider.type == "claude":
-        ai: ClaudeProvider | OpenAICompatProvider = ClaudeProvider(
-            api_key=api_key,
-            ssl_verify=ai_provider.ssl_verify,
-            timeout=ai_provider.timeout,
-        )
-    else:
-        ai = OpenAICompatProvider(
-            api_key=api_key,
-            base_url=ai_provider.base_url or None,
-            ssl_verify=ai_provider.ssl_verify,
-            timeout=ai_provider.timeout,
-        )
-    return await ai.list_models()
+    return await _build_ai_backend(ai_provider).list_models()
 
 
 def _make_vcs_factory(vcs_cache: VCSCache) -> VCSProviderFactory:

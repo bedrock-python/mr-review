@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from mr_review.core.ai.entities import DispatchOptions, ReasoningEffort
 from mr_review.core.reviews.entities import BriefConfig, IterationStage
 from mr_review.core.reviews.sources import ReviewSource
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
@@ -106,12 +107,58 @@ class UpdateReviewRequest(BaseModel):
 
 
 class DispatchReviewRequest(BaseModel):
+    """Which provider and model to run, and how. ``null`` everywhere means the default.
+
+    Settings the chosen model does not accept are dropped or adapted rather than sent — see
+    ``GET /ai-providers/{id}/capabilities`` for what a model takes.
+    """
+
     ai_provider_id: UUID
-    model: str | None = None
-    temperature: float | None = None
-    reasoning_budget: int | None = None
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    model: str | None = Field(default=None, description="null: the provider's first model.")
+    temperature: float | None = Field(
+        default=None,
+        ge=0,
+        le=2,
+        description="Sent only to models that take it, only while reasoning is off; Claude caps it at 1.",
+    )
+    reasoning_budget: int | None = Field(
+        default=None, ge=1, le=128_000, description="Thinking tokens, for models with budget-based reasoning."
+    )
+    reasoning_effort: ReasoningEffort | None = Field(
+        default=None, description="Reasoning depth; the nearest level the model has is used."
+    )
+    max_output_tokens: int | None = Field(
+        default=None,
+        ge=256,
+        le=128_000,
+        description="Output limit, thinking included; capped at the model's maximum. null: 32k for Claude "
+        "(64k at xhigh/max effort), the endpoint's own default otherwise.",
+    )
+    structured_output: bool | None = Field(
+        default=None,
+        description="Constrain the answer to the review JSON schema. null: on for claude and openai models "
+        "known to support it, off for openai_compat.",
+    )
+    system_prompt: str | None = Field(
+        default=None, max_length=20_000, description="Replaces the built-in system prompt; null or blank keeps it."
+    )
     iteration_id: UUID | None = None
+
+    @field_validator("model", "system_prompt")
+    @classmethod
+    def _blank_is_default(cls, value: str | None) -> str | None:
+        return value if value is None or value.strip() else None
+
+    def to_options(self) -> DispatchOptions:
+        return DispatchOptions(
+            model=self.model.strip() if self.model else None,
+            temperature=self.temperature,
+            reasoning_effort=self.reasoning_effort,
+            reasoning_budget=self.reasoning_budget,
+            max_output_tokens=self.max_output_tokens,
+            structured_output=self.structured_output,
+            system_prompt=self.system_prompt,
+        )
 
 
 class DispatchCommentEvent(BaseModel):
