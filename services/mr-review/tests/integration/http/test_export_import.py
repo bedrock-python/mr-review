@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from mr_review.api.routers.v1.ai_providers import router as ai_providers_router
 from mr_review.api.routers.v1.export_import import router as export_import_router
 from mr_review.api.routers.v1.hosts import router as hosts_router
 from mr_review.api.routers.v1.reviews import router as reviews_router
+from mr_review.core.export_import import encryption
 from mr_review.infra.di.containers.api import create_api_container
 
 pytestmark = [pytest.mark.integration, pytest.mark.http]
@@ -60,7 +62,12 @@ async def _populate(client: AsyncClient) -> dict[str, Any]:
         "/api/v1/ai-providers",
         json={"name": "oa", "type": "openai", "api_key": _API_KEY, "models": ["gpt-4o"], "max_concurrent": 2},
     )
-    await client.post("/api/v1/reviews", json={"host_id": host["id"], "repo_path": "grp/repo", "mr_iid": 7})
+    review = (
+        await client.post("/api/v1/reviews", json={"host_id": host["id"], "repo_path": "grp/repo", "mr_iid": 7})
+    ).json()
+    brief = {"preset": "security", "custom_instructions": "Look for SQL injection"}
+    patched = await client.patch(f"/api/v1/reviews/{review['id']}", json={"brief_config": brief})
+    assert patched.json()["iterations"][0]["brief_config"]["preset"] == "security"
     return host
 
 
@@ -249,3 +256,43 @@ async def test__import_preview__review_whose_host_is_nowhere__is_flagged(instanc
 
     assert preview["reviews_without_host"] == 1
     assert preview["secrets"] == "omitted"
+
+
+async def test__export__more_reviews_than_the_history_page__exports_all(instance: ClientFactory) -> None:
+    async with instance("a") as client:
+        host = await _populate(client)
+        for mr_iid in range(100, 155):
+            await client.post(
+                "/api/v1/reviews", json={"host_id": host["id"], "repo_path": "grp/repo", "mr_iid": mr_iid}
+            )
+
+        body = (await client.post("/api/v1/data/export", json={"include_hosts": False})).json()
+
+    assert len(body["reviews"]) == 56
+
+
+async def test__export_and_import__derive_one_key_per_file_off_the_event_loop(
+    instance: ClientFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_event_loop_thread: list[bool] = []
+    real_derive = encryption._derive_key
+
+    def recording_derive(*args: Any, **kwargs: Any) -> bytes:
+        on_event_loop_thread.append(threading.current_thread() is threading.main_thread())
+        return real_derive(*args, **kwargs)
+
+    monkeypatch.setattr(encryption, "_derive_key", recording_derive)
+    async with instance("a") as source:
+        await _populate(source)
+        await source.post(
+            "/api/v1/hosts", json={"name": "gh", "type": "github", "base_url": "https://api.github.com", "token": "t"}
+        )
+        package = (await source.post("/api/v1/data/export", json={"encryption_password": _PASSPHRASE})).json()
+
+    async with instance("b") as target:
+        response = await target.post(
+            "/api/v1/data/import", json={**package, "merge_strategy": "skip", "decryption_password": _PASSPHRASE}
+        )
+
+    assert response.status_code == 201
+    assert on_event_loop_thread == [False, False]  # one derivation per file, never on the event loop
