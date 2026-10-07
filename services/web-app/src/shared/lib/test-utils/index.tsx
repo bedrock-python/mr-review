@@ -4,6 +4,12 @@ import type { RenderResult } from "@testing-library/react";
 
 /** Test-only helpers; not re-exported from `@shared/lib` so they stay out of the bundle. */
 
+/**
+ * Per-test budget for component tests that render through MSW, debounces and the
+ * virtualizer; the 5 s default is too tight when CI runs suites in parallel.
+ */
+export const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
+
 export const createTestQueryClient = (): QueryClient =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 

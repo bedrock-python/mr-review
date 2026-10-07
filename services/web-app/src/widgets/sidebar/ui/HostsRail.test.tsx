@@ -1,11 +1,15 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { configure, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { MemoryRouter } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { renderWithQueryClient } from "@shared/lib/test-utils";
+import { renderWithQueryClient, INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { HostsRail } from "./HostsRail";
+
+// Form validation + MSW round trip can exceed Testing Library's 1 s default when
+// the machine is busy (e.g. parallel CI jobs).
+configure({ asyncUtilTimeout: 5000 });
 
 vi.mock("@app/navigation", () => ({
   useNav: () => ({ selectedHostId: null, setHost: vi.fn() }),
@@ -40,7 +44,7 @@ afterAll(() => {
   server.close();
 });
 
-describe("HostsRail add-host modal", () => {
+describe("HostsRail add-host modal", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("submits with the default timeout although the form has no timeout field", async () => {
     renderWithQueryClient(
       <MemoryRouter>

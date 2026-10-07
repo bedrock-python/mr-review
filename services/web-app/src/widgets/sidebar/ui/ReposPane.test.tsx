@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { configure, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -16,8 +16,13 @@ import {
   mockVirtualLayout,
   renderWithQueryClient,
   scrollToEnd,
+  INTEGRATION_TEST_TIMEOUT_MS,
 } from "@shared/lib/test-utils";
 import { ReposPane } from "./ReposPane";
+
+// Debounce + MSW round trip + virtualizer measurement can exceed Testing Library's
+// 1 s default when the machine is busy (e.g. parallel CI jobs).
+configure({ asyncUtilTimeout: 5000 });
 
 const nav = vi.hoisted(() => ({
   state: {
@@ -93,7 +98,7 @@ const waitForFirstPage = async (): Promise<void> => {
   expect(await screen.findByText("Favourites")).toBeInTheDocument();
 };
 
-describe("ReposPane", () => {
+describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("keeps every favourite on top, including pins on pages not loaded yet", async () => {
     renderWithQueryClient(<ReposPane />);
     await waitForFirstPage();

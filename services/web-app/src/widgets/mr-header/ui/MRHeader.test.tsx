@@ -1,14 +1,22 @@
-import { screen, waitFor } from "@testing-library/react";
+import { configure, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mrKeys } from "@entities/mr";
 import { MOCK_BUSY_REPO, MOCK_HOST_ID, getMockMRs, mrHandlers } from "@shared/api/mocks";
-import { createTestQueryClient, renderWithQueryClient } from "@shared/lib/test-utils";
+import {
+  createTestQueryClient,
+  renderWithQueryClient,
+  INTEGRATION_TEST_TIMEOUT_MS,
+} from "@shared/lib/test-utils";
 import { MRHeader } from "./MRHeader";
 import type * as ReviewEntity from "@entities/review";
 import type { MR } from "@entities/mr";
+
+// Sync chains several MSW round trips, which can exceed Testing Library's 1 s
+// default when the machine is busy (e.g. parallel CI jobs).
+configure({ asyncUtilTimeout: 5000 });
 
 const MR_IID = 95;
 
@@ -85,7 +93,7 @@ const detailRequests = (): number =>
     ({ method, url }) => method === "GET" && url.pathname.endsWith("/repos/platform/api-1/mrs/95")
   ).length;
 
-describe("MRHeader", () => {
+describe("MRHeader", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("names the repository from its path without requesting the repository list", async () => {
     renderWithQueryClient(<MRHeader />);
 

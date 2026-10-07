@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,8 +9,13 @@ import {
   mockVirtualLayout,
   renderWithQueryClient,
   scrollToEnd,
+  INTEGRATION_TEST_TIMEOUT_MS,
 } from "@shared/lib/test-utils";
 import { MRList } from "./MRList";
+
+// Debounce + MSW round trip + virtualizer measurement can exceed Testing Library's
+// 1 s default when the machine is busy (e.g. parallel CI jobs).
+configure({ asyncUtilTimeout: 5000 });
 
 type NavState = {
   selectedHostId: string | null;
@@ -83,7 +88,7 @@ const waitForStatus = async (text: string): Promise<void> => {
   expect(await screen.findByText(text)).toBeInTheDocument();
 };
 
-describe("MRList in a repository", () => {
+describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("offers state chips, not relationship chips, and requests open MRs", async () => {
     renderWithQueryClient(<MRList />);
     await waitForStatus("30 loaded · more available");
@@ -197,7 +202,7 @@ describe("MRList in a repository", () => {
   });
 });
 
-describe("MRList in the inbox", () => {
+describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     nav.state = { ...nav.state, selectedRepoPath: null, isInbox: true };
   });
