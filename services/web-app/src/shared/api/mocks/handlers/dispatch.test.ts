@@ -70,6 +70,7 @@ describe("dispatch handler", () => {
       comments: DISPATCH_MOCK_COMMENTS.length,
       errors: 0,
       json_error: null,
+      truncated: false,
     });
   });
 

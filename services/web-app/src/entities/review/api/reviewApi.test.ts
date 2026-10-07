@@ -17,7 +17,13 @@ const frame = (event: string, data: string): string => `event: ${event}\r\ndata:
 const MODEL_OUTPUT =
   '[{"file": "a.py", "line": 3, "severity": "major", "body": "Use `{}` for \\"x\\"\\n"}]';
 const COMMENT = { index: 0, file: "a.py", line: 3, severity: "major", body: 'Use `{}` for "x"\n' };
-const RESULT = { iteration_id: ITERATION_ID, comments: 1, errors: 0, json_error: null };
+const RESULT = {
+  iteration_id: ITERATION_ID,
+  comments: 1,
+  errors: 0,
+  json_error: null,
+  truncated: false,
+};
 
 const FULL_STREAM =
   frame("chunk", JSON.stringify(MODEL_OUTPUT.slice(0, 30))) +

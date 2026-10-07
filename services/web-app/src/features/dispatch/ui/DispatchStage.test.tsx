@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   dispatchStream: vi.fn(),
   getRawResponse: vi.fn(),
   importResponse: vi.fn(),
+  reparseIteration: vi.fn(),
 }));
 
 const stage = vi.hoisted(() => ({ setStage: vi.fn() }));
@@ -94,6 +95,7 @@ const RESULT = {
   comments: 1,
   errors: 0,
   json_error: null,
+  truncated: false,
 };
 
 /**
@@ -323,6 +325,38 @@ describe("DispatchStage — run in app", () => {
     channel.emit({ type: "done", result: RESULT });
 
     expect(await screen.findByText("1 comment saved")).toBeInTheDocument();
+  });
+
+  it("warns when the model output was truncated", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    channel.emit({ type: "done", result: { ...RESULT, truncated: true } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Model output was truncated — some comments may be missing; raise max tokens or narrow the context"
+    );
+  });
+
+  it("re-parses the stored output from the JSON error notice", async () => {
+    api.reparseIteration.mockResolvedValue({ imported: 3, errors: [], json_error: null });
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+    channel.emit({ type: "done", result: { ...RESULT, json_error: "Expecting value" } });
+    const notice = await screen.findByRole("alert");
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledTimes(2);
+    });
+
+    await user.click(within(notice).getByRole("button", { name: "Re-parse" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("3 comments imported");
+    expect(screen.getByText("3 comments saved")).toBeInTheDocument();
+    expect(screen.queryByText("The model output wasn't valid JSON")).not.toBeInTheDocument();
+    expect(api.reparseIteration).toHaveBeenCalledWith(REVIEW_ID, ITERATION_ID);
+    expect(api.get).toHaveBeenCalledTimes(3);
   });
 
   it("stops cleanly when the user aborts", async () => {

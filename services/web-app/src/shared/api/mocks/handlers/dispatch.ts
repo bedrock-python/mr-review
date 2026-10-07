@@ -48,6 +48,7 @@ const buildDispatchFrames = (iterationId: string): string[] => {
       comments: DISPATCH_MOCK_COMMENTS.length,
       errors: 0,
       json_error: null,
+      truncated: false,
     })
   );
   return frames;

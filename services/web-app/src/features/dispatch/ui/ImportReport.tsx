@@ -56,7 +56,8 @@ const summarize = ({ imported, errors, json_error }: ImportResponseResult): Summ
 export type ImportReportProps = {
   result: ImportResponseResult;
   onEdit: () => void;
-  onContinue: () => void;
+  /** Offers "Polish comments →" when given; omit it where the screen already has one. */
+  onContinue?: () => void;
 };
 
 /** Outcome of importing a pasted AI response, including why anything was rejected. */
@@ -201,7 +202,7 @@ export const ImportReport = ({
             Edit &amp; re-import
           </button>
         )}
-        {hasImported && (
+        {hasImported && onContinue && (
           <button
             type="button"
             className={shouldPolish ? "btn primary" : "btn"}

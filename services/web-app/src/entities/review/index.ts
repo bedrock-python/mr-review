@@ -37,6 +37,7 @@ export {
   DispatchErrorPayloadSchema,
   rawResponseQueryOptions,
   useRawResponse,
+  useReparseIteration,
 } from "./model";
 export type {
   BriefPreset,

@@ -69,3 +69,4 @@ export type {
   DispatchStreamEvent,
 } from "./dispatch.schema";
 export { rawResponseQueryOptions, useRawResponse } from "./useRawResponse";
+export { useReparseIteration } from "./useReparseIteration";

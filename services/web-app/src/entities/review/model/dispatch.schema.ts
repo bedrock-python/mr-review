@@ -28,9 +28,11 @@ export const DispatchResultSchema = z.object({
   comments: z.number().int().nonnegative(),
   errors: z.number().int().nonnegative(),
   json_error: z.string().nullable().default(null),
+  /** The model output was cut off (e.g. at max tokens), so comments may be missing. */
+  truncated: z.boolean().default(false),
 });
 
-/** `event: error` — generation failed; partial output is still persisted server-side. */
+/** `event: error` — generation failed; the iteration keeps its previous comments. */
 export const DispatchErrorPayloadSchema = z.object({
   message: z.string(),
 });

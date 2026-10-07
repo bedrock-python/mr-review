@@ -3,7 +3,9 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 
-import { rawResponseQueryOptions, useRawResponse } from "@entities/review";
+import { rawResponseQueryOptions, useRawResponse, useReparseIteration } from "@entities/review";
+
+import { ImportReport } from "./ImportReport";
 
 import type { DispatchResult } from "@entities/review";
 import type { StoreApi } from "zustand/vanilla";
@@ -13,6 +15,24 @@ const RAW_VIEW_MAX_HEIGHT_PX = 360;
 
 const pluralize = (count: number, noun: string): string =>
   `${String(count)} ${noun}${count !== 1 ? "s" : ""}`;
+
+const NOTICE_STYLE: React.CSSProperties = {
+  padding: "12px 14px",
+  borderRadius: 8,
+  border: "1px solid color-mix(in oklch, var(--c-major) 40%, transparent)",
+  background: "color-mix(in oklch, var(--c-major) 8%, var(--bg-2))",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const NOTICE_TITLE_STYLE: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--c-major)",
+};
+
+const NOTICE_BUTTON_STYLE: React.CSSProperties = { fontSize: 11, padding: "4px 10px" };
 
 /* ── Raw response viewer ────────────────────────────────────── */
 type RawResponseViewerProps = {
@@ -81,8 +101,8 @@ export type DispatchOutcomeProps = {
 };
 
 /**
- * What a finished run produced: the saved count, a clear notice when the model
- * output was not valid JSON, and access to the stored raw output.
+ * What a finished run produced: the saved count, clear notices when the model
+ * output was cut off or was not valid JSON, and access to the stored raw output.
  */
 export const DispatchOutcome = ({
   reviewId,
@@ -93,12 +113,21 @@ export const DispatchOutcome = ({
 }: DispatchOutcomeProps): React.ReactElement => {
   const qc = useQueryClient();
   const parsedCount = useStore(store, (s) => s.comments.length);
+  const reparse = useReparseIteration(reviewId);
   const [isRawOpen, setIsRawOpen] = useState(false);
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
-  const hasJsonError = result.json_error !== null;
+  // A re-parse replaces the iteration's comments, so its report supersedes the run's.
+  const reparsed = reparse.data;
+  const isJsonNoticeShown = result.json_error !== null && reparsed === undefined;
+  const savedCount = reparsed ? reparsed.imported : result.comments;
+  const skippedCount = reparsed ? reparsed.errors.length : result.errors;
 
   const handleToggleRaw = (): void => {
     setIsRawOpen((open) => !open);
+  };
+
+  const handleReparse = (): void => {
+    reparse.mutate(result.iteration_id);
   };
 
   const handleEditInManual = async (): Promise<void> => {
@@ -116,7 +145,7 @@ export const DispatchOutcome = ({
     <button
       type="button"
       className="btn"
-      style={{ fontSize: 11, padding: "4px 10px" }}
+      style={NOTICE_BUTTON_STYLE}
       aria-expanded={isRawOpen}
       onClick={handleToggleRaw}
     >
@@ -129,22 +158,18 @@ export const DispatchOutcome = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {hasJsonError && (
-        <div
-          role="alert"
-          style={{
-            padding: "12px 14px",
-            borderRadius: 8,
-            border: "1px solid color-mix(in oklch, var(--c-major) 40%, transparent)",
-            background: "color-mix(in oklch, var(--c-major) 8%, var(--bg-2))",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-major)" }}>
-            The model output wasn't valid JSON
+      {result.truncated && (
+        <div role="alert" style={NOTICE_STYLE}>
+          <div style={NOTICE_TITLE_STYLE}>
+            Model output was truncated — some comments may be missing; raise max tokens or narrow
+            the context
           </div>
+        </div>
+      )}
+
+      {isJsonNoticeShown && (
+        <div role="alert" style={NOTICE_STYLE}>
+          <div style={NOTICE_TITLE_STYLE}>The model output wasn't valid JSON</div>
           <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5 }}>
             {parsedCount === 0
               ? "It was saved as one general comment with the raw text, so nothing is lost."
@@ -170,7 +195,17 @@ export const DispatchOutcome = ({
             <button
               type="button"
               className="btn"
-              style={{ fontSize: 11, padding: "4px 10px" }}
+              style={NOTICE_BUTTON_STYLE}
+              disabled={reparse.isPending}
+              title="Parse the stored output again, e.g. after a parser update"
+              onClick={handleReparse}
+            >
+              {reparse.isPending ? "Re-parsing…" : "Re-parse"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={NOTICE_BUTTON_STYLE}
               disabled={isOpeningEditor}
               onClick={() => {
                 void handleEditInManual();
@@ -179,26 +214,40 @@ export const DispatchOutcome = ({
               {isOpeningEditor ? "Opening…" : "Fix in Copy & paste mode"}
             </button>
           </div>
+          {reparse.isError && (
+            <div style={{ fontSize: 12, color: "var(--c-critical)" }}>
+              Re-parse failed: {reparse.error.message}
+            </div>
+          )}
           {rawViewer}
         </div>
       )}
 
+      {reparsed && (
+        <ImportReport
+          result={reparsed}
+          onEdit={() => {
+            void handleEditInManual();
+          }}
+        />
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--fg-3)" }}>
-          {pluralize(result.comments, "comment")} saved
+          {pluralize(savedCount, "comment")} saved
         </span>
-        {result.errors > 0 && (
+        {skippedCount > 0 && (
           <span style={{ fontSize: 12, color: "var(--c-major)" }}>
-            · {pluralize(result.errors, "item")} couldn't be parsed
+            · {pluralize(skippedCount, "item")} couldn't be parsed
           </span>
         )}
-        {!hasJsonError && rawToggle}
+        {!isJsonNoticeShown && rawToggle}
         <div style={{ flex: 1 }} />
         <button type="button" className="btn primary" onClick={onContinue}>
           Polish comments →
         </button>
       </div>
-      {!hasJsonError && rawViewer}
+      {!isJsonNoticeShown && rawViewer}
     </div>
   );
 };
