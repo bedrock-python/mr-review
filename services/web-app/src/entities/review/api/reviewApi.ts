@@ -1,8 +1,13 @@
 import { z } from "zod";
-import { httpClient } from "@shared/api";
+import { ApiError, httpClient } from "@shared/api";
 import { env } from "@shared/config";
+import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
+import { parseDispatchStreamEvent } from "./parseDispatchStreamEvent";
+import type { DispatchStreamEvent } from "../model/dispatch.schema";
 import type { Review, BriefConfig, Comment } from "../model/review.schema";
+
+const HTTP_NOT_FOUND = 404;
 
 const CommentParseErrorSchema = z.object({
   index: z.number(),
@@ -99,7 +104,9 @@ export const reviewApi = {
     return res.data;
   },
 
-  // SSE streaming dispatch — returns AsyncGenerator of text chunks
+  // Runs the review through an AI provider over SSE. Yields the raw text and
+  // comment previews as they stream, then ends after exactly one terminal
+  // `done` or `error` event; throws if the stream ends without one.
   dispatchStream: async function* (
     reviewId: string,
     aiProviderId: string,
@@ -109,7 +116,7 @@ export const reviewApi = {
     reasoningBudget?: number | null,
     reasoningEffort?: string | null,
     iterationId?: string | null
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<DispatchStreamEvent, void, undefined> {
     const response = await fetch(`${env.VITE_API_BASE_URL}/api/v1/reviews/${reviewId}/dispatch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -135,30 +142,13 @@ export const reviewApi = {
       throw new Error(message);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    try {
-      let done = false;
-      while (!done) {
-        const result = await reader.read();
-        done = result.done;
-        if (result.value !== undefined) {
-          buffer += decoder.decode(result.value, { stream: true });
-        }
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const chunk = line.slice(6);
-            if (chunk.length > 0) yield chunk;
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
+    for await (const message of readEventStream(response.body)) {
+      const event = parseDispatchStreamEvent(message.event, message.data);
+      if (event === null) continue;
+      yield event;
+      if (event.type === "done" || event.type === "error") return;
     }
+    throw new Error("Dispatch stream ended before the server reported a result");
   },
 
   importResponse: async (
@@ -208,5 +198,32 @@ export const reviewApi = {
       `/api/v1/reviews/${reviewId}/iterations/${iterationId}/comments/${commentId}`
     );
     return ReviewSchema.parse(res.data);
+  },
+
+  // The model output an iteration was parsed from, exactly as received;
+  // null when none was stored for it.
+  getRawResponse: async (reviewId: string, iterationId: string): Promise<string | null> => {
+    try {
+      const res = await httpClient.get<unknown>(
+        `/api/v1/reviews/${reviewId}/iterations/${iterationId}/raw-response`,
+        // Keep the body as text: axios would otherwise parse output that is valid JSON.
+        { responseType: "text" }
+      );
+      return z.string().parse(res.data);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === HTTP_NOT_FOUND) return null;
+      throw err;
+    }
+  },
+
+  // Parses the iteration's stored raw response again; reports like importResponse.
+  reparseIteration: async (
+    reviewId: string,
+    iterationId: string
+  ): Promise<ImportResponseResult> => {
+    const res = await httpClient.post<unknown>(
+      `/api/v1/reviews/${reviewId}/iterations/${iterationId}/reparse`
+    );
+    return ImportResponseResultSchema.parse(res.data);
   },
 };
