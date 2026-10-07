@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, httpClient } from "@shared/api";
+import { ApiError, LONG_REQUEST_TIMEOUT_MS, httpClient } from "@shared/api";
 import { env } from "@shared/config";
 import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
@@ -12,8 +12,6 @@ import type { PostReviewResult, SeverityLabel } from "../model/post.schema";
 import type { Review, BriefConfig, Comment } from "../model/review.schema";
 
 const HTTP_NOT_FOUND = 404;
-// Building a prompt fetches context files from the VCS host first; that can take a while.
-const PROMPT_TIMEOUT_MS = 120_000;
 // Posting waits on the VCS host for every comment. With the client default of 30 s the browser
 // gave up while the server went on posting, and a second click then posted everything twice.
 const POST_TIMEOUT_MS = 10 * 60 * 1000;
@@ -101,7 +99,9 @@ export const reviewApi = {
   },
 
   getDiff: async (reviewId: string): Promise<string> => {
-    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/diff`);
+    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/diff`, {
+      timeout: LONG_REQUEST_TIMEOUT_MS,
+    });
     return res.data;
   },
 
@@ -110,19 +110,24 @@ export const reviewApi = {
   },
 
   getContext: async (reviewId: string): Promise<string> => {
-    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/context`);
+    const res = await httpClient.get<string>(`/api/v1/reviews/${reviewId}/context`, {
+      timeout: LONG_REQUEST_TIMEOUT_MS,
+    });
     return res.data;
   },
 
+  // A POST, but read like a query: building the prompt fetches the diff, and with the
+  // brief's options full files, tests and related code from the VCS host.
   getPrompt: async (
     reviewId: string,
     briefConfig?: BriefConfig,
     iterationId?: string
   ): Promise<string> => {
-    const res = await httpClient.post<string>(`/api/v1/reviews/${reviewId}/prompt`, {
-      brief_config: briefConfig ?? null,
-      iteration_id: iterationId ?? null,
-    });
+    const res = await httpClient.post<string>(
+      `/api/v1/reviews/${reviewId}/prompt`,
+      { brief_config: briefConfig ?? null, iteration_id: iterationId ?? null },
+      { timeout: LONG_REQUEST_TIMEOUT_MS }
+    );
     return res.data;
   },
 
@@ -135,7 +140,7 @@ export const reviewApi = {
     const res = await httpClient.post<unknown>(
       `/api/v1/reviews/${reviewId}/prompt/preview`,
       { brief_config: briefConfig ?? null, iteration_id: iterationId ?? null },
-      { timeout: PROMPT_TIMEOUT_MS }
+      { timeout: LONG_REQUEST_TIMEOUT_MS }
     );
     return PromptPreviewSchema.parse(res.data);
   },

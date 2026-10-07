@@ -22,5 +22,7 @@ export const useCheckUpdate = () => {
     refetchIntervalInBackground: false,
     // Never throw errors into the ErrorBoundary — update checks are best-effort
     throwOnError: false,
+    // Nor toast them: an air-gapped install would see the error on every page load.
+    meta: { silent: true },
   });
 };
