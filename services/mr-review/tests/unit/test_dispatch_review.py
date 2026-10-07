@@ -255,7 +255,7 @@ async def test__persist_ai_response__unknown_severity__normalises_to_suggestion(
 
     ai_response = json.dumps(
         [
-            {"file": None, "line": None, "severity": "blocker", "body": "Something"},
+            {"file": None, "line": None, "severity": "whatever", "body": "Something"},
         ]
     )
     await use_case._persist_ai_response(review.id, iteration.id, ai_response)  # noqa: SLF001
