@@ -65,6 +65,7 @@ def _comments_from_list(raw: object) -> list[Comment]:
 
 def _iteration_from_dict(data: dict[str, object]) -> Iteration:
     comments = _comments_from_list(data.get("comments"))
+    raw_response = data.get("raw_response")
 
     brief_raw = data.get("brief_config") or {}
     brief_config = BriefConfig.model_validate(brief_raw)
@@ -89,6 +90,7 @@ def _iteration_from_dict(data: dict[str, object]) -> Iteration:
         brief_config=brief_config,
         created_at=_aware(datetime.fromisoformat(str(data["created_at"]))),
         completed_at=completed_at,
+        raw_response=raw_response if isinstance(raw_response, str) else None,
     )
 
 
@@ -103,6 +105,7 @@ def _iteration_to_dict(iteration: Iteration) -> dict[str, object]:
         "brief_config": iteration.brief_config.model_dump(mode="json"),
         "created_at": iteration.created_at.isoformat(),
         "completed_at": iteration.completed_at.isoformat() if iteration.completed_at else None,
+        "raw_response": iteration.raw_response,
     }
 
 

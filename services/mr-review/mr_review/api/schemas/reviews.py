@@ -144,6 +144,8 @@ class ImportResponseResponse(BaseModel):
     imported: int
     errors: list[CommentParseErrorResponse] = Field(default_factory=list)
     json_error: str | None = None
+    # The answer stops mid-JSON (the model most likely hit its token limit); complete comments were kept.
+    truncated: bool = False
 
 
 class CreateCommentRequest(BaseModel):

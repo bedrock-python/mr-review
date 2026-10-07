@@ -26,6 +26,7 @@ from mr_review.api.schemas.reviews import (
     UpdateReviewRequest,
 )
 from mr_review.core.reviews.entities import Comment, Iteration, Review
+from mr_review.use_cases.reviews.ai_response_parser import ParseResult
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
@@ -33,6 +34,7 @@ from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
 from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.get_iteration_raw_response import GetIterationRawResponseUseCase
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
@@ -41,6 +43,7 @@ from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
+from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 logger = structlog.get_logger(__name__)
@@ -258,6 +261,22 @@ async def dispatch_review(
     return EventSourceResponse(event_generator())
 
 
+def _parse_result_to_response(result: ParseResult, imported: int) -> ImportResponseResponse:
+    return ImportResponseResponse(
+        imported=imported,
+        errors=[
+            CommentParseErrorResponse(
+                index=e.index,
+                reason=e.reason,
+                raw=str(e.raw)[:500],
+            )
+            for e in result.errors
+        ],
+        json_error=result.json_error,
+        truncated=result.truncated,
+    )
+
+
 @router.post("/{review_id}/import-response", response_model=ImportResponseResponse)
 async def import_response(
     review_id: UUID,
@@ -273,18 +292,37 @@ async def import_response(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return ImportResponseResponse(
-        imported=len(result.comments),
-        errors=[
-            CommentParseErrorResponse(
-                index=e.index,
-                reason=e.reason,
-                raw=str(e.raw)[:500],
-            )
-            for e in result.errors
-        ],
-        json_error=result.json_error,
-    )
+    return _parse_result_to_response(result, imported=len(result.comments))
+
+
+@router.get("/{review_id}/iterations/{iteration_id}/raw-response", response_class=Response)
+async def get_iteration_raw_response(
+    review_id: UUID,
+    iteration_id: UUID,
+    use_case: FromDishka[GetIterationRawResponseUseCase],
+) -> Response:
+    """The model's answer stored on the iteration, exactly as it was received."""
+    try:
+        raw = await use_case.execute(review_id, iteration_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return Response(content=raw, media_type="text/plain")
+
+
+@router.post("/{review_id}/iterations/{iteration_id}/reparse", response_model=ImportResponseResponse)
+async def reparse_iteration(
+    review_id: UUID,
+    iteration_id: UUID,
+    use_case: FromDishka[ReparseIterationUseCase],
+) -> ImportResponseResponse:
+    """Parse the stored answer again and replace the iteration's comments with the result."""
+    try:
+        outcome = await use_case.execute(review_id, iteration_id)
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _parse_result_to_response(outcome.result, imported=outcome.stored)
 
 
 @router.post("/{review_id}/post", response_model=PostReviewResponse)

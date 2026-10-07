@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -17,7 +18,7 @@ class ImportResponseUseCase:
         if review is None:
             raise ValueError(f"Review {review_id} not found")
 
-        result = parse_ai_response(raw)
+        result = await asyncio.to_thread(parse_ai_response, raw)
         if not result.comments:
             return result
 
@@ -46,7 +47,7 @@ class ImportResponseUseCase:
             idx = 0
 
         updated_iteration = review.iterations[idx].model_copy(
-            update={"stage": IterationStage.polish, "comments": result.comments}
+            update={"stage": IterationStage.polish, "comments": result.comments, "raw_response": raw}
         )
         new_iterations = list(review.iterations)
         new_iterations[idx] = updated_iteration
