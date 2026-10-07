@@ -17,6 +17,8 @@ import {
   getReviewBriefConfig,
 } from "@entities/review";
 import type { DispatchResult, ImportResponseResult } from "@entities/review";
+import { readStorageItem, writeStorageItem } from "@shared/lib";
+import { Skeleton } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
 import { createDispatchSession } from "../model/dispatchSession";
@@ -679,6 +681,49 @@ const ManualDispatch = ({
 };
 
 /* ── AutoDispatch ───────────────────────────────────────────── */
+const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+  temperature: null,
+  reasoningBudget: null,
+  reasoningEffort: null,
+  reasoningMode: "budget",
+};
+
+// The provider of the last run while it still exists, else the first one.
+const pickInitialProviderId = (providers: AIProvider[]): string => {
+  const saved = readStorageItem(LAST_PROVIDER_KEY);
+  if (saved && providers.some((p) => p.id === saved)) return saved;
+  return providers[0]?.id ?? "";
+};
+
+// The model of the last run when this provider offers it, else its first model.
+const pickModelFor = (provider: AIProvider | undefined): string => {
+  const saved = readStorageItem(LAST_MODEL_KEY);
+  if (saved && provider?.models.includes(saved)) return saved;
+  return provider?.models[0] ?? "";
+};
+
+const readSavedSettings = (): ModelSettings => {
+  const saved = readStorageItem(LAST_SETTINGS_KEY);
+  if (!saved) return DEFAULT_MODEL_SETTINGS;
+  try {
+    return JSON.parse(saved) as ModelSettings;
+  } catch {
+    return DEFAULT_MODEL_SETTINGS;
+  }
+};
+
+const ProvidersSkeleton = (): React.ReactElement => (
+  <div role="status" aria-label="Loading AI providers">
+    <Skeleton style={{ width: 72, height: 11, marginBottom: 12 }} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} style={{ height: 96, borderRadius: 10 }} />
+      ))}
+    </div>
+    <Skeleton style={{ height: 48, borderRadius: 10, marginTop: 24 }} />
+  </div>
+);
+
 type AutoDispatchProps = {
   activeReviewId: string;
   providers: AIProvider[];
@@ -699,34 +744,14 @@ const AutoDispatch = ({
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const qc = useQueryClient();
 
-  const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
-    const saved = localStorage.getItem(LAST_PROVIDER_KEY);
-    if (saved && providers.find((p) => p.id === saved)) return saved;
-    return providers[0]?.id ?? "";
-  });
-
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const savedPid = localStorage.getItem(LAST_PROVIDER_KEY);
-    const savedModel = localStorage.getItem(LAST_MODEL_KEY);
-    const provider = providers.find((p) => p.id === (savedPid ?? providers[0]?.id));
-    if (savedModel && provider?.models.includes(savedModel)) return savedModel;
-    return provider?.models[0] ?? "";
-  });
-
-  const [settings, setSettings] = useState<ModelSettings>(() => {
-    try {
-      const s = localStorage.getItem(LAST_SETTINGS_KEY);
-      if (s) return JSON.parse(s) as ModelSettings;
-    } catch {
-      /* ignore */
-    }
-    return {
-      temperature: null,
-      reasoningBudget: null,
-      reasoningEffort: null,
-      reasoningMode: "budget",
-    };
-  });
+  // `providers` has loaded by the time this mounts, so the saved choice can be restored.
+  const [selectedProviderId, setSelectedProviderId] = useState<string>(() =>
+    pickInitialProviderId(providers)
+  );
+  const [selectedModel, setSelectedModel] = useState<string>(() =>
+    pickModelFor(providers.find((p) => p.id === selectedProviderId))
+  );
+  const [settings, setSettings] = useState<ModelSettings>(readSavedSettings);
 
   // Streamed output lives in this store, not in state: tokens must not re-render
   // this component, only the panel parts subscribed to the store.
@@ -747,14 +772,23 @@ const AutoDispatch = ({
   const isReasoningOn = settings.reasoningBudget !== null || settings.reasoningEffort !== null;
 
   useEffect(() => {
-    if (selectedProviderId) localStorage.setItem(LAST_PROVIDER_KEY, selectedProviderId);
+    if (selectedProviderId) writeStorageItem(LAST_PROVIDER_KEY, selectedProviderId);
   }, [selectedProviderId]);
   useEffect(() => {
-    if (selectedModel) localStorage.setItem(LAST_MODEL_KEY, selectedModel);
+    if (selectedModel) writeStorageItem(LAST_MODEL_KEY, selectedModel);
   }, [selectedModel]);
   useEffect(() => {
-    localStorage.setItem(LAST_SETTINGS_KEY, JSON.stringify(settings));
+    writeStorageItem(LAST_SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  // Leaving the screen ends the run: release the connection instead of streaming
+  // into a component that is gone.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isModelDropOpen) return;
@@ -777,10 +811,7 @@ const AutoDispatch = ({
 
   const handleProviderChange = (id: string): void => {
     setSelectedProviderId(id);
-    const p = providers.find((x) => x.id === id);
-    const savedModel = localStorage.getItem(LAST_MODEL_KEY);
-    if (savedModel && p?.models.includes(savedModel)) setSelectedModel(savedModel);
-    else setSelectedModel(p?.models[0] ?? "");
+    setSelectedModel(pickModelFor(providers.find((x) => x.id === id)));
   };
 
   const handleDispatch = useCallback(async (): Promise<void> => {
@@ -837,7 +868,8 @@ const AutoDispatch = ({
       return;
     }
     if (runId !== runIdRef.current) return;
-    // Stopped or failed runs still persist their partial output server-side.
+    // Show what the server kept: a stopped run's partial output, or the previous
+    // comments of the iteration after a failure.
     void refreshReview();
     if (ctrl.signal.aborted) {
       setStatus("stopped");
@@ -1616,11 +1648,13 @@ const AutoDispatch = ({
 };
 
 /* ── DispatchStage ──────────────────────────────────────────── */
+const NO_PROVIDERS: AIProvider[] = [];
+
 export const DispatchStage = (): React.ReactElement => {
   const { activeReviewId } = useNav();
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const { data: review } = useReview(activeReviewId);
-  const { data: providers = [] } = useAIProviders();
+  const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = useAIProviders();
   const [mode, setMode] = useState<Mode>("auto");
   const [manualDraft, setManualDraft] = useState<string | null>(null);
 
@@ -1762,7 +1796,7 @@ export const DispatchStage = (): React.ReactElement => {
           width: "100%",
         }}
       >
-        {mode === "manual" ? (
+        {mode === "manual" && (
           <ManualDispatch
             promptText={promptText}
             isLoading={isPromptLoading}
@@ -1772,7 +1806,11 @@ export const DispatchStage = (): React.ReactElement => {
             existingCommentsCount={existingCommentsCount}
             initialResponseText={manualDraft}
           />
-        ) : (
+        )}
+        {/* AutoDispatch restores the saved provider and model when it mounts, so it
+            must not mount before the provider list is known. */}
+        {mode === "auto" && isProvidersPending && <ProvidersSkeleton />}
+        {mode === "auto" && !isProvidersPending && (
           <AutoDispatch
             activeReviewId={activeReviewId}
             providers={providers}

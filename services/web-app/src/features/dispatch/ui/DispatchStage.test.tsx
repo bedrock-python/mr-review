@@ -24,6 +24,11 @@ const api = vi.hoisted(() => ({
 
 const stage = vi.hoisted(() => ({ setStage: vi.fn() }));
 
+const providersQuery = vi.hoisted(() => ({
+  data: undefined as AIProvider[] | undefined,
+  isPending: false,
+}));
+
 vi.mock("@entities/review/api/reviewApi", async (importOriginal) => {
   const actual = await importOriginal<typeof ReviewApiModule>();
   return { ...actual, reviewApi: { ...actual.reviewApi, ...api } };
@@ -50,8 +55,16 @@ const PROVIDER: AIProvider = {
   created_at: "2026-05-16T10:00:00+00:00",
 };
 
+const OTHER_PROVIDER: AIProvider = {
+  ...PROVIDER,
+  id: "55555555-5555-4555-8555-555555555555",
+  name: "OpenAI",
+  type: "openai",
+  models: ["gpt-a", "gpt-b"],
+};
+
 vi.mock("@entities/ai-provider", () => ({
-  useAIProviders: () => ({ data: [PROVIDER] }),
+  useAIProviders: () => ({ ...providersQuery }),
 }));
 
 const REVIEW: Review = {
@@ -76,7 +89,12 @@ const REVIEW: Review = {
   updated_at: "2026-05-16T10:00:00+00:00",
 };
 
-const RESULT = { iteration_id: ITERATION_ID, comments: 1, errors: 0, json_error: null };
+const RESULT = {
+  iteration_id: ITERATION_ID,
+  comments: 1,
+  errors: 0,
+  json_error: null,
+};
 
 /**
  * Stands in for `reviewApi.dispatchStream`: the test decides when each event
@@ -118,8 +136,8 @@ const createDispatchChannel = (): { emit: (...events: DispatchStreamEvent[]) => 
 };
 
 // Node 25+ ships its own `localStorage` global, unusable without --localstorage-file,
-// which shadows jsdom's; the provider and model pickers need a working one.
-const createMemoryStorage = (): Storage => {
+// which shadows jsdom's; restoring the saved provider and model needs a working one.
+const createMemoryStorage = (overrides: Partial<Storage> = {}): Storage => {
   const items = new Map<string, string>();
   return {
     get length(): number {
@@ -136,6 +154,7 @@ const createMemoryStorage = (): Storage => {
     setItem: (key, value) => {
       items.set(key, value);
     },
+    ...overrides,
   };
 };
 
@@ -146,17 +165,26 @@ const resetMocks = (): void => {
   api.getPrompt.mockResolvedValue("prompt");
   api.getDiff.mockResolvedValue("");
   api.getContext.mockResolvedValue("");
+  providersQuery.data = [PROVIDER];
+  providersQuery.isPending = false;
 };
 
-const renderStage = (): void => {
+const renderStage = (): { rerender: () => void; unmount: () => void } => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const tree = (): React.ReactElement => (
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
         <DispatchStage />
       </QueryClientProvider>
     </MemoryRouter>
   );
+  const { rerender, unmount } = render(tree());
+  return {
+    rerender: () => {
+      rerender(tree());
+    },
+    unmount,
+  };
 };
 
 const startDispatch = async (
@@ -216,7 +244,7 @@ describe("DispatchStage — run in app", () => {
     expect(stage.setStage).toHaveBeenCalledWith("polish");
   });
 
-  it("shows the error message and refetches the partially saved review", async () => {
+  it("shows the error message and refetches the review the server kept", async () => {
     const user = userEvent.setup();
     renderStage();
     const channel = await startDispatch(user);
@@ -226,9 +254,75 @@ describe("DispatchStage — run in app", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Rate limit exceeded");
     expect(screen.getByText("Claude · failed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Run again with Claude/ })).toBeEnabled();
+    expect(screen.queryByText(/saved$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Polish comments →" })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("aborts the run when the stage unmounts", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderStage();
+    const channel = await startDispatch(user);
+    channel.emit({ type: "chunk", text: "[{" });
+    const signal = api.dispatchStream.mock.calls[0]?.[2] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("waits for the providers, then restores the saved provider and model", async () => {
+    localStorage.setItem("mr-review:dispatch:last-provider", OTHER_PROVIDER.id);
+    localStorage.setItem("mr-review:dispatch:last-model", "gpt-b");
+    providersQuery.data = undefined;
+    providersQuery.isPending = true;
+    const user = userEvent.setup();
+    const { rerender } = renderStage();
+
+    expect(await screen.findByRole("status", { name: "Loading AI providers" })).toBeInTheDocument();
+    expect(screen.queryByText("No AI providers configured")).not.toBeInTheDocument();
+
+    providersQuery.data = [PROVIDER, OTHER_PROVIDER];
+    providersQuery.isPending = false;
+    rerender();
+
+    const generate = screen.getByRole("button", { name: /Generate with OpenAI.*gpt-b/ });
+    createDispatchChannel();
+    await user.click(generate);
+    expect(api.dispatchStream).toHaveBeenCalledWith(
+      REVIEW_ID,
+      OTHER_PROVIDER.id,
+      expect.any(AbortSignal),
+      "gpt-b",
+      null,
+      null,
+      null,
+      ITERATION_ID
+    );
+  });
+
+  it("keeps working when storage is unavailable or full", async () => {
+    vi.stubGlobal(
+      "localStorage",
+      createMemoryStorage({
+        getItem: () => {
+          throw new DOMException("The operation is insecure.", "SecurityError");
+        },
+        setItem: () => {
+          throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+        },
+      })
+    );
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    channel.emit({ type: "done", result: RESULT });
+
+    expect(await screen.findByText("1 comment saved")).toBeInTheDocument();
   });
 
   it("stops cleanly when the user aborts", async () => {
