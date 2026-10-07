@@ -20,6 +20,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ALL_IN_ONE_DOCKERFILE = _REPO_ROOT / "deploy" / "all-in-one" / "Dockerfile"
 _API_DOCKERFILE = _REPO_ROOT / "services" / "mr-review" / "Dockerfile.api"
 _STANDARD_COMPOSE = _REPO_ROOT / "deploy" / "standard" / "docker-compose.yml"
+_DEV_COMPOSE = _REPO_ROOT / "scripts" / "dev" / "services" / "mr-review.compose.yml"
 
 _HEALTH_ROUTES = {route.path for route in health_router.routes if isinstance(route, APIRoute)}
 _PROBE_URL = re.compile(r"http://localhost:8000(/[^\s\"']*)")
@@ -36,8 +37,8 @@ def _probe_paths(deployment_file: Path) -> list[str]:
 
 @pytest.mark.parametrize(
     "deployment_file",
-    [_ALL_IN_ONE_DOCKERFILE, _API_DOCKERFILE, _STANDARD_COMPOSE],
-    ids=["all-in-one", "api-image", "standard"],
+    [_ALL_IN_ONE_DOCKERFILE, _API_DOCKERFILE, _STANDARD_COMPOSE, _DEV_COMPOSE],
+    ids=["all-in-one", "api-image", "standard", "dev"],
 )
 def test__deployment_health_probe__points_at_a_route_the_api_serves(deployment_file: Path) -> None:
     """Each health probe in deploy/ names one of the routes the health router registers."""
