@@ -1,3 +1,5 @@
+import { Disclosure } from "@shared/ui";
+
 export type TruncatedReposNoteProps = {
   /** Repositories whose newest open MRs are all the inbox shows. */
   repoPaths: readonly string[];
@@ -17,12 +19,16 @@ export const TruncatedReposNote = ({
   repoPaths,
   onOpenRepo,
 }: TruncatedReposNoteProps): React.ReactElement => (
-  <details className="border-border text-fg-2 shrink-0 border-b px-(--space-3) py-(--space-1) text-(length:--fs-meta)">
-    <summary className="hover:text-fg-1 cursor-pointer">{describe(repoPaths.length)}</summary>
+  <Disclosure
+    variant="inline"
+    headingLevel="none"
+    title={<span className="text-(length:--fs-meta)">{describe(repoPaths.length)}</span>}
+    className="border-border shrink-0 border-b px-(--space-3) py-(--space-1)"
+  >
     <div
       role="group"
       aria-label="Repositories with more open MRs"
-      className="mt-(--space-1) grid justify-items-start gap-px"
+      className="grid justify-items-start gap-px"
     >
       {repoPaths.map((repoPath) => (
         <button
@@ -37,5 +43,5 @@ export const TruncatedReposNote = ({
         </button>
       ))}
     </div>
-  </details>
+  </Disclosure>
 );

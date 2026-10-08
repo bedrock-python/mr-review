@@ -48,6 +48,10 @@ describe("ReviewPresetsManager", () => {
     expect(within(list).getByText("Public API")).toBeInTheDocument();
     expect(within(list).getByText("Exported names only · sets 1 brief option")).toBeInTheDocument();
     expect(within(list).getByText("Review only the public API.")).toBeInTheDocument();
+
+    const builtins = screen.getByRole("button", { name: "Built-in presets" });
+    expect(builtins).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(builtins);
     expect(screen.getByText("Focus on security.")).toBeInTheDocument();
   });
 

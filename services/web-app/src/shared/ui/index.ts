@@ -43,6 +43,8 @@ export { SegmentedControl } from "./segmented-control";
 export type { SegmentedControlProps, SegmentedOption } from "./segmented-control";
 export { StageFooter } from "./stage-footer";
 export type { StageFooterProps } from "./stage-footer";
+export { Disclosure } from "./disclosure";
+export type { DisclosureProps } from "./disclosure";
 export { Dialog } from "./dialog";
 export type { DialogProps } from "./dialog";
 export { Drawer } from "./drawer";

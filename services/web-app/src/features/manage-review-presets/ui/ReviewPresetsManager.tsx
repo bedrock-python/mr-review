@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { Bookmark, Pencil, Trash2 } from "lucide-react";
 import {
   PresetEditor,
   useBuiltinPresets,
@@ -7,7 +7,7 @@ import {
   useReviewPresets,
   useUpdateReviewPreset,
 } from "@entities/review-preset";
-import { Button, Card, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
+import { Button, Card, Disclosure, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
 import type { ReviewPreset } from "@entities/review-preset";
 
 const ROW_STYLE: React.CSSProperties = { padding: "var(--space-3) var(--space-4)" };
@@ -157,19 +157,8 @@ export const ReviewPresetsManager = (): React.ReactElement => {
         )}
       </Card>
       {builtins && (
-        <details className="group">
-          <summary
-            className="text-fg-1 hover:text-fg-0 flex w-fit cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden"
-            style={{ gap: "var(--space-1)", fontSize: "var(--fs-control)" }}
-          >
-            <ChevronRight
-              size={ICON_SIZE.inline}
-              aria-hidden="true"
-              className="text-fg-2 transition-transform group-open:rotate-90"
-            />
-            Built-in presets
-          </summary>
-          <Card as="div" padding="none" style={{ marginTop: "var(--space-2)" }}>
+        <Disclosure variant="inline" headingLevel="none" title="Built-in presets">
+          <Card as="div" padding="none">
             <ul className="m-0 list-none p-0">
               {builtins.map((preset) => (
                 <li
@@ -188,7 +177,7 @@ export const ReviewPresetsManager = (): React.ReactElement => {
               ))}
             </ul>
           </Card>
-        </details>
+        </Disclosure>
       )}
     </div>
   );
