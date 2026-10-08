@@ -323,6 +323,10 @@ fetched ahead.
 
 Repositories: pinned favourites the host's listing does not return are fetched and put in front of
 page 1 (filtered by `q` when one is given), and left out of later pages, so each appears once.
+On GitHub, `q` goes through repository search scoped to the token's user and the organisations
+listed by `/user/orgs` (`user:<login> org:<org> …`), not all of GitHub. A token that may not list
+organisations searches the user's own repositories only; repositories the user merely collaborates
+on in someone else's account are not searched.
 
 Merge requests per host:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from typing import Any, Literal
@@ -34,6 +35,11 @@ _SEARCH_STATE_QUALIFIERS: dict[MRStateFilter, tuple[str, ...]] = {
     "closed": ("is:closed", "is:unmerged"),
     "all": (),
 }
+
+# Owners a repository search is scoped to: the user plus at most this many of their organisations.
+_MAX_SEARCH_ORGS = 100
+
+logger = logging.getLogger(__name__)
 
 _PERSONAL_SCOPE_QUALIFIERS: dict[PersonalMRScope, str] = {
     "authored": "author:@me",
@@ -72,6 +78,10 @@ class GitHubProvider:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
+        # Search qualifiers for "the user's repositories", looked up once per provider (the provider
+        # is rebuilt when the host's token changes).
+        self._search_owners: str | None = None
+        self._search_owners_lock = asyncio.Lock()
 
     async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}{path}"
@@ -100,9 +110,10 @@ class GitHubProvider:
         self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
     ) -> Page[Repo]:
         if query:
+            search = f"{_search_terms(query)} {await self._owner_qualifiers()}"
             response = await self._get_response(
                 "/search/repositories",
-                params={"q": query, "sort": "updated", "order": "desc", "per_page": per_page, "page": page},
+                params={"q": search, "sort": "updated", "order": "desc", "per_page": per_page, "page": page},
             )
             items: list[dict[str, Any]] = response.json().get("items", [])
         else:
@@ -117,6 +128,30 @@ class GitHubProvider:
             per_page=per_page,
             has_more=has_next_link(response),
         )
+
+    async def _owner_qualifiers(self) -> str:
+        """``user:<login> org:<org> ...`` for the token's user and the organisations they belong to.
+
+        Repository search otherwise covers all of GitHub. Repeated owner qualifiers are OR-ed by
+        GitHub's search (unlike explicit OR, they are not limited to five per query).
+        """
+        if self._search_owners is None:
+            async with self._search_owners_lock:
+                if self._search_owners is None:
+                    self._search_owners = await self._load_owner_qualifiers()
+        return self._search_owners
+
+    async def _load_owner_qualifiers(self) -> str:
+        user: dict[str, Any] = await self._get("/user")
+        qualifiers = [f"user:{user['login']}"]
+        try:
+            orgs: list[dict[str, Any]] = await self._get("/user/orgs", params={"per_page": _MAX_SEARCH_ORGS})
+        except httpx.HTTPStatusError:
+            # A token without read:org may not list organisations: search the user's own repositories.
+            logger.warning("Could not list the GitHub user's organisations; searching their own repositories only")
+            orgs = []
+        qualifiers.extend(f"org:{org['login']}" for org in orgs if org.get("login"))
+        return " ".join(qualifiers)
 
     async def get_repo(self, repo_path: str) -> Repo:
         owner, repo = _split_repo_path(repo_path)

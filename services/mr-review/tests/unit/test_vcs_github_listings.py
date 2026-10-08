@@ -78,13 +78,19 @@ async def test__list_repos__without_next_link__has_more_false_even_for_a_full_pa
 
 
 async def test__list_repos__with_query__uses_repository_search() -> None:
-    transport = RoutedTransport({"/search/repositories": json_response({"total_count": 1, "items": [_repo(7)]})})
+    transport = RoutedTransport(
+        {
+            "/user": json_response({"login": "alice"}),
+            "/user/orgs": json_response([]),
+            "/search/repositories": json_response({"total_count": 1, "items": [_repo(7)]}),
+        }
+    )
 
     page = await _provider(transport).list_repos(query="r7", page=1, per_page=10)
 
     assert [r.path for r in page.items] == ["acme/r7"]
     assert page.has_more is False
-    assert transport.last_params()["q"] == "r7"
+    assert transport.last_params()["q"] == "r7 user:alice"
 
 
 async def test__list_mrs__opened__uses_pulls_api_with_open_state_and_null_stats() -> None:
@@ -163,3 +169,38 @@ async def test__get_mr__detail__fills_stats_from_the_host() -> None:
     mr = await _provider(transport).get_mr("acme/api", 2)
 
     assert (mr.additions, mr.deletions, mr.file_count) == (10, 3, 2)
+
+
+async def test__list_repos__query__is_scoped_to_the_user_and_their_orgs() -> None:
+    """Repository search must not search all of GitHub, only what the token's user owns or belongs to."""
+    transport = RoutedTransport(
+        {
+            "/user": json_response({"login": "alice"}),
+            "/user/orgs": json_response([{"login": "acme"}, {"login": "tools"}]),
+            "/search/repositories": json_response({"total_count": 1, "items": [_repo(7)]}),
+        }
+    )
+    provider = _provider(transport)
+
+    await provider.list_repos(query="api", page=1, per_page=10)
+    await provider.list_repos(query="api", page=2, per_page=10)
+
+    searches = [r for r in transport.requests if r.url.path == "/search/repositories"]
+    assert [r.url.params["q"] for r in searches] == ["api user:alice org:acme org:tools"] * 2
+    # The owners are looked up once per provider, so every page stays a single request.
+    assert transport.paths().count("/user") == 1
+    assert transport.paths().count("/user/orgs") == 1
+
+
+async def test__list_repos__query__org_listing_refused__searches_the_users_own_repos() -> None:
+    transport = RoutedTransport(
+        {
+            "/user": json_response({"login": "alice"}),
+            "/user/orgs": json_response({"message": "Resource not accessible"}, status_code=403),
+            "/search/repositories": json_response({"total_count": 0, "items": []}),
+        }
+    )
+
+    await _provider(transport).list_repos(query="api")
+
+    assert transport.last_params()["q"] == "api user:alice"
