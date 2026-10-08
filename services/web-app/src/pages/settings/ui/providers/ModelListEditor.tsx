@@ -157,7 +157,7 @@ export const ModelListEditor = ({
         )}
         {models.map((m, index) => (
           <li key={m} style={rowStyle}>
-            <span className="mono" style={modelNameStyle} title={m}>
+            <span className="font-mono" style={modelNameStyle} title={m}>
               {m}
             </span>
             {index === 0 ? (
@@ -295,7 +295,7 @@ export const ModelListEditor = ({
             >
               {shown.map((m, index) => (
                 <li key={m} style={{ ...rowStyle, minHeight: "var(--control-sm)" }}>
-                  <span className="mono" style={modelNameStyle} title={m}>
+                  <span className="font-mono" style={modelNameStyle} title={m}>
                     {m}
                   </span>
                   <Button

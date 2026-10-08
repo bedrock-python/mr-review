@@ -31,8 +31,7 @@
 
   .ui-input,
   .ui-textarea,
-  .ui-select,
-  .field {
+  .ui-select {
     width: 100%;
     min-width: 0;
     height: var(--control-md);
@@ -58,11 +57,9 @@
   }
   .ui-input:hover:not(:disabled, :focus),
   .ui-textarea:hover:not(:disabled, :focus),
-  .ui-select:hover:not(:disabled, :focus),
-  .field:hover:not(:disabled, :focus) {
+  .ui-select:hover:not(:disabled, :focus) {
     border-color: var(--border-control-hover);
   }
-  textarea.field,
   .ui-textarea {
     height: auto;
     padding: 6px 10px;
@@ -72,16 +69,14 @@
   /* The same ring as the base rule, restated so this layer's box-shadow resets don't win */
   .ui-input:focus-visible,
   .ui-textarea:focus-visible,
-  .ui-select:focus-visible,
-  .field:focus-visible {
+  .ui-select:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -1px;
     box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
   .ui-input[aria-invalid="true"],
   .ui-textarea[aria-invalid="true"],
-  .ui-select[aria-invalid="true"],
-  .field[aria-invalid="true"] {
+  .ui-select[aria-invalid="true"] {
     border-color: var(--c-critical);
   }
   .ui-input:disabled,

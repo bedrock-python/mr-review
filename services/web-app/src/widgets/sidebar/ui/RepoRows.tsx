@@ -3,6 +3,7 @@ import { Book, ChevronRight, Star } from "lucide-react";
 import { ROW_FOCUS_ATTR, cn } from "@shared/lib";
 import { ICON_SIZE } from "@shared/ui";
 import { REPO_ROW_HEIGHT } from "../lib/repoTree";
+import { sidebarRowClassName } from "./sidebarRow";
 import type { Repo } from "@entities/mr";
 
 const INDENT_STEP_PX = 12;
@@ -29,7 +30,7 @@ const RepoRowComponent = ({
   onToggleFavourite,
 }: RepoRowProps): React.ReactElement => (
   <div
-    className={isSelected ? "row-btn active" : "row-btn"}
+    className={sidebarRowClassName(isSelected)}
     style={{
       height: REPO_ROW_HEIGHT.repo,
       paddingLeft: getIndent(depth),
@@ -62,9 +63,12 @@ const RepoRowComponent = ({
       }}
       data-active={isFavourite ? "true" : undefined}
       className={cn(
-        // Shown on row hover by .row-btn; on keyboard focus too, or Tab would land on nothing.
-        "fav-star flex size-(--control-sm) shrink-0 items-center justify-center rounded-(--radius-1) focus-visible:opacity-100!",
-        isFavourite ? "text-(--c-major)" : "text-fg-3 hover:text-fg-1"
+        "flex size-(--control-sm) shrink-0 items-center justify-center rounded-(--radius-1)",
+        // A favourite always shows its star; the others on row hover, and on keyboard focus
+        // too, or Tab would land on nothing.
+        isFavourite
+          ? "text-(--c-major)"
+          : "text-fg-3 hover:text-fg-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       )}
     >
       <Star

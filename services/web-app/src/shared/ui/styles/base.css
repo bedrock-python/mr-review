@@ -2,8 +2,7 @@
 
 @layer components {
   /* ── Eyebrow: the one small-caps label style ───────────────── */
-  .ui-eyebrow,
-  .field-label {
+  .ui-eyebrow {
     display: block;
     margin: 0;
     font-family: var(--font-mono);
@@ -13,9 +12,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--fg-2);
-  }
-  .field-label {
-    margin-bottom: 6px;
   }
 
   /* ── Tones: [data-tone] sets --tone, --tone-fg, --tone-tint, --tone-line ── */
