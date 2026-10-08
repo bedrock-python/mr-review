@@ -97,7 +97,7 @@ const GeneralNotes = ({ comments, onToggleStatus }: GeneralNotesProps): React.Re
               }}
             />
           </div>
-          <Markdown className="[&>:last-child]:mb-0!">{c.body}</Markdown>
+          <Markdown>{c.body}</Markdown>
         </Card>
       );
     })}

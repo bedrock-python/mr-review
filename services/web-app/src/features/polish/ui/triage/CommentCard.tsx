@@ -151,8 +151,7 @@ const CommentCardBase = ({
         />
       ) : (
         <div className={cn(isDismissed && "opacity-55")}>
-          {/* The card's gap spaces the blocks; the last one's own margin would double it. */}
-          <Markdown className="[&>:last-child]:mb-0!">{comment.body}</Markdown>
+          <Markdown>{comment.body}</Markdown>
         </div>
       )}
 

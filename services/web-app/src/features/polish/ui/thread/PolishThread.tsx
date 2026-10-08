@@ -67,7 +67,7 @@ const ThreadComment = ({
             }}
           />
         </div>
-        <Markdown className="[&>:last-child]:mb-0!">{comment.body}</Markdown>
+        <Markdown>{comment.body}</Markdown>
       </Card>
     </li>
   );
