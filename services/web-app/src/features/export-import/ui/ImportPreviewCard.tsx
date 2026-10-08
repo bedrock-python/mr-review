@@ -24,7 +24,7 @@ export const ImportPreviewCard = ({
 }: ImportPreviewCardProps): React.ReactElement => (
   <div style={cardStyle} aria-label="Import file summary">
     <div style={{ fontWeight: 600, color: "var(--fg-0)", wordBreak: "break-all" }}>{fileName}</div>
-    <div style={{ color: "var(--fg-3)", fontSize: 11, margin: "2px 0 8px" }}>
+    <div style={{ color: "var(--fg-2)", fontSize: 11, margin: "2px 0 8px" }}>
       Exported {formatTimestamp(preview.exported_at)} · format {preview.version} · tokens and API
       keys {SECRETS_LABELS[preview.secrets]}
     </div>
