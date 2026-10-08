@@ -12,6 +12,7 @@ import {
 } from "@shared/lib/test-utils";
 import { MRHeader } from "./MRHeader";
 import type * as ReviewEntity from "@entities/review";
+import type * as SharedLib from "@shared/lib";
 import type { MR } from "@entities/mr";
 
 // Sync chains several MSW round trips, which can exceed Testing Library's 1 s
@@ -23,7 +24,13 @@ const MR_IID = 95;
 const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  copyText: vi.fn(),
 }));
+
+vi.mock("@shared/lib", async (importOriginal) => {
+  const actual = await importOriginal<typeof SharedLib>();
+  return { ...actual, copyText: mocks.copyText };
+});
 
 vi.mock("sonner", () => ({
   toast: { success: mocks.toastSuccess, error: mocks.toastError },
@@ -79,6 +86,7 @@ beforeAll(() => {
 beforeEach(() => {
   mocks.toastSuccess.mockClear();
   mocks.toastError.mockClear();
+  mocks.copyText.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
   server.resetHandlers();
@@ -177,6 +185,28 @@ describe("MRHeader", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
       expect(mocks.toastError).toHaveBeenCalledWith("Sync failed", expect.anything());
     });
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("cuts a long branch name in the middle and copies it whole", async () => {
+    const longBranch = "feature/add-invoice-pdf-export-with-retry-aware-billing-client";
+    server.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json({ ...MOCK_MR, source_branch: longBranch, target_branch: "main" })
+      )
+    );
+    renderWithQueryClient(<MRHeader />);
+
+    const chip = await screen.findByRole("button", { name: `Copy branch name ${longBranch}` });
+    expect(chip).toHaveTextContent("…");
+    expect(chip).not.toHaveTextContent(longBranch);
+    expect(chip).toHaveTextContent("main");
+
+    await userEvent.click(chip);
+
+    expect(mocks.copyText).toHaveBeenCalledWith(longBranch);
+    await waitFor(() => {
+      expect(mocks.toastSuccess).toHaveBeenCalledWith("Branch name copied");
+    });
   });
 
   it("hides the branch chip when the host reported no branches", async () => {

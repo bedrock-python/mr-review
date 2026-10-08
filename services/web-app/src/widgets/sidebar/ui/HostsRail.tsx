@@ -399,7 +399,8 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
 
 /* ── HostsRail ──────────────────────────────────────────────── */
 export const HostsRail = (): React.ReactElement => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isModalOpen = useAppStore((s) => s.addHostOpen);
+  const setIsModalOpen = useAppStore((s) => s.setAddHostOpen);
   const { data: hosts } = useHosts();
   const { selectedHostId, setHost } = useNav();
   const navigate = useNavigate();

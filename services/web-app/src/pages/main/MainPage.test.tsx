@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import MockAdapter from "axios-mock-adapter";
@@ -69,7 +69,7 @@ describe("MainPage", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const api = new MockAdapter(httpClient);
 
   beforeEach(() => {
-    useAppStore.setState({ historyOpen: false, iterationHistoryOpen: false });
+    useAppStore.setState({ historyOpen: false, iterationHistoryOpen: false, addHostOpen: false });
     vi.spyOn(checkUpdateApi, "checkForUpdate").mockResolvedValue(null);
     api.onGet("/api/v1/hosts").reply(200, [
       {
@@ -139,6 +139,45 @@ describe("MainPage", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     await user.keyboard("j");
     expect(focusedCommentId()).toBe(C3);
     expect(api.history.get.some((request) => request.url === "/api/v1/reviews")).toBe(false);
+  });
+
+  it("shows and hides the navigator with [", async () => {
+    const user = userEvent.setup();
+    useAppStore.setState({ navCollapsed: false });
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <BrowserRouter>
+          <MainPage />
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+    expect(await screen.findByText("No merge request open")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show navigator" })).not.toBeInTheDocument();
+
+    // "[[" is how user-event types a literal "[".
+    await user.keyboard("[[");
+
+    expect(useAppStore.getState().navCollapsed).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Show navigator" }));
+    expect(useAppStore.getState().navCollapsed).toBe(false);
+  });
+
+  it("offers to add a host when there is none yet", async () => {
+    const user = userEvent.setup();
+    api.onGet("/api/v1/hosts").reply(200, []);
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <BrowserRouter>
+          <MainPage />
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    const main = screen.getByRole("main");
+    expect(await within(main).findByText("Connect a Git host")).toBeInTheDocument();
+    await user.click(within(main).getByRole("button", { name: "Add host" }));
+
+    expect(await screen.findByRole("dialog", { name: "Add host" })).toBeInTheDocument();
   });
 
   it("stands Polish's keys down while the iteration panel is open", async () => {

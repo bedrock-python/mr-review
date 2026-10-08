@@ -6,7 +6,13 @@ import { useReview } from "@entities/review";
 import { getVcsErrorMessage } from "@shared/lib";
 import { useSyncMR } from "../model/useSyncMR";
 import { MRHeaderActions, MRHeaderMeta } from "./MRHeaderParts";
-import { MRBreadcrumbs, MRHeaderError, MRHeaderFrame, MRHeaderSkeleton } from "./MRHeaderStates";
+import {
+  MRBreadcrumbs,
+  MRHeaderError,
+  MRHeaderFrame,
+  MRHeaderSkeleton,
+  NavigatorToggle,
+} from "./MRHeaderStates";
 import type { Host } from "@entities/host";
 
 const buildMRUrl = (
@@ -36,15 +42,16 @@ export const MRHeader = (): React.ReactElement | null => {
   if (!selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
   const host = hosts?.find((h) => h.id === selectedHostId);
-  const breadcrumbs = (
-    <MRBreadcrumbs
-      hostName={host?.name ?? selectedHostId}
-      repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
-      repoPath={selectedRepoPath}
-      mrIid={selectedMRIid}
-      isNavCollapsed={navCollapsed}
-      onShowNav={toggleNav}
-    />
+  const lead = (
+    <>
+      <NavigatorToggle isNavCollapsed={navCollapsed} onToggleNav={toggleNav} />
+      <MRBreadcrumbs
+        hostName={host?.name ?? selectedHostId}
+        repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
+        repoPath={selectedRepoPath}
+        leaf={`!${String(selectedMRIid)}`}
+      />
+    </>
   );
 
   const mr = mrQuery.data;
@@ -52,7 +59,7 @@ export const MRHeader = (): React.ReactElement | null => {
     if (mrQuery.isError) {
       return (
         <MRHeaderError
-          breadcrumbs={breadcrumbs}
+          topRow={lead}
           message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
           isRetrying={mrQuery.isFetching}
           onRetry={() => {
@@ -61,7 +68,7 @@ export const MRHeader = (): React.ReactElement | null => {
         />
       );
     }
-    return <MRHeaderSkeleton breadcrumbs={breadcrumbs} />;
+    return <MRHeaderSkeleton topRow={lead} />;
   }
 
   const handleSync = (): void => {
@@ -74,33 +81,24 @@ export const MRHeader = (): React.ReactElement | null => {
   };
 
   return (
-    <MRHeaderFrame>
-      {breadcrumbs}
-
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-        <h1
-          style={{
-            flex: 1,
-            fontSize: 22,
-            fontFamily: "var(--font-display)",
-            fontWeight: 600,
-            color: "var(--fg-0)",
-            lineHeight: 1.25,
-            margin: 0,
-          }}
-        >
-          {mr.title}
-        </h1>
-        <MRHeaderActions
-          iterationCount={review?.iterations.length ?? 0}
-          onShowHistory={toggleIterationHistory}
-          isSyncing={syncMR.isPending}
-          onSync={handleSync}
-          mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
-        />
-      </div>
-
-      <MRHeaderMeta mr={mr} />
+    <MRHeaderFrame
+      topRow={
+        <>
+          {lead}
+          <MRHeaderMeta mr={mr} />
+          <MRHeaderActions
+            iterationCount={review?.iterations.length ?? 0}
+            onShowHistory={toggleIterationHistory}
+            isSyncing={syncMR.isPending}
+            onSync={handleSync}
+            mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+          />
+        </>
+      }
+    >
+      <h1 className="text-fg-0 m-0 line-clamp-2 font-(family-name:--font-display) text-(length:--fs-page) leading-(--lh-tight) font-semibold">
+        {mr.title}
+      </h1>
     </MRHeaderFrame>
   );
 };
