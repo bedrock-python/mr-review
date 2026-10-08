@@ -68,7 +68,7 @@ export const TriageFilterBar = ({
             if (filters.search.length > 0) update({ search: "" });
             else event.currentTarget.blur();
           }}
-          className="text-fg-0 placeholder:text-fg-3 min-w-0 flex-1 bg-transparent text-[12px]"
+          className="text-fg-0 placeholder:text-fg-2 min-w-0 flex-1 bg-transparent text-[12px]"
         />
       </label>
 

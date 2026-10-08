@@ -8,7 +8,10 @@
 
    Text contrast (WCAG AA, checked for all three themes):
    - fg-0 / fg-1 / fg-2 are text colours, ≥ 4.5:1 on bg-0…bg-3.
-   - fg-3 is for non-text only (icons, dividers, disabled, placeholders), ≥ 3:1.
+   - fg-3 is for non-text only (icons, dividers, disabled), ≥ 3:1.
+   - Placeholders are fg-2: readable, yet apart from typed text (fg-0).
+   - A form control's outline is --border-control (≥ 3:1 on bg-0…bg-2);
+     --border / --border-strong stay subtle for dividers and cards.
    - A hue used as text or a thin border uses its -fg variant (--accent-fg,
      --c-major-fg, …); the base hue is for dots, fills and tints.
    ───────────────────────────────────────────────────────────── */
@@ -22,6 +25,7 @@
   --color-bg-hover: var(--bg-hover);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-border-control: var(--border-control);
   --color-fg-0: var(--fg-0);
   --color-fg-1: var(--fg-1);
   --color-fg-2: var(--fg-2);
@@ -139,6 +143,8 @@
   --bg-hover: #1f2329;
   --border: #2a2e36;
   --border-strong: #3a3f48;
+  --border-control: #666b74;
+  --border-control-hover: #7c818a;
   --fg-0: #f3f4f3;
   --fg-1: #c8ccca;
   --fg-2: #8a8f8a;
@@ -232,6 +238,8 @@
   --bg-hover: #efefe9;
   --border: #e4e4dc;
   --border-strong: #cdcdc4;
+  --border-control: #868b8f;
+  --border-control-hover: #6f7479;
   --fg-0: #14171a;
   --fg-1: #404449;
   --fg-2: #62676c;
@@ -270,6 +278,8 @@
   --bg-hover: #0a2614;
   --border: #0f3a1f;
   --border-strong: #1a5530;
+  --border-control: #33794b;
+  --border-control-hover: #418a5a;
   --fg-0: #b8ffcc;
   --fg-1: #74e093;
   --fg-2: #4a9d63;
@@ -387,7 +397,7 @@
   }
 
   ::placeholder {
-    color: var(--fg-3);
+    color: var(--fg-2);
     opacity: 1;
   }
 

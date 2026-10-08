@@ -37,7 +37,7 @@
     min-width: 0;
     height: var(--control-md);
     padding: 0 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-control);
     border-radius: var(--radius-control);
     background: var(--bg-2);
     color: var(--fg-0);
@@ -60,7 +60,7 @@
   .ui-textarea:hover:not(:disabled, :focus),
   .ui-select:hover:not(:disabled, :focus),
   .field:hover:not(:disabled, :focus) {
-    border-color: var(--border-strong);
+    border-color: var(--border-control-hover);
   }
   textarea.field,
   .ui-textarea {
@@ -82,7 +82,7 @@
   .ui-textarea[aria-invalid="true"],
   .ui-select[aria-invalid="true"],
   .field[aria-invalid="true"] {
-    border-color: var(--c-critical-line);
+    border-color: var(--c-critical);
   }
   .ui-input:disabled,
   .ui-textarea:disabled,
@@ -100,7 +100,7 @@
     min-width: 0;
     height: var(--control-md);
     padding: 0 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-control);
     border-radius: var(--radius-control);
     background: var(--bg-2);
     color: var(--fg-3);
@@ -112,14 +112,14 @@
     height: var(--control-sm);
   }
   .ui-input-shell:hover:not(:focus-within) {
-    border-color: var(--border-strong);
+    border-color: var(--border-control-hover);
   }
   .ui-input-shell:focus-within {
     border-color: var(--focus-ring);
     box-shadow: 0 0 0 3px var(--focus-ring-soft);
   }
   .ui-input-shell[data-invalid="true"] {
-    border-color: var(--c-critical-line);
+    border-color: var(--c-critical);
   }
   .ui-input-shell[data-disabled="true"] {
     opacity: 0.5;
@@ -203,7 +203,7 @@
     margin: 0;
     width: 16px;
     height: 16px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-control);
     background: var(--bg-1);
     cursor: inherit;
     transition:
@@ -217,7 +217,7 @@
     border-radius: 50%;
   }
   .ui-choice:hover .ui-choice__control > input:not(:disabled) {
-    border-color: var(--fg-3);
+    border-color: var(--border-control-hover);
   }
   .ui-choice__control > input:checked,
   .ui-choice__control > input[type="checkbox"]:indeterminate {

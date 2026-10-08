@@ -23,9 +23,10 @@ toolbar.
 | Group | Tokens | Rule |
 |---|---|---|
 | Surfaces | `--bg-0` page · `--bg-1` panels · `--bg-2` controls, raised · `--bg-3` hover fill · `--bg-hover` | |
-| Lines | `--border`, `--border-strong` | `--border-strong` for hover and unselected outlines |
-| Text | `--fg-0` primary · `--fg-1` body · `--fg-2` secondary/meta | all ≥ 4.5:1 on bg-0…bg-3 in every theme |
-| Non-text | `--fg-3` | icons, dividers, disabled, placeholders — **never text** |
+| Lines | `--border`, `--border-strong` | dividers, cards, panels — subtle on purpose |
+| Control outline | `--border-control`, `--border-control-hover` | the edge of a form control (Input, Textarea, Select, Checkbox, Radio, Switch track, SegmentedControl): ≥ 3:1 on bg-0…bg-2 |
+| Text | `--fg-0` primary · `--fg-1` body · `--fg-2` secondary/meta, placeholders | all ≥ 4.5:1 on bg-0…bg-3 in every theme |
+| Non-text | `--fg-3` | icons, dividers, disabled — **never text** |
 | Hues | `--accent`, `--c-critical/major/minor/suggest`, `--c-add/del` | dots, fills, tints only |
 | Hue as text | `--accent-fg`, `--c-*-fg` (`--c-critical-fg` …) | any hue used as text or a thin border |
 | Roles | `--c-danger`, `--c-warn`, `--c-success`, `--c-info` (+ `-fg`) | aliases of critical, major, add, suggest |
@@ -38,6 +39,10 @@ toolbar.
 | Controls | `--control-sm` 24 · `--control-md` 30 · `--control-lg` 36 | |
 | Icons | `ICON_SIZE.inline` 14 · `ICON_SIZE.button` 16 | lucide-react only, `aria-hidden="true"` |
 | Motion | `--dur-fast` 0.08s · `--dur-base` 0.15s · `--ease-out` | reduced motion is handled globally |
+
+Known exception: on paper the `--accent` fill is 2.35:1 against white. It is accepted where a label sits on it (a primary button, the active stage node): the label is `--accent-ink` at 8.3:1 and carries the control; focus uses `--focus-ring` (5.7:1). Don't use the bare accent fill as the only sign of anything.
+
+Placeholders are fg-2 so they are readable; typed text is fg-0, so the two stay apart. A placeholder that could pass for a value starts with "e.g.".
 
 The one eyebrow (section titles, field labels): mono 10/500, 0.08em, uppercase, `--fg-2` — the
 `Eyebrow` component or the `ui-eyebrow` class. Write the text in sentence case; CSS uppercases it.
