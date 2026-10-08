@@ -29,16 +29,21 @@ const inlineIconStyle: React.CSSProperties = {
   marginRight: "var(--space-2)",
 };
 
-const PolishButton = ({
-  count,
-  variant,
-  onClick,
-}: {
-  count: number;
-  variant: "primary" | "secondary";
-  onClick: () => void;
-}): React.ReactElement => (
+/*
+ * Keys decide which button keeps its DOM node, and so the focus, from one state to the next.
+ * The primary slot is always "primary": Generate turns into the busy Generating… and then into
+ * Polish, so a keyboard user lands on the next step. A secondary button is keyed by what it
+ * does: Run again must never become Stop under a second click.
+ */
+const PRIMARY_KEY = "primary";
+
+const polishButton = (
+  count: number,
+  variant: "primary" | "secondary",
+  onClick: () => void
+): React.ReactElement => (
   <Button
+    key={variant === "primary" ? PRIMARY_KEY : "polish"}
     size="lg"
     variant={variant}
     iconRight={<ArrowRight size={ICON_SIZE.inline} aria-hidden="true" />}
@@ -48,14 +53,12 @@ const PolishButton = ({
   </Button>
 );
 
-const RunAgainButton = ({
-  variant,
-  onClick,
-}: {
-  variant: "primary" | "secondary";
-  onClick: () => void;
-}): React.ReactElement => (
+const runAgainButton = (
+  variant: "primary" | "secondary",
+  onClick: () => void
+): React.ReactElement => (
   <Button
+    key={variant === "primary" ? PRIMARY_KEY : "run-again"}
     size="lg"
     variant={variant}
     icon={<RotateCcw size={ICON_SIZE.inline} aria-hidden="true" />}
@@ -85,9 +88,8 @@ const doneContent = (
           {count > 0 ? `${pluralize(count, "comment")} kept from before` : "No comments saved"}
         </span>
       ),
-      secondary:
-        count > 0 ? <PolishButton count={count} variant="secondary" onClick={onPolish} /> : null,
-      primary: <RunAgainButton variant="primary" onClick={onGenerate} />,
+      secondary: count > 0 ? polishButton(count, "secondary", onPolish) : null,
+      primary: runAgainButton("primary", onGenerate),
     };
   }
   return {
@@ -101,13 +103,9 @@ const doneContent = (
         )}
       </>
     ),
-    secondary: count > 0 ? <RunAgainButton variant="secondary" onClick={onGenerate} /> : null,
+    secondary: count > 0 ? runAgainButton("secondary", onGenerate) : null,
     primary:
-      count > 0 ? (
-        <PolishButton count={count} variant="primary" onClick={onPolish} />
-      ) : (
-        <RunAgainButton variant="primary" onClick={onGenerate} />
-      ),
+      count > 0 ? polishButton(count, "primary", onPolish) : runAgainButton("primary", onGenerate),
   };
 };
 
@@ -150,6 +148,7 @@ export const RunFooter = ({
         ),
       primary: (
         <Button
+          key={PRIMARY_KEY}
           size="lg"
           variant="primary"
           icon={<Sparkles size={ICON_SIZE.inline} aria-hidden="true" />}
@@ -178,6 +177,7 @@ export const RunFooter = ({
       summary: `Generating with ${providerName}…`,
       secondary: (
         <Button
+          key="stop"
           size="lg"
           icon={<Square size={ICON_SIZE.inline} aria-hidden="true" />}
           onClick={onStop}
@@ -185,8 +185,9 @@ export const RunFooter = ({
           Stop
         </Button>
       ),
+      // Busy, not disabled: it keeps the focus Generate had, and a second click does nothing.
       primary: (
-        <Button size="lg" variant="primary" isLoading>
+        <Button key={PRIMARY_KEY} size="lg" variant="primary" isLoading>
           Generating…
         </Button>
       ),
@@ -196,11 +197,8 @@ export const RunFooter = ({
   } else if (status === "stopped") {
     content = {
       summary: `Generation stopped${onIteration}`,
-      secondary:
-        existing > 0 ? (
-          <PolishButton count={existing} variant="secondary" onClick={onPolish} />
-        ) : null,
-      primary: <RunAgainButton variant="primary" onClick={onGenerate} />,
+      secondary: existing > 0 ? polishButton(existing, "secondary", onPolish) : null,
+      primary: runAgainButton("primary", onGenerate),
     };
   } else {
     // The notice above says what failed; the iteration may have kept what arrived before it.
@@ -209,10 +207,7 @@ export const RunFooter = ({
         existing > 0
           ? `${pluralize(existing, "comment")} on this iteration`
           : "No comments on this iteration",
-      secondary:
-        existing > 0 ? (
-          <PolishButton count={existing} variant="secondary" onClick={onPolish} />
-        ) : null,
+      secondary: existing > 0 ? polishButton(existing, "secondary", onPolish) : null,
     };
   }
 

@@ -580,6 +580,26 @@ describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS
     expect(copyAndPaste).not.toHaveAttribute("aria-disabled");
   });
 
+  it("keeps the focus on the next step and never turns Run again into Stop", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const generate = await screen.findByRole("button", { name: /Generate review/ });
+    const channel = createDispatchChannel();
+
+    await user.click(generate);
+    expect(generate).toHaveFocus();
+    expect(generate).toHaveAttribute("aria-busy", "true");
+    channel.emit({ type: "done", result: RESULT });
+    const polish = await screen.findByRole("button", { name: "Polish 1 comment" });
+    expect(polish).toBe(generate);
+    expect(polish).toHaveFocus();
+
+    const runAgain = screen.getByRole("button", { name: "Run again" });
+    createDispatchChannel();
+    await user.click(runAgain);
+    expect(await screen.findByRole("button", { name: "Stop" })).not.toBe(runAgain);
+  });
+
   it("folds the form into the run's header line and opens it again on Edit", async () => {
     const user = userEvent.setup();
     renderStage();
