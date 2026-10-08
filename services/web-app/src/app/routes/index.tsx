@@ -1,14 +1,19 @@
 import { lazy, Suspense } from "react";
 import type React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { reloadOnStaleChunk } from "@shared/lib";
 import { Spinner } from "@shared/ui/Spinner";
 
-const MainPage = lazy(() =>
-  import("@pages/main").then((m) => ({ default: m.MainPage as React.ComponentType }))
+const MainPage = lazy(
+  reloadOnStaleChunk(() =>
+    import("@pages/main").then((m) => ({ default: m.MainPage as React.ComponentType }))
+  )
 );
 
-const SettingsPage = lazy(() =>
-  import("@pages/settings").then((m) => ({ default: m.SettingsPage as React.ComponentType }))
+const SettingsPage = lazy(
+  reloadOnStaleChunk(() =>
+    import("@pages/settings").then((m) => ({ default: m.SettingsPage as React.ComponentType }))
+  )
 );
 
 export const Router = (): React.ReactElement => {

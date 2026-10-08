@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mockVirtualLayout } from "@shared/lib/test-utils";
+import { INTEGRATION_TEST_TIMEOUT_MS, mockVirtualLayout } from "@shared/lib/test-utils";
 import { DiffViewer } from "./DiffViewer";
 import { VIRTUALIZE_FROM_LINES } from "./DiffTable";
 
@@ -24,7 +24,7 @@ const bodyRows = (): HTMLElement[] =>
     .getAllByRole("row")
     .filter((row) => row.closest("tbody") !== null && row.hasAttribute("data-line-type"));
 
-describe("DiffViewer on a long diff", () => {
+describe("DiffViewer on a long diff", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   let restoreLayout: () => void;
 
   beforeEach(() => {

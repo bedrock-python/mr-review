@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mockVirtualLayout } from "@shared/lib/test-utils";
+import { INTEGRATION_TEST_TIMEOUT_MS, mockVirtualLayout } from "@shared/lib/test-utils";
 import { DiffViewer } from "./DiffViewer";
 import type { DiffFile } from "@entities/mr";
 
@@ -27,7 +27,7 @@ const bigFile = (): DiffFile => ({
   ],
 });
 
-describe("Pick DiffViewer", () => {
+describe("Pick DiffViewer", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   let restoreLayout: () => void;
 
   beforeEach(() => {

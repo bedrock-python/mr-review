@@ -19,3 +19,13 @@ export { readStorageItem, writeStorageItem } from "./safeStorage";
 export { useStickToBottom } from "./useStickToBottom";
 export type { StickToBottom } from "./useStickToBottom";
 export { useReturnFocus } from "./useReturnFocus";
+export {
+  STALE_CHUNK_RELOAD_KEY,
+  STALE_CHUNK_RELOAD_INTERVAL_MS,
+  createStaleChunkReloader,
+  installStaleChunkReload,
+  isChunkLoadError,
+  reloadOnStaleChunk,
+  staleChunkReloader,
+} from "./staleChunk";
+export type { StaleChunkReloader, StaleChunkReloaderDeps } from "./staleChunk";

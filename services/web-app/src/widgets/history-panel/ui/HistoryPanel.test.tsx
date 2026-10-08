@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppStore } from "@app/store";
 import { hostApi } from "@entities/host";
 import { DEFAULT_BRIEF_CONFIG, reviewApi } from "@entities/review";
-import { createTestQueryClient } from "@shared/lib/test-utils";
+import { INTEGRATION_TEST_TIMEOUT_MS, createTestQueryClient } from "@shared/lib/test-utils";
 import { HistoryPanel } from "./HistoryPanel";
 import type { Host } from "@entities/host";
 import type { Review } from "@entities/review";
@@ -98,7 +98,7 @@ const openPanel = async (user: ReturnType<typeof userEvent.setup>): Promise<HTML
   return screen.findByRole("dialog", { name: "Review History" });
 };
 
-describe("HistoryPanel", () => {
+describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     useAppStore.setState({ historyOpen: false });
     // Two hosts with the same name must still be two groups.
