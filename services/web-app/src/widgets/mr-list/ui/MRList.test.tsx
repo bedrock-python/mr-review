@@ -201,6 +201,26 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
     expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
   });
 
+  it("leaves the filter menu with Tab to the next control, with Shift+Tab to its button", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+    const button = screen.getByRole("button", { name: "Filter merge requests" });
+
+    await userEvent.click(button);
+    await userEvent.tab({ shift: true });
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+
+    await userEvent.click(button);
+    expect(screen.getByRole("radio", { name: "All merge requests" })).toHaveFocus();
+    await userEvent.tab();
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(button.compareDocumentPosition(document.activeElement as Node)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   it("closes the filter menu on Escape and goes back to its button", async () => {
     renderWithQueryClient(<MRList />);
     await waitForStatus("Showing 30 · more below");
