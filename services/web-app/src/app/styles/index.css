@@ -498,6 +498,37 @@
     outline-offset: -1px;
   }
 
+  /* form fields — keep outline out of inline styles, or keyboard focus becomes invisible */
+  .field {
+    width: 100%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--fg-0);
+  }
+  textarea.field {
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .field:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--c-critical);
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
   /* diff: active row and the pin being edited */
   tr.diff-row-highlight {
     background: color-mix(in oklch, var(--accent) 18%, transparent);

@@ -1,6 +1,7 @@
 export { cn } from "./cn";
 export { compareVersions, isNewerVersion } from "./compareVersions";
 export { copyFolderPath } from "./copyFolderPath";
+export { copyText, COPY_BLOCKED_MESSAGE } from "./copyText";
 export { getVcsErrorMessage } from "./apiError";
 export { useDebouncedSearch, SEARCH_DEBOUNCE_MS } from "./useDebouncedSearch";
 export type { DebouncedSearch } from "./useDebouncedSearch";
