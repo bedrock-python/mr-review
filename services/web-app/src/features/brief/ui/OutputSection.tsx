@@ -1,7 +1,8 @@
 import { useId } from "react";
 import { MAX_COMMENTS_LIMIT } from "@entities/review";
+import { Eyebrow, Field, Input, SegmentedControl } from "@shared/ui";
+import { BriefSection } from "./BriefSection";
 import type { BriefConfig, CommentSeverity } from "@entities/review";
-import { HINT_STYLE, SECTION_STYLE, SECTION_TITLE_STYLE, toggleChipStyle } from "./styles";
 
 const LANGUAGE_SUGGESTIONS = [
   "English",
@@ -37,85 +38,71 @@ export const OutputSection = ({ config, onChange }: OutputSectionProps): React.R
   const id = useId();
 
   return (
-    <section style={SECTION_STYLE} aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} style={SECTION_TITLE_STYLE}>
-        Output
-      </h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
-          <label className="field-label" htmlFor={`${id}-language`}>
-            Comment language
-          </label>
-          <input
-            id={`${id}-language`}
-            className="field"
-            list={`${id}-languages`}
-            maxLength={MAX_LANGUAGE_CHARS}
-            value={config.output_language}
-            placeholder="Same as the code and the MR"
-            onChange={(event) => {
-              onChange({ output_language: event.target.value });
-            }}
-          />
-          <datalist id={`${id}-languages`}>
-            {LANGUAGE_SUGGESTIONS.map((language) => (
-              <option key={language} value={language} />
-            ))}
-          </datalist>
-        </div>
-        <div role="group" aria-labelledby={`${id}-severity`}>
-          <div id={`${id}-severity`} className="field-label">
+    <BriefSection title="Output" description="How the comments come back, and how many.">
+      <div className="flex flex-col" style={{ gap: "var(--space-4)" }}>
+        <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
+          <Eyebrow as="div" id={`${id}-severity`}>
             Minimum severity
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {SEVERITY_FLOORS.map((floor) => {
-              const isOn = config.min_severity === floor.value;
-              return (
-                <button
-                  key={floor.value}
-                  type="button"
-                  aria-pressed={isOn}
-                  onClick={() => {
-                    onChange({ min_severity: floor.value });
-                  }}
-                  style={toggleChipStyle(isOn)}
-                >
-                  {floor.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div>
-          <label className="field-label" htmlFor={`${id}-max`}>
-            Maximum comments
-          </label>
-          <input
-            id={`${id}-max`}
-            className="field"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={MAX_COMMENTS_LIMIT}
-            value={config.max_comments ?? ""}
-            placeholder="No limit"
-            aria-describedby={`${id}-max-hint`}
-            style={{ width: 140 }}
-            onChange={(event) => {
-              const parsed = Number.parseInt(event.target.value, 10);
-              onChange({
-                max_comments: Number.isNaN(parsed)
-                  ? null
-                  : Math.min(Math.max(parsed, 1), MAX_COMMENTS_LIMIT),
-              });
+          </Eyebrow>
+          <SegmentedControl
+            aria-labelledby={`${id}-severity`}
+            options={SEVERITY_FLOORS}
+            value={config.min_severity}
+            onValueChange={(min_severity) => {
+              onChange({ min_severity });
             }}
+            className="self-start"
           />
-          <div id={`${id}-max-hint`} style={{ ...HINT_STYLE, marginTop: 4 }}>
-            The model is asked for at most this many; when more come back, the most severe are kept.
-            Comments under the minimum severity are dropped too.
-          </div>
+          <p className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>
+            Comments under it are dropped, even when the model sends them.
+          </p>
         </div>
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
+            gap: "var(--space-4)",
+          }}
+        >
+          <Field label="Comment language" hint="Empty: the language of the code and the MR.">
+            <Input
+              list={`${id}-languages`}
+              maxLength={MAX_LANGUAGE_CHARS}
+              value={config.output_language}
+              placeholder="e.g. English"
+              onChange={(event) => {
+                onChange({ output_language: event.target.value });
+              }}
+            />
+          </Field>
+          <Field
+            label="Maximum comments"
+            hint="Empty: no limit. Past it, the most severe are kept."
+          >
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_COMMENTS_LIMIT}
+              value={config.max_comments ?? ""}
+              placeholder="e.g. 20"
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                onChange({
+                  max_comments: Number.isNaN(parsed)
+                    ? null
+                    : Math.min(Math.max(parsed, 1), MAX_COMMENTS_LIMIT),
+                });
+              }}
+            />
+          </Field>
+        </div>
+        <datalist id={`${id}-languages`}>
+          {LANGUAGE_SUGGESTIONS.map((language) => (
+            <option key={language} value={language} />
+          ))}
+        </datalist>
       </div>
-    </section>
+    </BriefSection>
   );
 };

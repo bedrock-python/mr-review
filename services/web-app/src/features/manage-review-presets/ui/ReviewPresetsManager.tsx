@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Bookmark, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import {
   PresetEditor,
   useBuiltinPresets,
@@ -6,28 +7,38 @@ import {
   useReviewPresets,
   useUpdateReviewPreset,
 } from "@entities/review-preset";
+import { Button, Card, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
 import type { ReviewPreset } from "@entities/review-preset";
 
-const ROW_STYLE: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 10,
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--border)",
+const ROW_STYLE: React.CSSProperties = { padding: "var(--space-3) var(--space-4)" };
+
+const NAME_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-body)",
+  fontWeight: "var(--fw-semibold)",
 };
 
+const META_STYLE: React.CSSProperties = { fontSize: "var(--fs-meta)" };
+
 const INSTRUCTIONS_STYLE: React.CSSProperties = {
-  margin: "6px 0 0",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  color: "var(--fg-2)",
-  whiteSpace: "pre-wrap",
+  margin: "var(--space-2) 0 0",
+  fontSize: "var(--fs-meta)",
+  lineHeight: "var(--lh-body)",
 };
+
+const icon = (Icon: typeof Pencil): React.ReactNode => (
+  <Icon size={ICON_SIZE.inline} aria-hidden="true" />
+);
 
 const countLabel = (brief: Record<string, unknown>): string => {
   const count = Object.keys(brief).length;
   return count === 0 ? "" : ` · sets ${String(count)} brief option${count === 1 ? "" : "s"}`;
 };
+
+const Instructions = ({ children }: { children: string }): React.ReactElement => (
+  <pre className="text-fg-2 font-mono whitespace-pre-wrap" style={INSTRUCTIONS_STYLE}>
+    {children}
+  </pre>
+);
 
 const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElement => {
   const updatePreset = useUpdateReviewPreset();
@@ -37,7 +48,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
 
   if (isEditing) {
     return (
-      <li style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+      <li className="border-border border-b last:border-b-0" style={ROW_STYLE}>
         <PresetEditor
           title={`Edit preset ${preset.name}`}
           submitLabel="Save changes"
@@ -68,47 +79,50 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
   }
 
   return (
-    <li style={ROW_STYLE}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)" }}>{preset.name}</div>
-        <div style={{ fontSize: 11, color: "var(--fg-2)" }}>
+    <li
+      className="border-border flex items-start border-b last:border-b-0"
+      style={{ ...ROW_STYLE, gap: "var(--space-3)" }}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="text-fg-0" style={NAME_STYLE}>
+          {preset.name}
+        </div>
+        <div className="text-fg-2" style={META_STYLE}>
           {(preset.description || "No description") + countLabel(preset.brief_config)}
         </div>
-        {preset.instructions && <pre style={INSTRUCTIONS_STYLE}>{preset.instructions}</pre>}
+        {preset.instructions && <Instructions>{preset.instructions}</Instructions>}
       </div>
-      <button
-        type="button"
-        className="btn ghost"
-        style={{ padding: "3px 8px", fontSize: 11 }}
-        aria-label={`Edit preset ${preset.name}`}
-        onClick={() => {
-          setIsEditing(true);
-        }}
-      >
-        Edit
-      </button>
-      <button
-        type="button"
-        className="btn ghost"
-        style={{
-          padding: "3px 8px",
-          fontSize: 11,
-          color: isConfirming ? "var(--c-critical-fg)" : undefined,
-        }}
-        aria-label={
-          isConfirming ? `Confirm deleting preset ${preset.name}` : `Delete preset ${preset.name}`
-        }
-        disabled={deletePreset.isPending}
-        onClick={() => {
-          if (!isConfirming) {
-            setIsConfirming(true);
-            return;
+      <div className="flex shrink-0" style={{ gap: "var(--space-1)" }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={icon(Pencil)}
+          aria-label={`Edit preset ${preset.name}`}
+          onClick={() => {
+            setIsEditing(true);
+          }}
+        >
+          Edit
+        </Button>
+        <Button
+          variant={isConfirming ? "danger" : "ghost"}
+          size="sm"
+          icon={icon(Trash2)}
+          isLoading={deletePreset.isPending}
+          aria-label={
+            isConfirming ? `Confirm deleting preset ${preset.name}` : `Delete preset ${preset.name}`
           }
-          deletePreset.mutate(preset.id);
-        }}
-      >
-        {isConfirming ? "Confirm" : "Delete"}
-      </button>
+          onClick={() => {
+            if (!isConfirming) {
+              setIsConfirming(true);
+              return;
+            }
+            deletePreset.mutate(preset.id);
+          }}
+        >
+          {isConfirming ? "Confirm" : "Delete"}
+        </Button>
+      </div>
     </li>
   );
 };
@@ -119,43 +133,61 @@ export const ReviewPresetsManager = (): React.ReactElement => {
   const { data: builtins } = useBuiltinPresets();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="card" style={{ overflow: "hidden" }}>
+    <div className="flex flex-col" style={{ gap: "var(--space-4)" }}>
+      <Card padding="none" className="overflow-hidden">
         {isLoading && (
-          <div style={{ padding: "12px 16px", color: "var(--fg-2)", fontSize: 12 }}>Loading…</div>
-        )}
-        {presets?.length === 0 && (
-          <div style={{ padding: 16, fontSize: 12, color: "var(--fg-2)", fontStyle: "italic" }}>
-            No saved presets yet. Save one from a review&apos;s Brief with “Save as preset…”.
+          <div className="flex justify-center" style={ROW_STYLE}>
+            <Spinner size="sm" label="Loading presets" />
           </div>
         )}
+        {presets?.length === 0 && (
+          <EmptyState
+            size="sm"
+            icon={<Bookmark size={ICON_SIZE.inline} />}
+            title="No saved presets yet"
+            description="Save one from a review's Brief with “Save as preset…”."
+          />
+        )}
         {presets && presets.length > 0 && (
-          <ul
-            aria-label="Saved review presets"
-            style={{ listStyle: "none", margin: 0, padding: 0 }}
-          >
+          <ul aria-label="Saved review presets" className="m-0 list-none p-0">
             {presets.map((preset) => (
               <SavedPresetRow key={preset.id} preset={preset} />
             ))}
           </ul>
         )}
-      </div>
+      </Card>
       {builtins && (
-        <details>
-          <summary style={{ fontSize: 12, color: "var(--fg-2)", cursor: "pointer" }}>
+        <details className="group">
+          <summary
+            className="text-fg-1 hover:text-fg-0 flex w-fit cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden"
+            style={{ gap: "var(--space-1)", fontSize: "var(--fs-control)" }}
+          >
+            <ChevronRight
+              size={ICON_SIZE.inline}
+              aria-hidden="true"
+              className="text-fg-2 transition-transform group-open:rotate-90"
+            />
             Built-in presets
           </summary>
-          <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
-            {builtins.map((preset) => (
-              <li key={preset.id} style={{ ...ROW_STYLE, flexDirection: "column", gap: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)" }}>
-                  {preset.name}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--fg-2)" }}>{preset.description}</div>
-                <pre style={INSTRUCTIONS_STYLE}>{preset.instructions}</pre>
-              </li>
-            ))}
-          </ul>
+          <Card as="div" padding="none" style={{ marginTop: "var(--space-2)" }}>
+            <ul className="m-0 list-none p-0">
+              {builtins.map((preset) => (
+                <li
+                  key={preset.id}
+                  className="border-border border-b last:border-b-0"
+                  style={ROW_STYLE}
+                >
+                  <div className="text-fg-0" style={NAME_STYLE}>
+                    {preset.name}
+                  </div>
+                  <div className="text-fg-2" style={META_STYLE}>
+                    {preset.description}
+                  </div>
+                  <Instructions>{preset.instructions}</Instructions>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </details>
       )}
     </div>

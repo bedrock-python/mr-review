@@ -1,96 +1,156 @@
+import { Callout, Eyebrow } from "@shared/ui";
+import { BudgetMeter } from "./BudgetMeter";
 import type { PromptPreview, PromptSection } from "@entities/review";
-import { noticeStyle } from "./styles";
 
 const CHARS_PER_TOKEN = 4;
 
 const formatCount = (value: number): string => value.toLocaleString();
 
-const sectionStatus = (section: PromptSection): string => {
-  const parts: string[] = [];
+type StatusPart = { text: string; isLoss: boolean };
+
+/** "1 of 3 · 1 cut short · 2 left out"; the parts that lost material are flagged. */
+const sectionStatus = (section: PromptSection): StatusPart[] => {
+  if (section.items > 0 && section.included === 0) return [{ text: "left out", isLoss: true }];
+  const parts: StatusPart[] = [];
   if (section.items > 1 || section.omitted.length > 0) {
-    parts.push(`${String(section.included)} of ${String(section.items)}`);
+    parts.push({ text: `${String(section.included)} of ${String(section.items)}`, isLoss: false });
   }
-  if (section.truncated.length > 0) parts.push(`${String(section.truncated.length)} cut short`);
-  if (section.omitted.length > 0) parts.push(`${String(section.omitted.length)} left out`);
-  if (section.skipped.length > 0) parts.push(`${String(section.skipped.length)} binary skipped`);
-  if (section.items > 0 && section.included === 0) return "left out";
-  return parts.join(" · ") || "whole";
+  if (section.truncated.length > 0) {
+    parts.push({ text: `${String(section.truncated.length)} cut short`, isLoss: true });
+  }
+  if (section.omitted.length > 0) {
+    parts.push({ text: `${String(section.omitted.length)} left out`, isLoss: true });
+  }
+  if (section.skipped.length > 0) {
+    parts.push({ text: `${String(section.skipped.length)} binary skipped`, isLoss: false });
+  }
+  return parts.length > 0 ? parts : [{ text: "whole", isLoss: false }];
 };
 
-const sectionTitle = (section: PromptSection): string | undefined => {
-  const lines = [
-    section.truncated.length > 0 ? `Cut short: ${section.truncated.join(", ")}` : "",
-    section.omitted.length > 0 ? `Left out: ${section.omitted.join(", ")}` : "",
-    section.skipped.length > 0 ? `Binary, skipped: ${section.skipped.join(", ")}` : "",
-  ].filter(Boolean);
-  return lines.length > 0 ? lines.join("\n") : undefined;
-};
+const hasLoss = (section: PromptSection): boolean =>
+  section.truncated.length > 0 ||
+  section.omitted.length > 0 ||
+  (section.items > 0 && section.included === 0);
 
-const CELL: React.CSSProperties = { padding: "2px 6px", textAlign: "right", whiteSpace: "nowrap" };
+const CELL = "whitespace-nowrap";
+const CELL_STYLE: React.CSSProperties = { padding: "var(--space-1) var(--space-2)" };
 
 export type PromptBreakdownProps = {
   preview: PromptPreview;
 };
 
+/** What the prompt is made of, what the budget cut, and which files were left out. */
 export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactElement => {
-  const isCut = preview.sections.some(
-    (s) => s.truncated.length > 0 || s.omitted.length > 0 || (s.items > 0 && s.included === 0)
-  );
-  const usedShare = Math.min(100, Math.round((preview.total_chars / preview.budget_chars) * 100));
+  const lossy = preview.sections.filter(hasLoss);
+  const skipped = preview.sections.flatMap((section) => section.skipped);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 11 }}>
-      <div style={{ color: "var(--fg-2)" }}>
-        {`${formatCount(preview.total_chars)} of ${formatCount(preview.budget_chars)} characters (${String(usedShare)}%) · ≈ ${formatCount(preview.estimated_tokens)} tokens, estimated at 4 characters per token`}
-      </div>
-      <table className="mono" style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
-        <caption className="sr-only">What the prompt is made of</caption>
+    <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
+      <BudgetMeter
+        used={preview.total_chars}
+        budget={preview.budget_chars}
+        isCut={lossy.length > 0}
+      />
+      <table
+        className="w-full border-collapse font-mono"
+        style={{ fontSize: "var(--fs-meta)", fontVariantNumeric: "tabular-nums" }}
+      >
+        <caption className="ui-visually-hidden">What the prompt is made of</caption>
         <thead>
-          <tr style={{ color: "var(--fg-2)" }}>
-            <th scope="col" style={{ ...CELL, textAlign: "left", fontWeight: 400 }}>
-              Part
+          <tr className="border-border border-b">
+            <th scope="col" className="text-left" style={CELL_STYLE}>
+              <Eyebrow>Part</Eyebrow>
             </th>
-            <th scope="col" style={{ ...CELL, fontWeight: 400 }}>
-              Characters
+            <th scope="col" className="text-right" style={CELL_STYLE}>
+              <Eyebrow>≈ Tokens</Eyebrow>
             </th>
-            <th scope="col" style={{ ...CELL, fontWeight: 400 }}>
-              ≈ Tokens
+            <th scope="col" className="text-right" style={CELL_STYLE}>
+              <Eyebrow>Characters</Eyebrow>
             </th>
-            <th scope="col" style={{ ...CELL, textAlign: "left", fontWeight: 400 }}>
-              Included
+            <th scope="col" className="text-left" style={CELL_STYLE}>
+              <Eyebrow>Included</Eyebrow>
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="text-fg-1">
           {preview.sections.map((section) => (
-            <tr key={section.key} title={sectionTitle(section)} style={{ color: "var(--fg-1)" }}>
-              <th scope="row" style={{ ...CELL, textAlign: "left", fontWeight: 400 }}>
+            <tr key={section.key} className="border-border border-b">
+              <th scope="row" className={`${CELL} text-left font-normal`} style={CELL_STYLE}>
                 {section.label}
               </th>
-              <td style={CELL}>{formatCount(section.chars)}</td>
-              <td style={CELL}>{formatCount(Math.ceil(section.chars / CHARS_PER_TOKEN))}</td>
-              <td style={{ ...CELL, textAlign: "left" }}>{sectionStatus(section)}</td>
+              <td className={`${CELL} text-right`} style={CELL_STYLE}>
+                {formatCount(Math.ceil(section.chars / CHARS_PER_TOKEN))}
+              </td>
+              <td className={`${CELL} text-fg-2 text-right`} style={CELL_STYLE}>
+                {formatCount(section.chars)}
+              </td>
+              <td className={CELL} style={CELL_STYLE}>
+                {sectionStatus(section).map((part, index) => (
+                  <span key={part.text}>
+                    {index > 0 && <span className="text-fg-2"> · </span>}
+                    <span className={part.isLoss ? "text-c-major-fg" : "text-fg-2"}>
+                      {part.text}
+                    </span>
+                  </span>
+                ))}
+              </td>
             </tr>
           ))}
         </tbody>
+        <tfoot className="text-fg-0">
+          <tr>
+            <th scope="row" className={`${CELL} text-left font-medium`} style={CELL_STYLE}>
+              Total
+            </th>
+            <td className={`${CELL} text-right`} style={CELL_STYLE}>
+              {formatCount(preview.estimated_tokens)}
+            </td>
+            <td className={`${CELL} text-fg-2 text-right`} style={CELL_STYLE}>
+              {formatCount(preview.total_chars)}
+            </td>
+            <td style={CELL_STYLE} />
+          </tr>
+        </tfoot>
       </table>
-      {isCut && (
-        <div role="status" style={noticeStyle("var(--c-major)")}>
-          Some material did not fit the prompt budget and was cut or left out (hover a row for the
-          files). Raise the budget under Advanced if the model has room, or narrow the review with
-          path filters.
-        </div>
+      {lossy.length > 0 && (
+        <Callout tone="warn" size="sm" title="Not everything fit">
+          <p className="m-0">
+            Some material did not fit the prompt budget and was cut or left out. Raise the budget
+            under Advanced if the model has room, or narrow the review with path filters.
+          </p>
+          <ul
+            className="m-0 list-disc space-y-1"
+            style={{ paddingLeft: "var(--space-4)", marginTop: "var(--space-1)" }}
+          >
+            {lossy.map((section) => (
+              <li key={section.key}>
+                <span className="text-fg-0">{section.label}</span>
+                {section.truncated.length > 0 && (
+                  <span>{` — cut short: ${section.truncated.join(", ")}`}</span>
+                )}
+                {section.omitted.length > 0 && (
+                  <span>{` — left out: ${section.omitted.join(", ")}`}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+      {skipped.length > 0 && (
+        <p className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>
+          {`Skipped as binary: ${skipped.join(", ")}.`}
+        </p>
       )}
       {preview.excluded_files.length > 0 && (
-        <div style={{ color: "var(--fg-2)" }}>
+        <p className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>
           {`${String(preview.excluded_files.length)} of ${String(preview.files_total)} changed files excluded by path filters.`}
-        </div>
+        </p>
       )}
       {preview.preset_missing && (
-        <div role="status" style={noticeStyle("var(--c-major)")}>
+        <Callout tone="warn" size="sm" role="status">
           The saved preset this brief names no longer exists; the built-in preset&apos;s
           instructions were used.
-        </div>
+        </Callout>
       )}
     </div>
   );

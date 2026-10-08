@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { Toaster } from "sonner";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
 import { ApiError } from "@shared/api";
 import { COPY_BLOCKED_MESSAGE } from "@shared/lib";
@@ -124,6 +126,14 @@ const SAVED_PRESET: ReviewPreset = {
   updated_at: "2026-05-16T10:00:00+00:00",
 };
 
+const OTHER_PRESET: ReviewPreset = {
+  ...SAVED_PRESET,
+  id: "55555555-5555-4555-8555-555555555555",
+  name: "Release hardening",
+  description: "Before a tagged release",
+  brief_config: { min_severity: "critical", focus_areas: ["Test coverage"], include_diff: false },
+};
+
 const lastSavedBrief = (): BriefConfig => {
   const calls = api.update.mock.calls as [string, { brief_config: BriefConfig }][];
   const last = calls.at(-1);
@@ -136,7 +146,10 @@ const renderStage = (brief: BriefConfig = DEFAULT_BRIEF_CONFIG): void => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <BriefStage />
+      <MemoryRouter>
+        <BriefStage />
+        <Toaster />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 };
@@ -145,6 +158,18 @@ const openPreview = async (user: ReturnType<typeof userEvent.setup>): Promise<HT
   await user.click(await screen.findByRole("button", { name: "Preview prompt" }));
   return screen.findByLabelText("Prompt text");
 };
+
+beforeAll(() => {
+  // jsdom has no pointer capture; sonner calls it when a toast button is pressed.
+  for (const method of ["setPointerCapture", "releasePointerCapture"] as const) {
+    if (!(method in Element.prototype)) {
+      Object.defineProperty(Element.prototype, method, {
+        configurable: true,
+        value: () => undefined,
+      });
+    }
+  }
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -174,15 +199,16 @@ afterEach(() => {
 
 describe("BriefStage — editing", () => {
   it(
-    "keeps a newline typed into Context Files and saves one path per line",
+    "keeps a newline typed into the context file paths and saves one path per line",
     async () => {
       const user = userEvent.setup();
       renderStage();
-      const field = await screen.findByLabelText("Context Files");
+      const field = await screen.findByLabelText("Context file paths");
 
       await user.type(field, "docs/{Enter}README.md");
 
       expect(field).toHaveValue("docs/\nREADME.md");
+      expect(field).toHaveAttribute("spellcheck", "false");
       await waitFor(() => {
         expect(lastSavedBrief().context_files).toEqual(["docs/", "README.md"]);
       }, SAVE_WAIT);
@@ -190,10 +216,10 @@ describe("BriefStage — editing", () => {
     INTEGRATION_TEST_TIMEOUT_MS
   );
 
-  it("tidies blank lines and spaces in Context Files when the field loses focus", async () => {
+  it("tidies blank lines and spaces in the context file paths on blur", async () => {
     const user = userEvent.setup();
     renderStage();
-    const field = await screen.findByLabelText("Context Files");
+    const field = await screen.findByLabelText("Context file paths");
 
     await user.type(field, "  docs/  {Enter}{Enter}README.md");
     expect(field).toHaveValue("  docs/  \n\nREADME.md");
@@ -206,18 +232,18 @@ describe("BriefStage — editing", () => {
     const user = userEvent.setup();
     renderStage();
 
-    expect(await screen.findByLabelText("Custom Instructions")).toBeInstanceOf(HTMLTextAreaElement);
-    expect(screen.getByRole("button", { name: /THOROUGH/, pressed: true })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: false })).toBeInTheDocument();
-    const pill = screen.getByRole("button", { name: "Include project context files" });
-    expect(pill).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByLabelText("Custom instructions")).toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByRole("radio", { name: /Thorough/, checked: true })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Security/, checked: false })).toBeInTheDocument();
+    const projectContext = screen.getByRole("checkbox", { name: "Project context files" });
+    expect(projectContext).toBeChecked();
 
-    await user.click(screen.getByRole("button", { name: /SECURITY/ }));
-    await user.click(pill);
+    await user.click(screen.getByRole("radio", { name: /Security/ }));
+    await user.click(projectContext);
 
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: true })).toBeInTheDocument();
-    expect(pill).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByLabelText("Context Files")).not.toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByRole("radio", { name: /Security/, checked: true })).toBeInTheDocument();
+    expect(projectContext).not.toBeChecked();
+    expect(screen.queryByLabelText("Context file paths")).not.toBeInTheDocument();
   });
 
   it(
@@ -227,7 +253,7 @@ describe("BriefStage — editing", () => {
       renderStage();
 
       await user.type(await screen.findByLabelText("Comment language"), "Russian");
-      await user.click(screen.getByRole("button", { name: "Major and up" }));
+      await user.click(screen.getByRole("radio", { name: "Major and up" }));
       await user.type(screen.getByLabelText("Maximum comments"), "12");
       await user.click(screen.getByRole("button", { name: "Error handling" }));
 
@@ -244,6 +270,20 @@ describe("BriefStage — editing", () => {
 });
 
 describe("BriefStage — prompt preview", () => {
+  it("names the binary files it skipped", async () => {
+    api.getPromptPreview.mockResolvedValue({
+      ...PREVIEW,
+      sections: PREVIEW.sections.map((section) =>
+        section.key === "full_files" ? { ...section, skipped: ["assets/logo.png"] } : section
+      ),
+    });
+    const user = userEvent.setup();
+    renderStage();
+    await openPreview(user);
+
+    expect(screen.getByText("Skipped as binary: assets/logo.png.")).toBeInTheDocument();
+  });
+
   it("shows the prompt as literal text, not rendered Markdown", async () => {
     const user = userEvent.setup();
     renderStage();
@@ -260,7 +300,7 @@ describe("BriefStage — prompt preview", () => {
     renderStage();
     const pre = await openPreview(user);
 
-    await user.type(screen.getByLabelText("Custom Instructions"), "Check the cache");
+    await user.type(screen.getByLabelText("Custom instructions"), "Check the cache");
 
     expect(screen.getByText("Out of date")).toBeInTheDocument();
     expect(screen.getByLabelText("Prompt text")).toBe(pre);
@@ -334,6 +374,24 @@ describe("BriefStage — copy", () => {
 });
 
 describe("BriefStage — dispatch", () => {
+  it("sums up the brief next to the way on", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const footer = await screen.findByRole("region", { name: "Brief actions" });
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent(
+        "Thorough · diff + description + project context · 1 file excluded"
+      );
+    });
+
+    await openPreview(user);
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent(`≈ ${String(PREVIEW.estimated_tokens)} tokens`);
+    });
+  });
+
   it("saves the brief, then moves on to Dispatch", async () => {
     const user = userEvent.setup();
     renderStage();
@@ -368,12 +426,14 @@ describe("BriefStage — saved presets", () => {
       const user = userEvent.setup();
       renderStage();
 
-      await user.click(await screen.findByRole("button", { name: /PUBLIC API/ }));
+      await user.click(await screen.findByRole("button", { name: /^Public API/ }));
 
-      expect(screen.getByRole("button", { name: /PUBLIC API/, pressed: true })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /THOROUGH/, pressed: false })).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Major and up", pressed: true })
+        screen.getByRole("button", { name: /^Public API/, pressed: true })
+      ).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: /Thorough/, checked: false })).toBeInTheDocument();
+      expect(
+        screen.getByRole("radio", { name: "Major and up", checked: true })
       ).toBeInTheDocument();
       await waitFor(() => {
         const saved = lastSavedBrief();
@@ -417,13 +477,95 @@ describe("BriefStage — saved presets", () => {
     INTEGRATION_TEST_TIMEOUT_MS
   );
 
+  it("does not apply a saved preset when the arrow keys pass over it", async () => {
+    presetApi.list.mockResolvedValue([SAVED_PRESET, OTHER_PRESET]);
+    const user = userEvent.setup();
+    renderStage({ ...DEFAULT_BRIEF_CONFIG, custom_preset_id: PRESET_ID });
+    const inUse = await screen.findByRole("button", { name: /^Public API/, pressed: true });
+
+    act(() => {
+      inUse.focus();
+    });
+    await user.keyboard("{ArrowDown}{ArrowRight}{ArrowDown}");
+
+    expect(inUse).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^Release hardening/ })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("radio", { name: "Everything", checked: true })).toBeInTheDocument();
+  });
+
+  it(
+    "puts back the settings a saved preset replaced when its toast is undone",
+    async () => {
+      presetApi.list.mockResolvedValue([SAVED_PRESET, OTHER_PRESET]);
+      const user = userEvent.setup();
+      renderStage({
+        ...DEFAULT_BRIEF_CONFIG,
+        focus_areas: ["Error handling"],
+        min_severity: "minor",
+      });
+
+      await user.click(await screen.findByRole("button", { name: /^Release hardening/ }));
+      expect(
+        screen.getByRole("radio", { name: "Critical only", checked: true })
+      ).toBeInTheDocument();
+      await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+      expect(
+        screen.getByRole("radio", { name: "Minor and up", checked: true })
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        const saved = lastSavedBrief();
+        expect(saved.custom_preset_id).toBeNull();
+        expect(saved.focus_areas).toEqual(["Error handling"]);
+        expect(saved.min_severity).toBe("minor");
+        expect(saved.include_diff).toBe(true);
+      }, SAVE_WAIT);
+    },
+    INTEGRATION_TEST_TIMEOUT_MS
+  );
+
+  it(
+    "edits and deletes a saved preset that is not in use without applying it",
+    async () => {
+      presetApi.list.mockResolvedValue([SAVED_PRESET, OTHER_PRESET]);
+      presetApi.delete.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      renderStage();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Edit preset Release hardening" })
+      );
+      expect(
+        screen.getByRole("form", { name: "Edit preset Release hardening" })
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Delete preset Release hardening" }));
+      await user.click(
+        screen.getByRole("button", { name: "Confirm deleting preset Release hardening" })
+      );
+
+      await waitFor(() => {
+        expect(presetApi.delete).toHaveBeenCalledWith(OTHER_PRESET.id);
+      });
+      expect(screen.getByRole("radio", { name: /Thorough/, checked: true })).toBeInTheDocument();
+      expect(api.update).not.toHaveBeenCalled();
+      expect(screen.getByRole("link", { name: /Manage in Settings/ })).toHaveAttribute(
+        "href",
+        "/settings"
+      );
+    },
+    INTEGRATION_TEST_TIMEOUT_MS
+  );
+
   it("warns when the brief's saved preset was deleted", async () => {
     renderStage({ ...DEFAULT_BRIEF_CONFIG, custom_preset_id: PRESET_ID, preset: "security" });
 
     expect(
-      await screen.findByText(/was deleted; the built-in SECURITY preset/)
+      await screen.findByText(/was deleted; the built-in Security preset/)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Security/, checked: true })).toBeInTheDocument();
   });
 });
 
@@ -440,7 +582,7 @@ describe("BriefStage — advanced", () => {
 
       await user.click(await screen.findByRole("button", { name: /Advanced/ }));
       await user.click(
-        await screen.findByRole("button", { name: "Review app/[slug]/page.tsx anyway" })
+        await screen.findByRole("button", { name: "Review anyway: app/[slug]/page.tsx" })
       );
 
       await waitFor(() => {
@@ -464,6 +606,30 @@ describe("BriefStage — advanced", () => {
       "All 2 changed files are excluded by the path filters"
     );
     expect(screen.getByRole("button", { name: /Dispatch/ })).toBeDisabled();
+  });
+
+  it("opens the path filters from the footer when every file is excluded", async () => {
+    api.getExcludedFiles.mockResolvedValue({
+      total: 1,
+      excluded: [{ path: "src/a.py", reason: "(not matched by the include patterns)" }],
+    });
+    const user = userEvent.setup();
+    renderStage({ ...DEFAULT_BRIEF_CONFIG, include_paths: ["docs/**"] });
+    // The footer re-renders when the check runs again for the loaded brief's own filters.
+    await waitFor(() => {
+      expect(api.getExcludedFiles).toHaveBeenLastCalledWith(
+        REVIEW_ID,
+        expect.objectContaining({ include_paths: ["docs/**"] })
+      );
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Edit path filters" }));
+
+    expect(screen.getByRole("button", { name: /Advanced/ })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(screen.getByLabelText("Include only")).toHaveFocus();
   });
 
   it("shows the server's reason when the preview is refused", async () => {
@@ -491,12 +657,52 @@ describe("BriefStage — advanced", () => {
         expect(toggle).toHaveTextContent("1 of 2 changed files excluded");
       });
       await user.click(toggle);
-      await user.click(screen.getByRole("button", { name: "Review uv.lock anyway" }));
+      await user.click(screen.getByRole("button", { name: "Review anyway: uv.lock" }));
 
       await waitFor(() => {
         expect(lastSavedBrief().exclude_paths).toEqual(["!/uv.lock"]);
       }, SAVE_WAIT);
       expect(screen.getByLabelText("Exclude")).toHaveValue("!/uv.lock");
+      // Glob patterns are not words: no spell-check squiggles under them.
+      expect(screen.getByLabelText("Exclude")).toHaveAttribute("spellcheck", "false");
+      expect(screen.getByLabelText("Include only")).toHaveAttribute("spellcheck", "false");
+    },
+    INTEGRATION_TEST_TIMEOUT_MS
+  );
+
+  it(
+    "moves focus to the next file it can take back, then to the summary",
+    async () => {
+      api.getExcludedFiles.mockResolvedValue({
+        total: 3,
+        excluded: [
+          { path: "uv.lock", reason: "*.lock" },
+          { path: "dist/app.js", reason: "dist/" },
+        ],
+      });
+      const user = userEvent.setup();
+      renderStage();
+      await user.click(await screen.findByRole("button", { name: /Advanced/ }));
+
+      await user.click(await screen.findByRole("button", { name: "Review anyway: uv.lock" }));
+      expect(screen.getByRole("button", { name: "Review anyway: dist/app.js" })).toHaveFocus();
+      // Let the re-check for the first file run before the server's answer changes.
+      await waitFor(() => {
+        expect(api.getExcludedFiles).toHaveBeenLastCalledWith(
+          REVIEW_ID,
+          expect.objectContaining({ exclude_paths: ["!/uv.lock"] })
+        );
+      }, SAVE_WAIT);
+
+      api.getExcludedFiles.mockResolvedValue({ total: 3, excluded: [] });
+      await user.click(screen.getByRole("button", { name: "Review anyway: dist/app.js" }));
+      const summary = screen.getByText(/changed files/, { selector: "p" });
+      expect(summary).toHaveFocus();
+
+      await waitFor(() => {
+        expect(summary).toHaveTextContent("All 3 changed files are reviewed.");
+      }, SAVE_WAIT);
+      expect(summary).toHaveFocus();
     },
     INTEGRATION_TEST_TIMEOUT_MS
   );

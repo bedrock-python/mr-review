@@ -1,44 +1,29 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { FileQuestion } from "lucide-react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { copyText } from "@shared/lib";
-import { StageLoading } from "@shared/ui";
+import { EmptyState, Field, ICON_SIZE, StageLoading, Textarea } from "@shared/ui";
 import { useDiffSize } from "@entities/review";
 import { isEverythingExcluded } from "../lib";
 import { useBriefDraft, useExcludedFiles, usePromptPreview } from "../model";
 import { AdvancedSection } from "./AdvancedSection";
-import { ContextFilesField } from "./ContextFilesField";
+import { BriefFooter } from "./BriefFooter";
 import { ContextSection } from "./ContextSection";
 import { FocusAreasField } from "./FocusAreasField";
 import { IntentSection } from "./IntentSection";
 import { OutputSection } from "./OutputSection";
 import { PromptPreviewPanel } from "./PromptPreviewPanel";
 import type { CopyState } from "./PromptPreviewPanel";
-import { SECTION_STYLE, noticeStyle } from "./styles";
 
 const COPIED_RESET_MS = 2000;
-
-const CenteredMessage = ({ children }: { children: React.ReactNode }): React.ReactElement => (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-      gap: 10,
-      color: "var(--fg-2)",
-      fontSize: 13,
-    }}
-  >
-    {children}
-  </div>
-);
+const INSTRUCTIONS_ROWS = 4;
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 export const BriefStage = (): React.ReactElement => {
-  const id = useId();
   const { activeReviewId } = useNav();
   const setStage = useStageBarStore((s) => s.setStage);
   const { isLoading, config, update, flush } = useBriefDraft(activeReviewId);
@@ -49,6 +34,8 @@ export const BriefStage = (): React.ReactElement => {
   const [copy, setCopy] = useState<CopyState>({ status: "idle" });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const includeFieldRef = useRef<HTMLTextAreaElement>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -93,11 +80,23 @@ export const BriefStage = (): React.ReactElement => {
     );
   }, [flush, setStage]);
 
+  // Opens Advanced and puts the cursor in the include patterns, the usual culprit.
+  const handleEditFilters = (): void => {
+    flushSync(() => {
+      setIsAdvancedOpen(true);
+    });
+    // Focusing scrolls the field into view.
+    includeFieldRef.current?.focus();
+  };
+
   if (!activeReviewId) {
     return (
-      <CenteredMessage>
-        No active review session. Go back to Pick and start a review.
-      </CenteredMessage>
+      <EmptyState
+        isFill
+        icon={<FileQuestion size={ICON_SIZE.button} />}
+        title="No review in progress"
+        description="Go back to Pick and start a review."
+      />
     );
   }
 
@@ -105,102 +104,60 @@ export const BriefStage = (): React.ReactElement => {
     return <StageLoading label="Loading review…" />;
   }
 
-  const footer = (
-    <div
-      style={{
-        padding: "12px 16px",
-        borderTop: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        gap: 12,
-        flexShrink: 0,
-      }}
-    >
-      {saveError && (
-        <div role="alert" style={{ ...noticeStyle("var(--c-critical)"), flex: 1 }}>
-          {saveError}
-        </div>
-      )}
-      {!saveError && nothingToReview && (
-        <div role="alert" style={{ ...noticeStyle("var(--c-critical)"), flex: 1 }}>
-          {`All ${String(excludedFiles.data?.total ?? 0)} changed files are excluded by the path filters, so there is nothing to review. Loosen the include or exclude patterns under Advanced.`}
-        </div>
-      )}
-      <button
-        type="button"
-        className="btn primary"
-        onClick={handleDispatch}
-        disabled={isSaving || nothingToReview}
-        style={{ gap: 8 }}
-      >
-        {isSaving ? "Saving…" : "Dispatch"}
-        <span style={{ fontSize: 11, opacity: 0.7 }} aria-hidden="true">
-          →
-        </span>
-      </button>
-    </div>
-  );
-
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1.05fr",
-        height: "100%",
-        overflow: "hidden",
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-col">
       <div
-        style={{
-          overflowY: "auto",
-          padding: "20px 20px 80px",
-          borderRight: "1px solid var(--border)",
-        }}
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.05fr)" }}
       >
-        <IntentSection config={config} onChange={update} />
-        <FocusAreasField
-          value={config.focus_areas}
-          onChange={(focus_areas) => {
-            update({ focus_areas });
-          }}
-        />
-        <OutputSection config={config} onChange={update} />
-        <ContextSection config={config} diffSize={diffSize} onChange={update} />
-        <section style={SECTION_STYLE}>
-          <label className="field-label" htmlFor={`${id}-instructions`}>
-            Custom Instructions
-          </label>
-          <textarea
-            id={`${id}-instructions`}
-            className="field"
-            value={config.custom_instructions}
-            onChange={(event) => {
-              update({ custom_instructions: event.target.value });
-            }}
-            placeholder="Focus on performance bottlenecks in the data layer…"
-            rows={4}
-            style={{ fontSize: 13, fontFamily: "var(--font-sans)" }}
-          />
-        </section>
-        <ContextFilesField
-          isEnabled={config.include_context}
-          paths={config.context_files}
-          onToggle={(include_context) => {
-            update({ include_context });
-          }}
-          onChange={(context_files) => {
-            update({ context_files });
-          }}
-        />
-        <AdvancedSection
-          config={config}
-          excluded={excludedFiles.data}
-          isCheckingExcluded={excludedFiles.isFetching}
-          onChange={update}
-        />
+        <div
+          className="border-border overflow-y-auto border-r"
+          style={{ padding: "var(--space-5)" }}
+        >
+          <div className="flex flex-col" style={{ gap: "var(--space-6)" }}>
+            <IntentSection config={config} onChange={update} />
+            <FocusAreasField
+              value={config.focus_areas}
+              onChange={(focus_areas) => {
+                update({ focus_areas });
+              }}
+            />
+            <OutputSection config={config} onChange={update} />
+            <ContextSection config={config} diffSize={diffSize} onChange={update} />
+            <Field label="Custom instructions" hint="Added after the preset's instructions.">
+              <Textarea
+                rows={INSTRUCTIONS_ROWS}
+                value={config.custom_instructions}
+                placeholder="e.g. Focus on performance bottlenecks in the data layer"
+                onChange={(event) => {
+                  update({ custom_instructions: event.target.value });
+                }}
+              />
+            </Field>
+            <AdvancedSection
+              config={config}
+              excluded={excludedFiles.data}
+              isCheckingExcluded={excludedFiles.isFetching}
+              onChange={update}
+              isOpen={isAdvancedOpen}
+              onOpenChange={setIsAdvancedOpen}
+              includeFieldRef={includeFieldRef}
+            />
+          </div>
+        </div>
+        <PromptPreviewPanel state={preview} copy={copy} onCopy={handleCopy} />
       </div>
-      <PromptPreviewPanel state={preview} copy={copy} onCopy={handleCopy} footer={footer} />
+      <BriefFooter
+        config={config}
+        diffSize={diffSize}
+        preview={preview}
+        excluded={excludedFiles.data}
+        saveError={saveError}
+        isSaving={isSaving}
+        nothingToReview={nothingToReview}
+        onDispatch={handleDispatch}
+        onEditFilters={handleEditFilters}
+      />
     </div>
   );
 };

@@ -1,13 +1,8 @@
-import { useId } from "react";
 import { COMMIT_HISTORY_FILE_LIMIT, formatDiffSize } from "@entities/review";
-import type { BriefConfig, DiffSizeInfo } from "@entities/review";
-import {
-  CHECKBOX_STYLE,
-  HINT_STYLE,
-  SECTION_STYLE,
-  SECTION_TITLE_STYLE,
-  noticeStyle,
-} from "./styles";
+import { Callout, Checkbox } from "@shared/ui";
+import { BriefSection } from "./BriefSection";
+import { ContextFilesField } from "./ContextFilesField";
+import type { BriefConfig, DiffSizeInfo, DiffSizeLevel } from "@entities/review";
 
 type ToggleKey =
   | "include_diff"
@@ -15,7 +10,8 @@ type ToggleKey =
   | "include_full_files"
   | "include_test_context"
   | "include_related_code"
-  | "include_commit_history";
+  | "include_commit_history"
+  | "include_context";
 
 const CONTEXT_TOGGLES: { key: ToggleKey; label: string; hint?: string }[] = [
   { key: "include_diff", label: "Full diff" },
@@ -36,20 +32,34 @@ const CONTEXT_TOGGLES: { key: ToggleKey; label: string; hint?: string }[] = [
     hint: "Up to 20 files the changed Python and JS/TS files import (relative imports only). Reads up to 30 changed files to find the imports.",
   },
   { key: "include_commit_history", label: "Commit history" },
+  {
+    key: "include_context",
+    label: "Project context files",
+    hint: "The repository's own conventions: CLAUDE.md, CONTRIBUTING.md, README.md and the like, or the paths below.",
+  },
 ];
 
-const BADGE_STYLE: React.CSSProperties = {
-  fontSize: 10,
-  borderRadius: "var(--radius-1)",
-  padding: "1px 5px",
+// The checkbox and its gap: notes and fields under a toggle line up with its label.
+const INDENT = "var(--space-6)";
+
+type MetaTone = "plain" | "warn" | "danger";
+
+const META_COLOR: Record<MetaTone, string> = {
+  plain: "var(--fg-2)",
+  warn: "var(--c-warn-fg)",
+  danger: "var(--c-danger-fg)",
 };
 
-const badgeStyle = (warnColor: string | null): React.CSSProperties => ({
-  ...BADGE_STYLE,
-  color: warnColor ?? "var(--fg-2)",
-  background: warnColor ? `color-mix(in oklch, ${warnColor} 12%, var(--bg-2))` : "var(--bg-3)",
-  border: `1px solid ${warnColor ? `color-mix(in oklch, ${warnColor} 35%, transparent)` : "var(--border)"}`,
-});
+const DIFF_TONE: Record<DiffSizeLevel, MetaTone> = { ok: "plain", warn: "warn", large: "danger" };
+
+const Meta = ({ tone, children }: { tone: MetaTone; children: string }): React.ReactElement => (
+  <span
+    className="shrink-0 font-mono"
+    style={{ fontSize: "var(--fs-meta)", color: META_COLOR[tone], paddingTop: "var(--space-1)" }}
+  >
+    {children}
+  </span>
+);
 
 export type ContextSectionProps = {
   config: BriefConfig;
@@ -62,77 +72,82 @@ export const ContextSection = ({
   diffSize,
   onChange,
 }: ContextSectionProps): React.ReactElement => {
-  const id = useId();
-  const diffWarnColor = diffSize.level === "large" ? "var(--c-critical)" : "var(--c-major)";
   const commitFilesOverLimit =
     !diffSize.isLoading && diffSize.fileCount > COMMIT_HISTORY_FILE_LIMIT;
 
+  const meta = (key: ToggleKey): React.ReactNode => {
+    if (diffSize.isLoading) return null;
+    if (key === "include_diff" && diffSize.chars > 0) {
+      return (
+        <Meta tone={DIFF_TONE[diffSize.level]}>
+          {`${formatDiffSize(diffSize.chars)} · ≈ ${diffSize.tokens.toLocaleString()} tokens`}
+        </Meta>
+      );
+    }
+    if (key === "include_commit_history" && diffSize.fileCount > 0) {
+      return (
+        <Meta tone={commitFilesOverLimit ? "warn" : "plain"}>
+          {`${String(diffSize.fileCount)} files`}
+        </Meta>
+      );
+    }
+    return null;
+  };
+
+  const notice = (key: ToggleKey): React.ReactNode => {
+    if (key === "include_diff" && diffSize.level !== "ok") {
+      return (
+        <Callout tone={diffSize.level === "large" ? "danger" : "warn"} size="sm" role="note">
+          {diffSize.level === "large"
+            ? "Diff exceeds ~100k tokens — the prompt budget will cut it. Narrow it with path filters under Advanced, or raise the budget for a larger model."
+            : "Diff is large (~40k+ tokens) and leaves less room for the rest of the prompt."}
+        </Callout>
+      );
+    }
+    if (key === "include_commit_history" && commitFilesOverLimit) {
+      return (
+        <Callout tone="warn" size="sm">
+          {`MR has ${String(diffSize.fileCount)} changed files — commit history will be fetched for the first ${String(COMMIT_HISTORY_FILE_LIMIT)} only.`}
+        </Callout>
+      );
+    }
+    return null;
+  };
+
   return (
-    <section style={SECTION_STYLE} aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} style={SECTION_TITLE_STYLE}>
-        Context
-      </h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <BriefSection title="Context" description="What the prompt carries besides the instructions.">
+      <ul className="m-0 flex list-none flex-col p-0" style={{ gap: "var(--space-3)" }}>
         {CONTEXT_TOGGLES.map((toggle) => {
           const isChecked = config[toggle.key];
-          const isDiff = toggle.key === "include_diff";
-          const isCommitHistory = toggle.key === "include_commit_history";
+          const shownNotice = isChecked ? notice(toggle.key) : null;
           return (
-            <div key={toggle.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
+            <li key={toggle.key} className="flex flex-col" style={{ gap: "var(--space-2)" }}>
+              <div className="flex items-start justify-between" style={{ gap: "var(--space-3)" }}>
+                <Checkbox
+                  label={toggle.label}
                   checked={isChecked}
-                  onChange={(event) => {
-                    onChange({ [toggle.key]: event.target.checked });
+                  onCheckedChange={(checked) => {
+                    onChange({ [toggle.key]: checked });
                   }}
-                  style={CHECKBOX_STYLE}
+                  {...(isChecked && toggle.hint ? { description: toggle.hint } : {})}
                 />
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: isChecked ? "var(--fg-0)" : "var(--fg-2)",
-                    flex: 1,
-                  }}
-                >
-                  {toggle.label}
-                </span>
-                {isDiff && !diffSize.isLoading && diffSize.chars > 0 && (
-                  <span
-                    className="mono"
-                    style={badgeStyle(diffSize.level === "ok" ? null : diffWarnColor)}
-                  >
-                    {formatDiffSize(diffSize.chars)} · ~{diffSize.tokens.toLocaleString()} tokens
-                  </span>
-                )}
-                {isCommitHistory && !diffSize.isLoading && diffSize.fileCount > 0 && (
-                  <span
-                    className="mono"
-                    style={badgeStyle(commitFilesOverLimit ? "var(--c-major)" : null)}
-                  >
-                    {diffSize.fileCount} files
-                  </span>
-                )}
-              </label>
-              {isDiff && isChecked && diffSize.level !== "ok" && (
-                <div style={{ ...noticeStyle(diffWarnColor), marginLeft: 23 }}>
-                  {diffSize.level === "large"
-                    ? "Diff exceeds ~100k tokens — the prompt budget will cut it. Narrow it with path filters under Advanced, or raise the budget for a larger model."
-                    : "Diff is large (~40k+ tokens) and leaves less room for the rest of the prompt."}
+                {meta(toggle.key)}
+              </div>
+              {shownNotice && <div style={{ marginLeft: INDENT }}>{shownNotice}</div>}
+              {toggle.key === "include_context" && isChecked && (
+                <div style={{ marginLeft: INDENT }}>
+                  <ContextFilesField
+                    paths={config.context_files}
+                    onChange={(context_files) => {
+                      onChange({ context_files });
+                    }}
+                  />
                 </div>
               )}
-              {isCommitHistory && isChecked && commitFilesOverLimit && (
-                <div style={{ ...noticeStyle("var(--c-major)"), marginLeft: 23 }}>
-                  {`MR has ${String(diffSize.fileCount)} changed files — commit history will be fetched for the first ${String(COMMIT_HISTORY_FILE_LIMIT)} only.`}
-                </div>
-              )}
-              {toggle.hint && isChecked && (
-                <div style={{ ...HINT_STYLE, marginLeft: 23 }}>{toggle.hint}</div>
-              )}
-            </div>
+            </li>
           );
         })}
-      </div>
-    </section>
+      </ul>
+    </BriefSection>
   );
 };

@@ -1,5 +1,7 @@
-import { useId, useState } from "react";
-import { HINT_STYLE, SECTION_STYLE, SECTION_TITLE_STYLE, toggleChipStyle } from "./styles";
+import { useState } from "react";
+import { Plus } from "lucide-react";
+import { Button, Chip, Field, ICON_SIZE, Input } from "@shared/ui";
+import { BriefSection } from "./BriefSection";
 
 const SUGGESTED_FOCUS_AREAS = [
   "Error handling",
@@ -22,7 +24,6 @@ export type FocusAreasFieldProps = {
 };
 
 export const FocusAreasField = ({ value, onChange }: FocusAreasFieldProps): React.ReactElement => {
-  const id = useId();
   const [draft, setDraft] = useState("");
   const selected = new Set(value);
   const custom = value.filter((area) => !SUGGESTED_FOCUS_AREAS.includes(area));
@@ -38,61 +39,51 @@ export const FocusAreasField = ({ value, onChange }: FocusAreasFieldProps): Reac
   };
 
   return (
-    <section style={SECTION_STYLE} aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} style={SECTION_TITLE_STYLE}>
-        Focus Areas
-      </h2>
-      <div style={{ ...HINT_STYLE, marginBottom: 8 }}>
-        Things the model must check explicitly, on top of the review intent.
+    <BriefSection
+      title="Focus areas"
+      description="Things the model must check explicitly, on top of the review intent."
+    >
+      <div className="flex flex-wrap" style={{ gap: "var(--space-2)" }}>
+        {[...SUGGESTED_FOCUS_AREAS, ...custom].map((area) => (
+          <Chip
+            key={area}
+            isSelected={selected.has(area)}
+            onSelectedChange={() => {
+              toggle(area);
+            }}
+          >
+            {area}
+          </Chip>
+        ))}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {[...SUGGESTED_FOCUS_AREAS, ...custom].map((area) => {
-          const isOn = selected.has(area);
-          return (
-            <button
-              key={area}
-              type="button"
-              aria-pressed={isOn}
-              onClick={() => {
-                toggle(area);
-              }}
-              style={toggleChipStyle(isOn)}
-            >
-              {area}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <label htmlFor={`${id}-new`} className="sr-only">
-          Add a focus area
-        </label>
-        <input
-          id={`${id}-new`}
-          className="field"
-          value={draft}
-          maxLength={MAX_FOCUS_AREA_CHARS}
-          placeholder="Add your own, e.g. Feature flags cleaned up"
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              addDraft();
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="btn"
-          style={{ padding: "4px 10px" }}
+      <div
+        className="flex items-start"
+        style={{ gap: "var(--space-2)", marginTop: "var(--space-3)" }}
+      >
+        <Field label="Add a focus area" isLabelHidden className="flex-1">
+          <Input
+            value={draft}
+            maxLength={MAX_FOCUS_AREA_CHARS}
+            placeholder="Add your own, e.g. Feature flags cleaned up"
+            onChange={(event) => {
+              setDraft(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addDraft();
+              }
+            }}
+          />
+        </Field>
+        <Button
+          icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
           disabled={!draft.trim()}
           onClick={addDraft}
         >
           Add
-        </button>
+        </Button>
       </div>
-    </section>
+    </BriefSection>
   );
 };

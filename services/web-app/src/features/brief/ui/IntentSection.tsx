@@ -1,23 +1,21 @@
 import { useId, useState } from "react";
+import { toast } from "sonner";
+import { BookmarkPlus, Eye, EyeOff } from "lucide-react";
 import {
-  PresetEditor,
   useBuiltinPresets,
-  useCreateReviewPreset,
   useDeleteReviewPreset,
   useReviewPresets,
-  useUpdateReviewPreset,
 } from "@entities/review-preset";
-import type { ReviewPreset, ReviewPresetForm } from "@entities/review-preset";
+import { Button, Callout, Card, ICON_SIZE } from "@shared/ui";
+import { BUILTIN_PRESET_CARDS, applyPreset, changedFields } from "../lib";
+import { BriefSection } from "./BriefSection";
+import { PresetPicker } from "./PresetPicker";
+import { SavedPresetList } from "./SavedPresetList";
+import { SavePresetForm } from "./SavePresetForm";
 import type { BriefConfig } from "@entities/review";
-import { BUILTIN_PRESET_CARDS, applyPreset, presetOverridesFrom } from "../lib";
-import { BuiltinPresetGrid, SavedPresetList } from "./PresetCards";
-import {
-  CHECKBOX_STYLE,
-  HINT_STYLE,
-  SECTION_STYLE,
-  SECTION_TITLE_STYLE,
-  noticeStyle,
-} from "./styles";
+import type { ReviewPreset } from "@entities/review-preset";
+
+const PRESET_UNDO_TOAST_ID = "brief-preset-applied";
 
 export type IntentSectionProps = {
   config: BriefConfig;
@@ -26,15 +24,16 @@ export type IntentSectionProps = {
 
 type EditorState = { mode: "create" } | { mode: "edit"; preset: ReviewPreset } | null;
 
+const icon = (Icon: typeof Eye): React.ReactNode => (
+  <Icon size={ICON_SIZE.inline} aria-hidden="true" />
+);
+
 export const IntentSection = ({ config, onChange }: IntentSectionProps): React.ReactElement => {
   const id = useId();
   const { data: presets } = useReviewPresets();
   const { data: builtins } = useBuiltinPresets();
-  const createPreset = useCreateReviewPreset();
-  const updatePreset = useUpdateReviewPreset();
   const deletePreset = useDeleteReviewPreset();
   const [editor, setEditor] = useState<EditorState>(null);
-  const [storeSettings, setStoreSettings] = useState(true);
   const [showInstructions, setShowInstructions] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
@@ -47,32 +46,27 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
   const shownInstructions = customText !== "" ? customText : builtinText;
   const builtinLabel = BUILTIN_PRESET_CARDS.find((card) => card.id === config.preset)?.label ?? "";
 
-  const openEditor = (next: EditorState): void => {
-    createPreset.reset();
-    updatePreset.reset();
-    setStoreSettings(next?.mode === "create");
-    setEditor(next);
-  };
-
-  const handleSubmit = (values: ReviewPresetForm): void => {
-    const overrides = storeSettings ? { brief_config: presetOverridesFrom(config) } : {};
-    if (editor?.mode === "edit") {
-      updatePreset.mutate(
-        { id: editor.preset.id, data: { ...values, ...overrides } },
-        {
-          onSuccess: () => {
-            setEditor(null);
-          },
-        }
-      );
+  // Applying a saved preset overwrites brief settings; Undo puts back what it changed.
+  const handleToggleSaved = (preset: ReviewPreset): void => {
+    setConfirmingDeleteId(null);
+    if (preset.id === config.custom_preset_id) {
+      onChange({ custom_preset_id: null });
       return;
     }
-    createPreset.mutate(
-      { ...values, ...overrides },
+    const next = applyPreset(config, preset.id, preset.brief_config);
+    const undo = changedFields(config, next);
+    onChange(next);
+    const overwritten = Object.keys(undo).filter((key) => key !== "custom_preset_id").length;
+    if (overwritten === 0) return;
+    toast(
+      `Applied preset ${preset.name}: ${String(overwritten)} brief setting${overwritten === 1 ? "" : "s"} changed`,
       {
-        onSuccess: (preset) => {
-          onChange({ custom_preset_id: preset.id });
-          setEditor(null);
+        id: PRESET_UNDO_TOAST_ID,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            onChange(undo);
+          },
         },
       }
     );
@@ -91,48 +85,47 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
     });
   };
 
-  const isSaving = createPreset.isPending || updatePreset.isPending;
-  const saveError =
-    (editor?.mode === "edit" ? updatePreset.error : createPreset.error)?.message ?? null;
-
   return (
-    <section style={SECTION_STYLE} aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} style={SECTION_TITLE_STYLE}>
-        Review Intent
-      </h2>
-      <BuiltinPresetGrid
-        selected={builtinSelected}
-        onSelect={(preset) => {
-          onChange({ preset, custom_preset_id: null });
-        }}
-      />
-      {presets && presets.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ ...HINT_STYLE, marginBottom: 6 }}>Saved presets</div>
+    <BriefSection
+      title="Review intent"
+      description="What the review looks for: a built-in preset, or one you saved."
+    >
+      <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
+        <PresetPicker
+          selected={builtinSelected}
+          onSelect={(preset) => {
+            setConfirmingDeleteId(null);
+            onChange({ preset, custom_preset_id: null });
+          }}
+        />
+        {presets && presets.length > 0 && (
           <SavedPresetList
             presets={presets}
             selectedId={selectedCustom?.id ?? null}
             confirmingDeleteId={confirmingDeleteId}
-            onSelect={(preset) => {
-              onChange(applyPreset(config, preset.id, preset.brief_config));
-            }}
+            deletingId={deletePreset.isPending ? deletePreset.variables : null}
+            onToggle={handleToggleSaved}
             onEdit={(preset) => {
-              openEditor({ mode: "edit", preset });
+              setConfirmingDeleteId(null);
+              setEditor({ mode: "edit", preset });
             }}
             onDelete={handleDelete}
           />
-        </div>
-      )}
+        )}
+      </div>
       {isMissing && (
-        <div role="status" style={{ ...noticeStyle("var(--c-major)"), marginTop: 8 }}>
+        <Callout tone="warn" size="sm" role="status" style={{ marginTop: "var(--space-3)" }}>
           {`The saved preset this brief used was deleted; the built-in ${builtinLabel} preset is used instead.`}
-        </div>
+        </Callout>
       )}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button
-          type="button"
-          className="btn ghost"
-          style={{ padding: "4px 8px", fontSize: 11 }}
+      <div
+        className="flex flex-wrap items-center"
+        style={{ gap: "var(--space-1)", marginTop: "var(--space-2)" }}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={icon(showInstructions ? EyeOff : Eye)}
           aria-expanded={showInstructions}
           aria-controls={`${id}-instructions`}
           onClick={() => {
@@ -140,75 +133,45 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
           }}
         >
           {showInstructions ? "Hide instructions" : "View instructions"}
-        </button>
-        <button
-          type="button"
-          className="btn ghost"
-          style={{ padding: "4px 8px", fontSize: 11 }}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={icon(BookmarkPlus)}
           onClick={() => {
-            openEditor({ mode: "create" });
+            setEditor({ mode: "create" });
           }}
         >
           Save as preset…
-        </button>
+        </Button>
       </div>
       {showInstructions && (
-        <pre
-          id={`${id}-instructions`}
-          aria-label="Preset instructions"
-          style={{
-            margin: "8px 0 0",
-            padding: "8px 10px",
-            borderRadius: "var(--radius-2)",
-            border: "1px solid var(--border)",
-            background: "var(--bg-1)",
-            fontSize: 11,
-            color: "var(--fg-1)",
-            whiteSpace: "pre-wrap",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          {shownInstructions || "Loading…"}
-        </pre>
+        <Card surface="sunken" padding="sm" style={{ marginTop: "var(--space-2)" }}>
+          <pre
+            id={`${id}-instructions`}
+            aria-label="Preset instructions"
+            className="text-fg-1 m-0 font-mono whitespace-pre-wrap"
+            style={{ fontSize: "var(--fs-meta)", lineHeight: "var(--lh-body)" }}
+          >
+            {shownInstructions || "Loading…"}
+          </pre>
+        </Card>
       )}
       {editor && (
-        <div style={{ marginTop: 10 }}>
-          <PresetEditor
-            key={editor.mode === "edit" ? editor.preset.id : "new"}
-            title={editor.mode === "edit" ? `Edit preset ${editor.preset.name}` : "Save as preset"}
-            submitLabel={editor.mode === "edit" ? "Save changes" : "Save preset"}
-            initial={
-              editor.mode === "edit"
-                ? {
-                    name: editor.preset.name,
-                    description: editor.preset.description,
-                    instructions: editor.preset.instructions,
-                  }
-                : { name: "", description: "", instructions: shownInstructions }
-            }
-            isSaving={isSaving}
-            error={saveError}
-            onSubmit={handleSubmit}
-            onCancel={() => {
-              setEditor(null);
-            }}
-          >
-            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", ...HINT_STYLE }}>
-              <input
-                type="checkbox"
-                checked={storeSettings}
-                onChange={(event) => {
-                  setStoreSettings(event.target.checked);
-                }}
-                style={{ ...CHECKBOX_STYLE, marginTop: 2 }}
-              />
-              {editor.mode === "edit"
-                ? "Replace its stored settings with this brief's (focus areas, output, context, filters)"
-                : "Also store this brief's settings (focus areas, output, context, filters)"}
-            </label>
-          </PresetEditor>
-        </div>
+        <SavePresetForm
+          key={editor.mode === "edit" ? editor.preset.id : "new"}
+          config={config}
+          editing={editor.mode === "edit" ? editor.preset : null}
+          defaultInstructions={shownInstructions}
+          onSaved={(preset) => {
+            if (editor.mode === "create") onChange({ custom_preset_id: preset.id });
+            setEditor(null);
+          }}
+          onCancel={() => {
+            setEditor(null);
+          }}
+        />
       )}
-    </section>
+    </BriefSection>
   );
 };
