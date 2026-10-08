@@ -8,11 +8,11 @@ PICK → BRIEF → DISPATCH → POLISH → POST
 
 ## PICK — select what to review
 
-Open an MR from the host browser. The diff viewer shows all changed files.
-
-- Click any file to expand it
-- Pin specific lines to draw the AI's attention to them
-- Deselect files you don't want included in the review
+Open an MR from the host browser. The changed files are listed as a tree (or a flat list) with
+their added and removed lines; the filter narrows them by path. Click a file to see its diff,
+or move through the tree with the arrow keys — → and ← open and close folders — and press
+Enter. The sidebar shows the MR's description, state and pipeline. **Compose prompt** moves
+on to the Brief. Which files the review covers is set there, with path filters.
 
 ## BRIEF — configure the prompt
 
@@ -23,9 +23,9 @@ Before dispatching to the AI, tune the review brief. Everything is saved as you 
   the top of the prompt. **Save as preset…** stores the current intent under a name — with
   its instructions, which you can rewrite, and optionally this brief's settings (focus areas,
   output, context toggles, exclude patterns, the advanced options), applied whenever the
-  preset is picked. Saved presets can be edited or deleted here and under **Settings →
-  Review presets**; a brief whose preset was deleted falls back to its built-in one and says
-  so.
+  preset is picked. The saved preset in use can be edited or deleted here, any of them under
+  **Settings → Review presets**; a brief whose preset was deleted falls back to its built-in
+  one and says so.
 - **Focus areas** — a checklist the model must go through explicitly: pick common ones
   (error handling, concurrency, test coverage…) or add your own.
 - **Output** — the language for comment bodies (empty: the language of the code and the MR),
@@ -46,8 +46,8 @@ Before dispatching to the AI, tune the review brief. Everything is saved as you 
     are not. Each excluded file is listed with the pattern that excluded it, and **Review
     anyway** takes one back in (it adds `!/path`, escaped, to the exclude patterns), even
     from an excluded directory. Excluded files are left out of the diff and of every context
-    lookup. If the patterns leave none of the changed files, the Brief says so and Dispatch
-    stays disabled.
+    lookup. If the patterns leave none of the changed files, the Brief says so, **Continue to
+    Dispatch** stays disabled, and **Edit path filters** takes you to the patterns.
   - *Number diff lines* (on by default) — each diff line carries its line number in the new
     file and the model is told to anchor comments to those numbers, so far fewer comments
     land on the wrong line.
@@ -68,8 +68,9 @@ brief afterwards marks it **Out of date** rather than rebuilding it on every key
 **Refresh** builds it again. **Copy** puts it on the clipboard, also on a plain-http address
 where the browser's clipboard API is unavailable.
 
-**Dispatch** saves the brief first and moves on only once it is saved; if saving fails, you
-stay on the Brief and the error says why.
+The bar at the bottom sums the brief up — the preset, what the prompt carries, roughly how many
+tokens — next to **Continue to Dispatch**, which saves the brief first and moves on only once
+it is saved; if saving fails, you stay on the Brief and the error says why.
 
 ## DISPATCH — run the review
 
