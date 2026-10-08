@@ -110,6 +110,61 @@ describe("Button", () => {
     expect(handleClick).not.toHaveBeenCalled();
   });
 
+  it("draws an xs size and the danger tone on a quiet button", () => {
+    render(
+      <Button variant="ghost" tone="danger" size="xs">
+        Remove
+      </Button>
+    );
+
+    expect(screen.getByRole("button")).toHaveClass(
+      "ui-btn--ghost",
+      "ui-btn--xs",
+      "ui-btn--tone-danger"
+    );
+  });
+
+  it("with a disabled reason: stays focusable, ignores clicks, says why", async () => {
+    const user = userEvent.setup();
+    const handleClick = vi.fn();
+    render(
+      <Button disabledReason="Posted iterations are read-only" onClick={handleClick}>
+        New comment
+      </Button>
+    );
+    const button = screen.getByRole("button", { name: "New comment" });
+
+    await user.tab();
+    expect(button).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Posted iterations are read-only");
+    await user.keyboard("{Enter}");
+    await user.click(button);
+
+    expect(handleClick).not.toHaveBeenCalled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).not.toBeDisabled();
+  });
+
+  it("works again once the reason is gone, and shows its own tooltip", async () => {
+    const user = userEvent.setup();
+    const handleClick = vi.fn();
+    render(
+      <Button tooltip="New comment" shortcut="n" disabledReason={null} onClick={handleClick}>
+        Add
+      </Button>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.tab();
+    await user.tab({ shift: true });
+
+    expect(handleClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button")).not.toHaveAttribute("aria-disabled");
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("New comment");
+    expect(tooltip).toHaveTextContent("n");
+  });
+
   it("forwards the ref to the button", () => {
     const ref = { current: null as HTMLButtonElement | null };
     render(<Button ref={ref}>Go</Button>);

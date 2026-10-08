@@ -69,10 +69,10 @@ export const RowActions = ({
       </Button>
       <Button
         variant="ghost"
+        tone="danger"
         size="sm"
         icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
         aria-label={`Remove ${name}`}
-        style={{ color: "var(--c-danger-fg)" }}
         disabled={isRemoved}
         onClick={() => {
           setIsConfirming(true);

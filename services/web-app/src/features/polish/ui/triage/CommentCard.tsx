@@ -18,9 +18,6 @@ type CommentCardProps = {
 };
 
 const LOCKED_DELETE_REASON = "This iteration was posted; comments can't be deleted";
-/** The look IconButton gives `disabled`, for one that is only aria-disabled. */
-const LOCKED_ICON_BUTTON_CLASS =
-  "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-fg-2";
 
 const locationOf = (comment: Comment): string => {
   if (comment.file === null) return "general";
@@ -134,12 +131,10 @@ const CommentCardBase = ({
             size="sm"
             variant="danger"
             label="Delete comment"
-            tooltip={isLocked ? LOCKED_DELETE_REASON : undefined}
-            aria-disabled={isLocked ? true : undefined}
-            className={cn(isLocked && LOCKED_ICON_BUTTON_CLASS)}
+            disabledReason={isLocked ? LOCKED_DELETE_REASON : null}
             icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
             onClick={() => {
-              if (!isLocked) handlers.onDelete(id);
+              handlers.onDelete(id);
             }}
           />
         </div>
@@ -165,8 +160,8 @@ const CommentCardBase = ({
         <div className="flex flex-col items-start gap-(--space-2)">
           <Button
             variant="ghost"
-            size="sm"
-            className="-ml-(--space-2)"
+            size="xs"
+            className="-ml-(--space-1)"
             aria-expanded={isContextOpen}
             icon={
               <ChevronRight

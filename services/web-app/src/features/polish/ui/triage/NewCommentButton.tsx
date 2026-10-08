@@ -1,10 +1,7 @@
 import { Plus } from "lucide-react";
-import { cn } from "@shared/lib";
-import { Button, ICON_SIZE, IconButton, Tooltip } from "@shared/ui";
+import { Button, ICON_SIZE, IconButton } from "@shared/ui";
 
 const LOCKED_REASON = "This iteration was posted; it can't take new comments";
-/** The look IconButton gives `disabled`, for one that is only aria-disabled. */
-const LOCKED_ICON_BUTTON_CLASS = "cursor-not-allowed opacity-40 hover:bg-transparent";
 
 type NewCommentButtonProps = {
   /** Only the icon, for a narrow row. */
@@ -22,10 +19,8 @@ export const NewCommentButton = ({
   isLocked,
   onAdd,
 }: NewCommentButtonProps): React.ReactElement => {
-  const handleClick = (): void => {
-    if (!isLocked) onAdd();
-  };
   const icon = <Plus size={ICON_SIZE.inline} aria-hidden="true" />;
+  const disabledReason = isLocked ? LOCKED_REASON : null;
 
   if (isCompact) {
     return (
@@ -33,27 +28,23 @@ export const NewCommentButton = ({
         size="sm"
         variant="secondary"
         label="New comment"
-        {...(isLocked ? { tooltip: LOCKED_REASON } : { shortcut: "n" })}
-        aria-disabled={isLocked ? true : undefined}
-        className={cn(isLocked && LOCKED_ICON_BUTTON_CLASS)}
+        shortcut="n"
+        disabledReason={disabledReason}
         icon={icon}
-        onClick={handleClick}
+        onClick={onAdd}
       />
     );
   }
   return (
-    <Tooltip
-      content={isLocked ? LOCKED_REASON : "New comment"}
-      {...(isLocked ? {} : { shortcut: "n" })}
+    <Button
+      size="sm"
+      icon={icon}
+      tooltip="New comment"
+      shortcut="n"
+      disabledReason={disabledReason}
+      onClick={onAdd}
     >
-      <Button
-        size="sm"
-        icon={icon}
-        aria-disabled={isLocked ? true : undefined}
-        onClick={handleClick}
-      >
-        New comment
-      </Button>
-    </Tooltip>
+      New comment
+    </Button>
   );
 };

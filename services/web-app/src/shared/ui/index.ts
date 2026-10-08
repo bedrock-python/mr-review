@@ -5,6 +5,7 @@ export type {
   IconButtonProps,
   ButtonClassOptions,
   ButtonSize,
+  ButtonTone,
   ButtonVariant,
 } from "./button";
 export { Tooltip, Kbd } from "./tooltip";
