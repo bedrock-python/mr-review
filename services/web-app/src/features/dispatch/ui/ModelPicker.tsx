@@ -1,151 +1,128 @@
-import { useEffect, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+
+import { Check, ChevronDown, Search } from "lucide-react";
+
+import { ICON_SIZE, Input } from "@shared/ui";
+
+const LIST_MAX_HEIGHT_PX = 240;
 
 export type ModelPickerProps = {
   models: string[];
   value: string;
   onChange: (model: string) => void;
   isDisabled: boolean;
-  accentColor: string;
 };
 
 /**
- * Pick one of the provider's models or type any other id: Enter, or the "Use …" entry, takes the
- * typed text as the model.
+ * Pick one of the provider's models or type any other id. The field shows the chosen model;
+ * typing searches the list, and Enter, or the "Use …" entry, takes the typed text as the model.
+ * Escape and leaving the field drop the search. Use inside a Field, which names it.
  */
 export const ModelPicker = ({
   models,
   value,
   onChange,
   isDisabled,
-  accentColor,
 }: ModelPickerProps): React.ReactElement => {
-  const [search, setSearch] = useState("");
+  // What the user typed since opening the list; null while the field shows the chosen model.
+  const [draft, setDraft] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
+  // A click that focuses the field selects its text, so typing replaces the model id.
+  const isSelectingOnMouseUp = useRef(false);
+  const listId = useId();
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent): void => {
-      const target = e.target as Node;
-      if (!dropRef.current?.contains(target) && !inputRef.current?.contains(target)) {
-        setIsOpen(false);
-        setSearch("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  const typed = search.trim();
-  const matches = models.filter((m) => m.toLowerCase().includes(typed.toLowerCase()));
+  const typed = draft?.trim() ?? "";
+  const matches =
+    draft === null ? models : models.filter((m) => m.toLowerCase().includes(typed.toLowerCase()));
   const canUseTyped = typed !== "" && !models.includes(typed);
+
+  const close = (): void => {
+    setIsOpen(false);
+    setDraft(null);
+  };
 
   const choose = (model: string): void => {
     onChange(model);
-    setIsOpen(false);
-    setSearch("");
+    close();
   };
 
   return (
     <div style={{ position: "relative" }}>
-      <div
-        className="ui-focus-within"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          borderRadius: "var(--radius-3)",
-          border: `1.5px solid ${isOpen ? accentColor : "var(--border)"}`,
-          background: "var(--bg-1)",
-          padding: "0 10px",
-          transition: "border-color 0.1s",
+      <Input
+        type="text"
+        isMono
+        data-testid="selected-model"
+        autoComplete="off"
+        spellCheck={false}
+        aria-controls={isOpen ? listId : undefined}
+        disabled={isDisabled}
+        placeholder="Search or type a model id…"
+        value={draft ?? value}
+        leadingIcon={<Search size={ICON_SIZE.inline} />}
+        trailing={
+          <ChevronDown
+            size={ICON_SIZE.inline}
+            aria-hidden="true"
+            style={{ color: "var(--fg-2)", flexShrink: 0 }}
+          />
+        }
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setIsOpen(true);
         }}
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          style={{ flexShrink: 0, color: "var(--fg-2)" }}
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          ref={inputRef}
-          type="text"
-          aria-label="Model"
-          disabled={isDisabled}
-          placeholder={value ? "Search or type a model id…" : "Type a model id…"}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && typed) {
-              e.preventDefault();
-              choose(typed);
-            } else if (e.key === "Escape") {
-              setIsOpen(false);
-              setSearch("");
-            }
-          }}
-          style={{
-            flex: 1,
-            border: "none",
-            background: "transparent",
-            fontSize: 13,
-            fontFamily: "var(--font-mono)",
-            color: "var(--fg-0)",
-            padding: "9px 0",
-            cursor: isDisabled ? "not-allowed" : "text",
-          }}
-        />
-        {value && !search && (
-          <span
-            data-testid="selected-model"
-            style={{
-              fontSize: 11,
-              color: "var(--fg-2)",
-              flexShrink: 0,
-              fontFamily: "var(--font-mono)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: 260,
-            }}
-          >
-            {value}
-          </span>
-        )}
-      </div>
+        onFocus={(e) => {
+          setIsOpen(true);
+          isSelectingOnMouseUp.current = true;
+          e.currentTarget.select();
+        }}
+        onMouseUp={(e) => {
+          if (!isSelectingOnMouseUp.current) return;
+          isSelectingOnMouseUp.current = false;
+          e.preventDefault();
+          e.currentTarget.select();
+        }}
+        onClick={() => {
+          // Reopens the list after Escape closed it with the focus still here.
+          setIsOpen(true);
+        }}
+        onBlur={() => {
+          isSelectingOnMouseUp.current = false;
+          close();
+        }}
+        onKeyDown={(e) => {
+          isSelectingOnMouseUp.current = false;
+          if (e.key === "Enter" && typed) {
+            e.preventDefault();
+            choose(typed);
+          } else if (e.key === "Escape") {
+            close();
+          }
+        }}
+      />
 
       {isOpen && (
         <div
-          ref={dropRef}
+          id={listId}
           role="listbox"
           aria-label="Models"
+          // Keeps focus in the field, so picking an option or scrolling the list doesn't close it.
+          onMouseDown={(e) => {
+            e.preventDefault();
+          }}
           style={{
             position: "absolute",
-            top: "calc(100% + 4px)",
+            top: "calc(100% + var(--space-1))",
             left: 0,
             right: 0,
-            zIndex: 100,
-            borderRadius: "var(--radius-3)",
-            border: "1px solid var(--border)",
+            zIndex: "var(--z-popover)",
+            display: "flex",
+            flexDirection: "column",
+            padding: "var(--space-1)",
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border-strong)",
             background: "var(--bg-1)",
             boxShadow: "var(--shadow-pop)",
-            maxHeight: 240,
+            maxHeight: LIST_MAX_HEIGHT_PX,
             overflowY: "auto",
           }}
         >
@@ -153,7 +130,6 @@ export const ModelPicker = ({
             <ModelOption
               label={`Use “${typed}”`}
               isSelected={false}
-              accentColor={accentColor}
               onSelect={() => {
                 choose(typed);
               }}
@@ -164,16 +140,23 @@ export const ModelPicker = ({
               key={m}
               label={m}
               isSelected={m === value}
-              accentColor={accentColor}
               onSelect={() => {
                 choose(m);
               }}
             />
           ))}
           {matches.length === 0 && !canUseTyped && (
-            <div style={{ padding: 12, fontSize: 12, color: "var(--fg-2)", textAlign: "center" }}>
+            <p
+              style={{
+                margin: 0,
+                padding: "var(--space-3)",
+                fontSize: "var(--fs-control)",
+                color: "var(--fg-2)",
+                textAlign: "center",
+              }}
+            >
               No models configured — type a model id
-            </div>
+            </p>
           )}
         </div>
       )}
@@ -184,52 +167,36 @@ export const ModelPicker = ({
 type ModelOptionProps = {
   label: string;
   isSelected: boolean;
-  accentColor: string;
   onSelect: () => void;
 };
 
-const ModelOption = ({
-  label,
-  isSelected,
-  accentColor,
-  onSelect,
-}: ModelOptionProps): React.ReactElement => (
+const ModelOption = ({ label, isSelected, onSelect }: ModelOptionProps): React.ReactElement => (
   <button
     type="button"
     role="option"
     aria-selected={isSelected}
-    onMouseDown={(e) => {
-      e.preventDefault();
-      onSelect();
-    }}
+    tabIndex={-1}
+    className="hover:bg-bg-hover"
+    onClick={onSelect}
     style={{
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      gap: "var(--space-2)",
       width: "100%",
-      padding: "8px 12px",
-      background: isSelected
-        ? `color-mix(in oklch, ${accentColor} 10%, var(--bg-0))`
-        : "transparent",
-      border: "none",
-      cursor: "pointer",
+      minHeight: "var(--control-md)",
+      padding: "0 var(--space-2)",
+      borderRadius: "var(--radius-control)",
       textAlign: "left",
+      fontFamily: "var(--font-mono)",
+      fontSize: "var(--fs-control)",
+      color: isSelected ? "var(--fg-0)" : "var(--fg-1)",
+      fontWeight: isSelected ? "var(--fw-medium)" : "var(--fw-regular)",
     }}
   >
-    <span style={{ width: 12, flexShrink: 0, color: accentColor }} aria-hidden="true">
-      {isSelected ? "✓" : ""}
+    <span style={{ display: "inline-flex", width: ICON_SIZE.inline, flexShrink: 0 }}>
+      {isSelected && <Check size={ICON_SIZE.inline} aria-hidden="true" color="var(--accent-fg)" />}
     </span>
-    <span
-      style={{
-        fontSize: 13,
-        fontFamily: "var(--font-mono)",
-        color: isSelected ? "var(--fg-0)" : "var(--fg-1)",
-        fontWeight: isSelected ? 600 : 400,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}
-    >
+    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       {label}
     </span>
   </button>

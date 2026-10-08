@@ -294,11 +294,13 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
 
     expect(await screen.findByText("1 comment saved")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
-    expect(screen.getByText("Claude · done")).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "Generation output" });
+    expect(within(panel).getByText("Done")).toBeInTheDocument();
     expect(api.get).toHaveBeenCalledTimes(2);
 
-    await user.click(screen.getByRole("button", { name: "Polish comments →" }));
+    await user.click(screen.getByRole("button", { name: "Polish 1 comment" }));
     expect(stage.setStage).toHaveBeenCalledWith("polish");
+    expect(screen.getByRole("button", { name: "Run again" })).toBeEnabled();
   });
 
   it("shows the error message and refetches the review the server kept", async () => {
@@ -308,14 +310,38 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
 
     channel.emit({ type: "chunk", text: "[{" }, { type: "error", message: "Rate limit exceeded" });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Rate limit exceeded");
-    expect(screen.getByText("Claude · failed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Run again with Claude/ })).toBeEnabled();
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("Rate limit exceeded");
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No comments were parsed from the response.")
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/saved$/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Polish comments →" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Polish/ })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledTimes(2);
     });
+
+    createDispatchChannel();
+    await user.click(within(notice).getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(api.dispatchStream).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers Copy & paste when the run fails", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    channel.emit({ type: "error", message: "Rate limit exceeded" });
+    const notice = await screen.findByRole("alert");
+    await user.click(within(notice).getByRole("button", { name: "Use Copy & paste" }));
+
+    expect(screen.getByRole("radio", { name: "Copy & paste" })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
+    expect(await screen.findByRole("button", { name: "Browse file" })).toBeInTheDocument();
   });
 
   it("aborts the run when the stage unmounts", async () => {
@@ -397,8 +423,16 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
 
     channel.emit({ type: "done", result: { ...RESULT, truncated: true } });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Model output was truncated — some comments may be missing; raise max tokens or narrow the context"
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("The model output was cut off");
+    expect(notice).toHaveTextContent(
+      "Some comments may be missing. Raise max output tokens or narrow the context"
+    );
+    // Saved, but not cleanly: the run reads as needing a look, not as a plain success.
+    const panel = screen.getByRole("region", { name: "Generation output" });
+    expect(within(panel).getByText("Done").closest("[data-tone]")).toHaveAttribute(
+      "data-tone",
+      "warn"
     );
   });
 
@@ -430,7 +464,8 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
 
     await user.click(screen.getByRole("button", { name: "Stop" }));
 
-    expect(await screen.findByText("Claude · stopped")).toBeInTheDocument();
+    expect(await screen.findByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run again" })).toBeEnabled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledTimes(2);
@@ -531,13 +566,35 @@ describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS
     renderStage();
     const channel = await startDispatch(user);
 
-    const copyAndPaste = screen.getByRole("button", { name: "Copy & paste" });
-    expect(copyAndPaste).toBeDisabled();
+    const copyAndPaste = screen.getByRole("radio", { name: "Copy & paste" });
+    expect(copyAndPaste).toHaveAttribute("aria-disabled", "true");
     expect(copyAndPaste).toHaveAttribute("title", "Stop the generation to switch modes");
+    await user.click(copyAndPaste);
+    expect(screen.getByRole("radio", { name: "Run in app" })).toHaveAttribute(
+      "aria-checked",
+      "true"
+    );
 
     channel.emit({ type: "done", result: RESULT });
     await screen.findByText("1 comment saved");
-    expect(copyAndPaste).toBeEnabled();
+    expect(copyAndPaste).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("folds the form into the run's header line and opens it again on Edit", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    expect(await screen.findByRole("radiogroup", { name: "Provider" })).toBeInTheDocument();
+    const channel = await startDispatch(user);
+
+    expect(screen.queryByRole("radiogroup", { name: "Provider" })).not.toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "Generation output" });
+    expect(within(panel).getByText("claude-model")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /Edit/ })).not.toBeInTheDocument();
+
+    channel.emit({ type: "done", result: RESULT });
+    await user.click(await within(panel).findByRole("button", { name: /Edit/ }));
+    expect(screen.getByRole("radiogroup", { name: "Provider" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /Edit/ })).not.toBeInTheDocument();
   });
 
   it("lists the saved comments once done, not the previews streamed before", async () => {
@@ -614,6 +671,11 @@ describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS
     expect(notice).toHaveTextContent("Your 2 previous comments are unchanged");
     expect(within(notice).queryByRole("button", { name: "Re-parse" })).not.toBeInTheDocument();
     expect(screen.getByText("2 comments kept from before")).toBeInTheDocument();
+    // Nothing new to polish: running again leads, the kept comments stay one click away.
+    expect(screen.getByRole("button", { name: "Run again" })).toHaveClass("ui-btn--primary");
+    expect(screen.getByRole("button", { name: "Polish 2 comments" })).toHaveClass(
+      "ui-btn--secondary"
+    );
 
     await user.click(within(notice).getByRole("button", { name: "View this run's output" }));
     expect(await screen.findByLabelText("This run's model output")).toHaveTextContent(
@@ -654,12 +716,13 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
 
     expect(await screen.findByText(/not accepted by this model/)).toBeInTheDocument();
     expect(screen.queryByRole("slider", { name: "Temperature" })).not.toBeInTheDocument();
-    const efforts = screen.getByRole("group", { name: "Reasoning effort" });
-    expect(within(efforts).getByRole("button", { name: "Default (medium)" })).toHaveAttribute(
-      "aria-pressed",
+    expect(screen.queryByRole("switch", { name: "Reasoning" })).not.toBeInTheDocument();
+    const efforts = screen.getByRole("radiogroup", { name: "Reasoning effort" });
+    expect(within(efforts).getByRole("radio", { name: "Default (medium)" })).toHaveAttribute(
+      "aria-checked",
       "true"
     );
-    await user.click(within(efforts).getByRole("button", { name: "xhigh" }));
+    await user.click(within(efforts).getByRole("radio", { name: "xhigh" }));
     await generate(user);
 
     expect(dispatchedRequest()).toMatchObject({
@@ -679,7 +742,8 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     fireEvent.change(await screen.findByRole("slider", { name: "Temperature" }), {
       target: { value: "0.4" },
     });
-    await user.click(screen.getByRole("button", { name: "Reasoning" }));
+    await user.click(screen.getByRole("switch", { name: "Reasoning" }));
+    expect(screen.getByRole("switch", { name: "Reasoning" })).toBeChecked();
     expect(screen.getByRole("slider", { name: "Temperature" })).toBeDisabled();
     expect(screen.getByRole("slider", { name: "Thinking budget" })).toHaveAttribute("max", "59904");
     await generate(user);
@@ -689,6 +753,43 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
       reasoningEffort: null,
       temperature: null,
     });
+  });
+
+  it("shows the chosen model in the picker and searches once something is typed", async () => {
+    providersQuery.data = [OTHER_PROVIDER];
+    const user = userEvent.setup();
+    renderStage();
+
+    const picker = await screen.findByRole("textbox", { name: "Model" });
+    expect(picker).toHaveValue("gpt-a");
+    await user.click(picker);
+    const list = screen.getByRole("listbox", { name: "Models" });
+    expect(
+      within(list)
+        .getAllByRole("option")
+        .map((o) => o.textContent)
+    ).toEqual(["gpt-a", "gpt-b"]);
+    expect(within(list).getByRole("option", { name: "gpt-a" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    await user.keyboard("b");
+    expect(picker).toHaveValue("b");
+    expect(
+      within(list)
+        .getAllByRole("option")
+        .map((o) => o.textContent)
+    ).toEqual(["Use “b”", "gpt-b"]);
+
+    await user.keyboard("{Escape}");
+    expect(picker).toHaveValue("gpt-a");
+    expect(screen.queryByRole("listbox", { name: "Models" })).not.toBeInTheDocument();
+
+    await user.click(picker);
+    await user.click(screen.getByRole("option", { name: "gpt-b" }));
+    expect(picker).toHaveValue("gpt-b");
+    expect(screen.queryByRole("listbox", { name: "Models" })).not.toBeInTheDocument();
   });
 
   it("takes a model id typed into the picker", async () => {
@@ -711,7 +812,7 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     await user.click(await screen.findByRole("button", { name: /Advanced/ }));
     await user.click(screen.getByRole("spinbutton", { name: "Max output tokens" }));
     await user.paste("20000");
-    await user.click(screen.getByRole("checkbox", { name: /Structured output/ }));
+    await user.click(screen.getByRole("switch", { name: /Structured output/ }));
     await user.click(screen.getByRole("textbox", { name: "System prompt" }));
     await user.paste("Only security issues.");
     await generate(user);
@@ -731,11 +832,12 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     fireEvent.change(await screen.findByRole("slider", { name: "Temperature" }), {
       target: { value: "0.3" },
     });
-    await user.click(screen.getByRole("button", { name: /OpenAI/ }));
+    await user.click(screen.getByRole("radio", { name: /OpenAI/ }));
     expect(screen.getByTestId("temperature-value")).toHaveTextContent("Default");
-    expect(screen.getByTestId("selected-model")).toHaveTextContent("gpt-a");
+    expect(screen.getByTestId("selected-model")).toHaveValue("gpt-a");
 
-    await user.click(screen.getByRole("button", { name: /^Claude/ }));
+    await user.click(screen.getByRole("radio", { name: /^Claude/ }));
+    expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("claude-model");
     expect(screen.getByTestId("temperature-value")).toHaveTextContent("0.3");
     const saved = JSON.parse(localStorage.getItem("mr-review:dispatch:settings") ?? "{}") as Record<
       string,
@@ -757,8 +859,8 @@ describe("DispatchStage — copy & paste import", { timeout: INTEGRATION_TEST_TI
   ): Promise<void> => {
     api.importResponse.mockResolvedValue(result);
     renderStage();
-    await user.click(await screen.findByRole("button", { name: "Copy & paste" }));
-    await user.click(screen.getByRole("button", { name: "paste text" }));
+    await user.click(await screen.findByRole("radio", { name: "Copy & paste" }));
+    await user.click(screen.getByRole("button", { name: "Paste text" }));
     await user.click(screen.getByPlaceholderText("Paste AI response JSON here…"));
     await user.paste('[{"severity": "minor", "body": "ok"}, {}]');
     await user.click(screen.getByRole("button", { name: "Import comments" }));
@@ -778,6 +880,9 @@ describe("DispatchStage — copy & paste import", { timeout: INTEGRATION_TEST_TI
     const skipped = screen.getByRole("region", { name: "Skipped items" });
     expect(within(skipped).getByText("item #2")).toBeInTheDocument();
     expect(within(skipped).getByText("body: Field required")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Polish 1 comment" }));
+    expect(stage.setStage).toHaveBeenCalledWith("polish");
   });
 
   it("explains a JSON error and lets the user fix the response", async () => {
@@ -817,7 +922,7 @@ describe(
       const user = userEvent.setup();
       renderStage();
 
-      await user.click(await screen.findByRole("button", { name: "Copy & paste" }));
+      await user.click(await screen.findByRole("radio", { name: "Copy & paste" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(
         `The prompt could not be built: ${EXCLUDED}`

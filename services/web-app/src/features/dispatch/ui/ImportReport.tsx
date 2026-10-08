@@ -1,31 +1,22 @@
+import { ArrowRight, Pencil } from "lucide-react";
+
+import { Button, Callout, ICON_SIZE, SectionHeader } from "@shared/ui";
+
+import { pluralize } from "../model/runOutcome";
+import { JsonErrorDetail } from "./JsonErrorDetail";
+
 import type { ImportResponseResult } from "@entities/review";
+import type { CalloutTone } from "@shared/ui";
 
 const SKIPPED_LIST_MAX_HEIGHT_PX = 280;
 const SKIPPED_RAW_MAX_HEIGHT_PX = 80;
 
-const pluralize = (count: number, noun: string): string =>
-  `${String(count)} ${noun}${count !== 1 ? "s" : ""}`;
-
-type Tone = "success" | "warning" | "failure";
-
-const TONE_COLOR: Record<Tone, string> = {
-  success: "var(--accent)",
-  warning: "var(--c-major)",
-  failure: "var(--c-critical)",
-};
-
-const TONE_ICON: Record<Tone, string> = {
-  success: "✓",
-  warning: "!",
-  failure: "✗",
-};
-
-type Summary = { tone: Tone; title: string; detail: string | null };
+type Summary = { tone: CalloutTone; title: string; detail: string | null };
 
 const summarize = ({ imported, errors, json_error }: ImportResponseResult): Summary => {
   if (json_error !== null) {
     return {
-      tone: imported > 0 ? "warning" : "failure",
+      tone: imported > 0 ? "warn" : "danger",
       title: "The response isn't valid JSON",
       detail:
         imported > 0
@@ -35,7 +26,7 @@ const summarize = ({ imported, errors, json_error }: ImportResponseResult): Summ
   }
   if (imported === 0) {
     return {
-      tone: "failure",
+      tone: "danger",
       title: "No comments were imported",
       detail:
         errors.length > 0
@@ -45,7 +36,7 @@ const summarize = ({ imported, errors, json_error }: ImportResponseResult): Summ
   }
   if (errors.length > 0) {
     return {
-      tone: "warning",
+      tone: "warn",
       title: `${pluralize(imported, "comment")} imported, ${pluralize(errors.length, "item")} skipped`,
       detail: "Skipped items are listed below. Fix them and import again to include them.",
     };
@@ -53,10 +44,85 @@ const summarize = ({ imported, errors, json_error }: ImportResponseResult): Summ
   return { tone: "success", title: `${pluralize(imported, "comment")} imported`, detail: null };
 };
 
+const SkippedItems = ({
+  errors,
+}: {
+  errors: ImportResponseResult["errors"];
+}): React.ReactElement => (
+  <section
+    aria-label="Skipped items"
+    style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}
+  >
+    <SectionHeader title="Skipped items" as="h4" count={errors.length} />
+    <ul
+      style={{
+        listStyle: "none",
+        margin: 0,
+        padding: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
+        maxHeight: SKIPPED_LIST_MAX_HEIGHT_PX,
+        overflowY: "auto",
+      }}
+    >
+      {errors.map((err) => (
+        <li
+          key={err.index}
+          style={{
+            padding: "var(--space-2) var(--space-3)",
+            borderRadius: "var(--radius-control)",
+            border: "1px solid var(--border)",
+            background: "var(--bg-2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-1)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-2)" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--fs-meta)",
+                color: "var(--fg-2)",
+              }}
+            >
+              item #{err.index + 1}
+            </span>
+            <span
+              style={{
+                fontSize: "var(--fs-control)",
+                fontWeight: "var(--fw-medium)",
+                color: "var(--c-warn-fg)",
+              }}
+            >
+              {err.reason}
+            </span>
+          </div>
+          <pre
+            style={{
+              margin: 0,
+              fontSize: "var(--fs-meta)",
+              color: "var(--fg-2)",
+              fontFamily: "var(--font-mono)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+              maxHeight: SKIPPED_RAW_MAX_HEIGHT_PX,
+              overflowY: "auto",
+            }}
+          >
+            {err.raw}
+          </pre>
+        </li>
+      ))}
+    </ul>
+  </section>
+);
+
 export type ImportReportProps = {
   result: ImportResponseResult;
   onEdit: () => void;
-  /** Offers "Polish comments →" when given; omit it where the screen already has one. */
+  /** Offers "Polish N comments" when given; omit it where the screen already has one. */
   onContinue?: () => void;
 };
 
@@ -67,152 +133,44 @@ export const ImportReport = ({
   onContinue,
 }: ImportReportProps): React.ReactElement => {
   const { tone, title, detail } = summarize(result);
-  const color = TONE_COLOR[tone];
   const hasImported = result.imported > 0;
   // Polishing is the natural next step only when the comments were really parsed;
   // after a JSON error the saved comment is just the raw text, so editing comes first.
   const shouldPolish = hasImported && result.json_error === null;
+  const isEditShown = tone !== "success";
+  const isPolishShown = hasImported && onContinue !== undefined;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div
-        role={tone === "success" ? "status" : "alert"}
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-          padding: "10px 14px",
-          borderRadius: "var(--radius-2)",
-          border: `1px solid color-mix(in oklch, ${color} 35%, transparent)`,
-          background: `color-mix(in oklch, ${color} 8%, var(--bg-2))`,
-        }}
-      >
-        <span style={{ fontSize: 16, lineHeight: "20px", color, fontWeight: 600 }}>
-          {TONE_ICON[tone]}
-        </span>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: tone === "success" ? "var(--fg-0)" : color,
-            }}
-          >
-            {title}
-          </span>
-          {detail && (
-            <span style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5 }}>{detail}</span>
-          )}
-          {result.json_error !== null && (
-            <span
-              className="mono"
-              style={{
-                marginTop: 2,
-                fontSize: 11,
-                color: "var(--fg-2)",
-                padding: "6px 8px",
-                borderRadius: "var(--radius-1)",
-                background: "var(--bg-1)",
-                wordBreak: "break-word",
-              }}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+      <Callout tone={tone} role={tone === "success" ? "status" : "alert"} title={title}>
+        {detail}
+        {result.json_error !== null && <JsonErrorDetail message={result.json_error} />}
+      </Callout>
+
+      {result.errors.length > 0 && <SkippedItems errors={result.errors} />}
+
+      {(isEditShown || isPolishShown) && (
+        <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
+          {isEditShown && (
+            <Button
+              variant={shouldPolish ? "secondary" : "primary"}
+              icon={<Pencil size={ICON_SIZE.inline} aria-hidden="true" />}
+              onClick={onEdit}
             >
-              {result.json_error}
-            </span>
+              Edit &amp; re-import
+            </Button>
+          )}
+          {isPolishShown && (
+            <Button
+              variant={shouldPolish ? "primary" : "secondary"}
+              iconRight={<ArrowRight size={ICON_SIZE.inline} aria-hidden="true" />}
+              onClick={onContinue}
+            >
+              Polish {pluralize(result.imported, "comment")}
+            </Button>
           )}
         </div>
-      </div>
-
-      {result.errors.length > 0 && (
-        <section
-          aria-label="Skipped items"
-          style={{ display: "flex", flexDirection: "column", gap: 6 }}
-        >
-          <div
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: "var(--fg-2)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Skipped items ({result.errors.length})
-          </div>
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              maxHeight: SKIPPED_LIST_MAX_HEIGHT_PX,
-              overflowY: "auto",
-            }}
-          >
-            {result.errors.map((err) => (
-              <li
-                key={err.index}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-2)",
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-2)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
-                    item #{err.index + 1}
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--c-major-fg)", fontWeight: 500 }}>
-                    {err.reason}
-                  </span>
-                </div>
-                <pre
-                  style={{
-                    margin: 0,
-                    fontSize: 10,
-                    color: "var(--fg-2)",
-                    fontFamily: "var(--font-mono)",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                    maxHeight: SKIPPED_RAW_MAX_HEIGHT_PX,
-                    overflowY: "auto",
-                  }}
-                >
-                  {err.raw}
-                </pre>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
-
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        {tone !== "success" && (
-          <button
-            type="button"
-            className={shouldPolish ? "btn" : "btn primary"}
-            style={{ fontSize: 12 }}
-            onClick={onEdit}
-          >
-            Edit &amp; re-import
-          </button>
-        )}
-        {hasImported && onContinue && (
-          <button
-            type="button"
-            className={shouldPolish ? "btn primary" : "btn"}
-            style={{ gap: 6, fontSize: 12 }}
-            onClick={onContinue}
-          >
-            Polish comments →
-          </button>
-        )}
-      </div>
     </div>
   );
 };
