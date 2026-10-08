@@ -1,12 +1,13 @@
 export { Badge } from "./Badge";
 export type { BadgeProps, Severity } from "./Badge";
-export { DiffViewer, parseDiff, attachFileInfo } from "./DiffViewer";
+export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,
   DiffLineType,
   DiffLineWithFile,
   DiffViewerMode,
   DiffViewerProps,
+  DiffTableProps,
   HunkDiffProps,
   LineDecorationRenderer,
 } from "./DiffViewer";

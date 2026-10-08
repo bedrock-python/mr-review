@@ -31,21 +31,15 @@ describe("DiffViewer", () => {
     expect(screen.getByRole("table", { name: "My diff" })).toBeInTheDocument();
   });
 
-  it("annotates rows with descriptive aria-labels (not color-only)", () => {
+  it("says added and removed in text, not only in colour, and does not repeat the line in a label", () => {
     render(<DiffViewer diff={SAMPLE} />);
-    const labels = screen
-      .getAllByRole("row")
-      .map((row) => row.getAttribute("aria-label"))
-      .filter((label): label is string => label !== null);
-    expect(labels).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/^File header:/),
-        expect.stringMatching(/^Hunk header:/),
-        expect.stringMatching(/^Context line 1: def foo\(\):$/),
-        expect.stringMatching(/^Removed line 2: {5}return 1$/),
-        expect.stringMatching(/^Added line 2: {5}return 2$/),
-      ])
-    );
+    const rows = screen.getAllByRole("row").filter((row) => row.closest("tbody") !== null);
+    const added = rows.find((row) => row.textContent.includes("return 2"));
+    const removed = rows.find((row) => row.textContent.includes("return 1"));
+
+    expect(added).toHaveTextContent("added");
+    expect(removed).toHaveTextContent("removed");
+    expect(rows.filter((row) => row.hasAttribute("aria-label"))).toHaveLength(0);
   });
 
   it("marks highlighted row with aria-current", () => {
@@ -53,7 +47,8 @@ describe("DiffViewer", () => {
     const highlighted = screen
       .getAllByRole("row")
       .find((row) => row.getAttribute("aria-current") === "true");
-    expect(highlighted?.getAttribute("aria-label")).toMatch(/^Added line 2:/);
+    expect(highlighted).toHaveAttribute("data-diff-row", "src/foo.py:2");
+    expect(highlighted).toHaveTextContent("return 2");
   });
 
   it("moves the highlight when the target line changes", () => {
@@ -67,7 +62,7 @@ describe("DiffViewer", () => {
       .getAllByRole("row")
       .filter((row) => row.getAttribute("aria-current") === "true");
     expect(highlighted).toHaveLength(1);
-    expect(highlighted[0]?.getAttribute("aria-label")).toMatch(/^Context line 3:/);
+    expect(highlighted[0]).toHaveAttribute("data-diff-row", "src/foo.py:3");
   });
 
   it("marks the active decoration", () => {

@@ -303,8 +303,8 @@ export const PickStage = (): React.ReactElement => {
           onSelect={setSelectedFilePath}
         />
 
-        {/* Center: diff viewer */}
-        <div style={{ overflowY: "auto", minWidth: 0 }}>
+        {/* Center: diff viewer — it scrolls its own rows, so it can render only the visible ones */}
+        <div style={{ overflow: "hidden", minWidth: 0, minHeight: 0 }}>
           {activeFile ? (
             <DiffViewer file={activeFile} />
           ) : (
