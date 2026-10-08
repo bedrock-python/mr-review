@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -9,6 +10,7 @@ from uuid import uuid4
 import pytest
 import yaml
 from mr_review.core.reviews.sources import BranchDiffSource
+from mr_review.infra.repositories import review_cache
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration, make_review
@@ -177,3 +179,71 @@ async def test__review_file_corrupted_after_caching__is_dropped(data_dir: Path) 
 
     assert await repo.list_all() == []
     assert await repo.get_by_mr(review.host_id, "g/p", 1) is None
+
+
+async def test__read_overtaken_by_writes__never_puts_old_content_back_in_the_cache(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read that parsed an old version must not land in the cache after newer writes.
+
+    Stat signatures are forced equal: the worst case of a filesystem that reuses the freed
+    inode for the next file and has a coarse clock (ext4, NFS, SMB, FAT).
+    """
+    monkeypatch.setattr(review_cache, "_signature", lambda st: (0, 0, 0, 0, 0))
+    review = make_review(repo_path="aaa", iterations=[])
+    await FileReviewRepository(data_dir).upsert_with(review.id, lambda _current: review)
+    repo = FileReviewRepository(data_dir)  # a fresh process: nothing cached yet
+    real_load = review_cache.load_yaml
+    reader_ids: list[int] = []
+    parsing, release = threading.Event(), threading.Event()
+
+    def pausing_load(content: str | bytes) -> object:
+        if threading.get_ident() in reader_ids:
+            parsing.set()
+            release.wait(5)
+        return real_load(content)
+
+    def read_old_version() -> None:
+        reader_ids.append(threading.get_ident())
+        repo._read_review(review.id)
+
+    monkeypatch.setattr(review_cache, "load_yaml", pausing_load)
+    reader = threading.Thread(target=read_old_version)
+    reader.start()
+    assert parsing.wait(5)
+    await repo.update_with(review.id, lambda r: r.model_copy(update={"repo_path": "bbb"}))
+    await repo.update_with(review.id, lambda r: r.model_copy(update={"repo_path": "ccc"}))
+    release.set()
+    reader.join(5)
+
+    fetched = await repo.get_by_id(review.id)
+    await repo.update_with(review.id, lambda r: r.model_copy(update={"iterations": [make_iteration()]}))
+    stored = await FileReviewRepository(data_dir).get_by_id(review.id)
+
+    assert fetched is not None
+    assert fetched.repo_path == "ccc"
+    assert stored is not None
+    assert (stored.repo_path, len(stored.iterations)) == ("ccc", 1)
+
+
+async def test__parsed_reviews__are_bounded_in_memory__metadata_covers_every_review(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    limit = 20_000
+    monkeypatch.setattr(review_cache, "PARSED_CACHE_MAX_BYTES", limit)
+    writer = FileReviewRepository(data_dir)
+    await _seed(writer, 30)
+    repo = FileReviewRepository(data_dir)
+
+    everything = await repo.list_all_uncapped()
+    page = await repo.list_all()
+    found = await repo.get_by_mr(everything[-1].host_id, "g/p", everything[-1].mr_iid)
+
+    assert len(everything) == 30
+    assert [r.id for r in page] == [r.id for r in everything]
+    assert found == everything[-1]
+    cache = repo._files
+    assert len(cache._meta) == 30
+    assert 0 < len(cache._parsed) < 30
+    assert cache._parsed_bytes <= limit
+    assert cache._parsed_bytes == sum(entry.size for entry in cache._parsed.values())
