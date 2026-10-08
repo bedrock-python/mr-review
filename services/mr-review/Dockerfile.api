@@ -41,22 +41,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
   && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN addgroup --system app && adduser --system --ingroup app \
-    --no-create-home --disabled-password --shell /usr/sbin/nologin app
+# Unprivileged user the application runs as. Fixed 1000:1000 so a host
+# directory can be given to it ahead of time; PUID/PGID override it at start.
+RUN groupadd --gid 1000 app \
+ && useradd --uid 1000 --gid app --home-dir /home/app --create-home \
+    --shell /usr/sbin/nologin app \
+ && mkdir /data && chown app:app /data
 
 # Copy installed python packages + app
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    MR_REVIEW__DATA_DIR=/data
 
-USER app
+# No USER: the entrypoint starts as root only to make the data directory
+# writable, then drops to the unprivileged user before the application starts.
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/system/health/livez || exit 1
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python", "-m", "mr_review.api.entrypoint"]
 
 

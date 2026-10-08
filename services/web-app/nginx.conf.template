@@ -9,7 +9,7 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    # Пути для временных файлов (необходимы для запуска от non-root)
+    # Temp paths under /tmp, writable by the non-root user
     client_body_temp_path /tmp/client_temp;
     proxy_temp_path       /tmp/proxy_temp;
     fastcgi_temp_path    /tmp/fastcgi_temp;
@@ -36,6 +36,19 @@ http {
         text/plain
         image/svg+xml;
 
+    # API_UPSTREAM is looked up through this resolver per request (cached for
+    # 10s) rather than once at start-up: nginx starts while the API is still
+    # down, and follows the api container to its new address when it is
+    # recreated. This resolver does not apply resolv.conf search domains, so
+    # API_UPSTREAM needs a name it can resolve as written.
+    resolver ${NGINX_RESOLVER} valid=10s;
+
+    # Keep the scheme a TLS-terminating proxy in front of this one reported.
+    map $http_x_forwarded_proto $forwarded_proto {
+        default $http_x_forwarded_proto;
+        ""      $scheme;
+    }
+
     server {
         listen 8080;
         listen [::]:8080;
@@ -44,41 +57,71 @@ http {
         root /usr/share/nginx/html;
         index index.html;
 
-        # Security Headers
-        add_header X-Frame-Options "DENY" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-
-        # Content Security Policy
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${API_URL};" always;
-
-        # HSTS (only for HTTPS)
-        ${HSTS_HEADER}
+        # Security headers, CSP and HSTS. A location that declares an add_header
+        # of its own inherits none of these, so each such location below
+        # includes the file again.
+        include /tmp/nginx-security-headers.conf;
 
         location / {
             try_files $uri $uri/ /index.html;
-            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+            include /tmp/nginx-security-headers.conf;
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
         }
 
         location /assets/ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
+            include /tmp/nginx-security-headers.conf;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
             access_log off;
+        }
+
+        # The UI calls the API on its own origin, and this hands the call to the
+        # API container: the browser never needs to reach the API itself, so
+        # the UI works from any hostname or address and needs no CORS.
+        location /api/ {
+            set $api_upstream "${API_UPSTREAM}";
+            proxy_pass $api_upstream;
+
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+
+            # The server-level security headers are added to API responses as
+            # well, and nginx appends rather than replaces: drop any the API
+            # sends itself, so a response never carries two conflicting policies.
+            proxy_hide_header Content-Security-Policy;
+            proxy_hide_header Strict-Transport-Security;
+            proxy_hide_header X-Frame-Options;
+            proxy_hide_header X-Content-Type-Options;
+            proxy_hide_header X-XSS-Protection;
+            proxy_hide_header Referrer-Policy;
+            proxy_hide_header Permissions-Policy;
+
+            # POST /api/v1/reviews/{id}/dispatch streams the review as
+            # Server-Sent Events for as long as the model takes: every event
+            # goes to the browser as it arrives, and an idle gap is not a
+            # timeout.
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
+
+            # POST /api/v1/data/import carries the whole store in one body.
+            client_max_body_size 100m;
         }
 
         location /health {
             access_log off;
+            default_type text/plain;
             return 200 "healthy\n";
-            add_header Content-Type text/plain;
         }
 
         location /metrics {
             stub_status on;
             access_log off;
-            # В облаке доступ ограничен через NetworkPolicy,
-            # здесь разрешаем всем внутри пода
+            # Restricted by NetworkPolicy in a cluster; open inside the pod
             allow all;
         }
 

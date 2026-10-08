@@ -3,14 +3,19 @@ services:
     image: ghcr.io/bedrock-python/mr-review/api:latest
     restart: unless-stopped
     ports:
-      - "${API_PORT:-17241}:8000"
+      # Loopback only unless MR_REVIEW_BIND says otherwise: mr-review has no
+      # login, and anyone who reaches this port can read every stored token.
+      - "${MR_REVIEW_BIND:-127.0.0.1}:${API_PORT:-17241}:8000"
     environment:
       MR_REVIEW__SERVER__HOST: "0.0.0.0"
       MR_REVIEW__SERVER__PORT: "8000"
       MR_REVIEW__DATA_DIR: "/data"
       MR_REVIEW__HOST_DATA_DIR: "${DATA_DIR:-./data}"
-      MR_REVIEW__CORS__ALLOW_ORIGINS: '["http://localhost:${WEB_PORT:-17242}"]'
       MR_REVIEW__LOGGING__USE_JSON: "true"
+      # The container starts as root, gives the data directory to PUID:PGID
+      # and runs the application as that user.
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/data
     networks:
@@ -26,9 +31,13 @@ services:
     image: ghcr.io/bedrock-python/mr-review/web-app:latest
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-17242}:8080"
+      # Same as the api service: the UI proxies the whole API under /api/.
+      - "${MR_REVIEW_BIND:-127.0.0.1}:${WEB_PORT:-17242}:8080"
     environment:
-      API_BASE_URL: "http://localhost:${API_PORT:-17241}"
+      # The UI calls /api/ on its own origin and nginx in this container
+      # forwards it to the api service, so the UI works from any hostname or
+      # address and the API needs no CORS settings.
+      API_UPSTREAM: "http://api:8000"
       APP_ENV: "production"
     networks:
       - mr-review

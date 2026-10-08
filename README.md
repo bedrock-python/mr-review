@@ -57,15 +57,19 @@ docker compose up -d
 
 ### Standard (separate services)
 
-API and UI run as separate containers — useful if you want more control over networking or scaling.
+API and UI run as separate containers — useful if you want more control over networking or scaling. The UI forwards `/api/` to the API container, so the browser only needs the UI port.
 
 ```bash
 mkdir mr-review && cd mr-review
 curl -O https://raw.githubusercontent.com/bedrock-python/mr-review/master/deploy/standard/docker-compose.yml
 docker compose up -d
-# API → http://localhost:17241
 # UI  → http://localhost:17242
+# API → http://localhost:17241/system/docs
 ```
+
+Both compose files publish their ports on `127.0.0.1` only. mr-review has no login, so read
+[Opening it from another machine](https://bedrock-python.github.io/mr-review/getting-started/installation/#opening-it-from-another-machine)
+before setting `MR_REVIEW_BIND=0.0.0.0`.
 
 Docker images are published to GitHub Container Registry:
 
