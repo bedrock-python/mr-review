@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { History, Plus, Settings } from "lucide-react";
 import { getHostColor, useHosts } from "@entities/host";
@@ -56,6 +57,13 @@ const HostAvatar = ({ host, isSelected, onClick }: HostAvatarProps): React.React
 export const HostsRail = (): React.ReactElement => {
   const isAddHostOpen = useAppStore((s) => s.addHostOpen);
   const setAddHostOpen = useAppStore((s) => s.setAddHostOpen);
+  // The dialog belongs to this page: leaving it (to Settings) must not leave it open for later.
+  useEffect(
+    () => () => {
+      setAddHostOpen(false);
+    },
+    [setAddHostOpen]
+  );
   const historyOpen = useAppStore((s) => s.historyOpen);
   const toggleHistory = useAppStore((s) => s.toggleHistory);
   const { data: hosts } = useHosts();

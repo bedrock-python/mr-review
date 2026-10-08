@@ -1,19 +1,27 @@
 import { useId } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ExternalLink } from "lucide-react";
 import { z } from "zod";
 import { ColorPicker, CreateHostSchema, HOST_COLORS, useCreateHost } from "@entities/host";
-import { Button, Dialog, Field, Input, Select } from "@shared/ui";
+import { Button, Dialog, Field, ICON_SIZE, Input, Select } from "@shared/ui";
+import { getTokenLink } from "../lib/tokenLink";
 import type { HostColorId } from "@entities/host";
+import type { TokenLink } from "../lib/tokenLink";
+
+/** The bounds the server accepts for a host's request timeout, in seconds. */
+const TIMEOUT_LIMITS = { min: 1, max: 600 } as const;
+const DEFAULT_HOST_TIMEOUT_S = 30;
 
 const AddHostFormSchema = CreateHostSchema.extend({
   colorId: z.string(),
-  timeout: z.number().int().min(1, "Must be at least 1").max(600, "Max 600s"),
+  timeout: z
+    .number()
+    .int()
+    .min(TIMEOUT_LIMITS.min, "Must be at least 1")
+    .max(TIMEOUT_LIMITS.max, "Max 600s"),
 });
 type AddHostFormValues = z.infer<typeof AddHostFormSchema>;
-
-// The form has no timeout input; without a value the schema rejects every submit.
-const DEFAULT_HOST_TIMEOUT_S = 30;
 
 const EMPTY_FORM: AddHostFormValues = {
   name: "",
@@ -32,12 +40,29 @@ const HOST_TYPES = [
   { value: "bitbucket", label: "Bitbucket" },
 ] as const;
 
+/** "Create a token on gitlab.example.com ↗": where the host issues the token asked for. */
+const TokenLinkAnchor = ({ link }: { link: TokenLink | null }): React.ReactElement | null =>
+  link ? (
+    <a
+      href={link.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-accent-fg inline-flex items-center gap-(--space-1) text-(length:--fs-meta) font-medium no-underline hover:underline"
+    >
+      {link.label}
+      <ExternalLink size={ICON_SIZE.inline} aria-hidden="true" />
+    </a>
+  ) : null;
+
 export type AddHostDialogProps = {
   isOpen: boolean;
   onClose: () => void;
 };
 
-/** A new Git host: its kind, where it is, the token to read it with, and a colour. */
+/**
+ * A new Git host: its kind, where it is, the token to read it with, a timeout and a colour.
+ * The same fields and words as Settings' host form.
+ */
 export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.ReactElement => {
   const createHost = useCreateHost();
   const formId = useId();
@@ -47,6 +72,8 @@ export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.Re
     defaultValues: EMPTY_FORM,
   });
   const { errors } = form.formState;
+  const hostType = useWatch({ control: form.control, name: "type" });
+  const baseUrl = useWatch({ control: form.control, name: "base_url" });
 
   const handleClose = (): void => {
     form.reset(EMPTY_FORM);
@@ -89,7 +116,7 @@ export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.Re
         className="flex flex-col gap-(--space-4)"
       >
         <Field label="Name" error={errors.name?.message}>
-          <Input {...form.register("name")} placeholder="e.g. Work GitLab" autoComplete="off" />
+          <Input {...form.register("name")} placeholder="e.g. My GitLab" autoComplete="off" />
         </Field>
         <Field label="Type">
           <Select {...form.register("type")}>
@@ -109,29 +136,44 @@ export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.Re
           />
         </Field>
         <Field
-          label="Access Token"
-          hint="Read access to repositories and merge requests; write access to post comments."
+          label="Access token"
+          hint="Stored on the server, never exposed to the browser."
           error={errors.token?.message}
+          labelAside={<TokenLinkAnchor link={getTokenLink(hostType, baseUrl)} />}
         >
           <Input
             {...form.register("token")}
             type="password"
             isMono
-            placeholder="e.g. glpat-…"
+            placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
             autoComplete="off"
           />
         </Field>
-        <div role="group" aria-labelledby={colorLabelId} className="flex flex-col gap-(--space-2)">
-          <span id={colorLabelId} className="ui-eyebrow">
-            Color
-          </span>
-          <Controller
-            name="colorId"
-            control={form.control}
-            render={({ field }) => (
-              <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
-            )}
-          />
+        <div className="grid grid-cols-[1fr_2fr] items-start gap-(--space-4)">
+          <Field label="Timeout (s)" error={errors.timeout?.message}>
+            <Input
+              type="number"
+              {...form.register("timeout", { valueAsNumber: true })}
+              min={TIMEOUT_LIMITS.min}
+              max={TIMEOUT_LIMITS.max}
+            />
+          </Field>
+          <div
+            role="group"
+            aria-labelledby={colorLabelId}
+            className="flex flex-col gap-(--space-2)"
+          >
+            <span id={colorLabelId} className="ui-eyebrow">
+              Colour
+            </span>
+            <Controller
+              name="colorId"
+              control={form.control}
+              render={({ field }) => (
+                <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
+              )}
+            />
+          </div>
         </div>
       </form>
     </Dialog>
