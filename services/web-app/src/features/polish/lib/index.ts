@@ -1,4 +1,4 @@
-export { SEVERITY_ORDER, SEV_COLOR, SEVERITY_RANK } from "./severity";
+export { SEVERITY_ORDER, SEV_COLOR, SEV_TEXT_COLOR, SEVERITY_RANK } from "./severity";
 export {
   buildDiffIndex,
   describeAnchorProblem,

@@ -9,7 +9,7 @@ export type ListMessageProps = {
 const inlineActionStyle: React.CSSProperties = {
   background: "transparent",
   border: "1px solid var(--border)",
-  borderRadius: 5,
+  borderRadius: "var(--radius-2)",
   padding: "3px 10px",
   fontSize: 11,
   fontFamily: "var(--font-mono)",
@@ -33,7 +33,7 @@ export const ListMessage = ({
       justifyContent: "center",
       gap: 10,
       minHeight: 80,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       fontSize: 12,
       textAlign: "center",
       padding: "16px 20px",
@@ -61,7 +61,7 @@ const rowStyle: React.CSSProperties = {
   padding: "10px 12px",
   fontSize: 11,
   fontFamily: "var(--font-mono)",
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
 };
 
 const SmallSpinner = (): React.ReactElement => (
@@ -91,7 +91,7 @@ export const LoadMoreRow = (props: LoadMoreRowProps): React.ReactElement => {
   }
   if (props.state === "error") {
     return (
-      <div role="alert" style={{ ...rowStyle, color: "var(--c-critical)" }}>
+      <div role="alert" style={{ ...rowStyle, color: "var(--c-critical-fg)" }}>
         <span>{props.message}</span>
         <button type="button" onClick={props.onRetry} style={inlineActionStyle}>
           Retry
@@ -144,7 +144,7 @@ export const ListStatusBar = (props: ListStatusBarProps): React.ReactElement => 
       borderTop: "1px solid var(--border)",
       padding: "4px 14px",
       fontSize: 10,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       whiteSpace: "nowrap",
       overflow: "hidden",
       textOverflow: "ellipsis",

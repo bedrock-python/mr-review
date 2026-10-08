@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@shared/lib";
-import { SEVERITY_ORDER, SEV_COLOR, countBySeverity } from "../../lib";
+import { SEVERITY_ORDER, SEV_COLOR, SEV_TEXT_COLOR, countBySeverity } from "../../lib";
 import type { CommentGroup } from "../../lib";
 
 type GroupHeaderProps = {
@@ -32,7 +32,7 @@ const GroupHeaderBase = ({
       <ChevronRight
         size={13}
         aria-hidden="true"
-        className={cn("text-fg-3 shrink-0 transition-transform", !isCollapsed && "rotate-90")}
+        className={cn("text-fg-2 shrink-0 transition-transform", !isCollapsed && "rotate-90")}
       />
       <span className="text-fg-0 truncate font-mono text-[11.5px]">{group.label}</span>
       <span className="chip">{total}</span>
@@ -42,7 +42,7 @@ const GroupHeaderBase = ({
             key={severity}
             title={`${String(counts[severity])} ${severity}`}
             className="flex items-center gap-1 font-mono text-[10px]"
-            style={{ color: SEV_COLOR[severity] }}
+            style={{ color: SEV_TEXT_COLOR[severity] }}
           >
             <span className="dot" style={{ background: SEV_COLOR[severity] }} />
             {counts[severity]}
@@ -50,7 +50,7 @@ const GroupHeaderBase = ({
         ) : null
       )}
       {dismissed > 0 && (
-        <span className="text-fg-3 font-mono text-[10px]">{dismissed} dismissed</span>
+        <span className="text-fg-2 font-mono text-[10px]">{dismissed} dismissed</span>
       )}
     </button>
   );

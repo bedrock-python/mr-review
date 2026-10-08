@@ -1,0 +1,47 @@
+/* Skeleton, Spinner, StageLoading. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Skeleton / Spinner / StageLoading ─────────────────────── */
+  .ui-skeleton {
+    display: block;
+    border-radius: var(--radius-badge);
+    background: color-mix(in oklch, var(--fg-0) 10%, transparent);
+    animation: ui-pulse 1.4s ease-in-out infinite;
+  }
+  .ui-spinner {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent-fg);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  .ui-spinner--sm {
+    width: 12px;
+    height: 12px;
+    border-width: 1.5px;
+  }
+  .ui-spinner--lg {
+    width: 24px;
+    height: 24px;
+  }
+  .ui-spinner--muted {
+    border-top-color: var(--fg-2);
+  }
+  .ui-spinner--current {
+    border-color: color-mix(in oklch, currentColor 25%, transparent);
+    border-top-color: currentColor;
+  }
+  .ui-stage-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100%;
+    min-height: 120px;
+    color: var(--fg-2);
+    font-size: var(--fs-body);
+  }
+}

@@ -82,12 +82,12 @@ export const ImportReport = ({
           alignItems: "flex-start",
           gap: 10,
           padding: "10px 14px",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
           border: `1px solid color-mix(in oklch, ${color} 35%, transparent)`,
           background: `color-mix(in oklch, ${color} 8%, var(--bg-2))`,
         }}
       >
-        <span style={{ fontSize: 16, lineHeight: "20px", color, fontWeight: 700 }}>
+        <span style={{ fontSize: 16, lineHeight: "20px", color, fontWeight: 600 }}>
           {TONE_ICON[tone]}
         </span>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -111,7 +111,7 @@ export const ImportReport = ({
                 fontSize: 11,
                 color: "var(--fg-2)",
                 padding: "6px 8px",
-                borderRadius: 4,
+                borderRadius: "var(--radius-1)",
                 background: "var(--bg-1)",
                 wordBreak: "break-word",
               }}
@@ -131,7 +131,7 @@ export const ImportReport = ({
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               textTransform: "uppercase",
               letterSpacing: "0.06em",
             }}
@@ -155,7 +155,7 @@ export const ImportReport = ({
                 key={err.index}
                 style={{
                   padding: "8px 12px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   border: "1px solid var(--border)",
                   background: "var(--bg-2)",
                   display: "flex",
@@ -164,10 +164,10 @@ export const ImportReport = ({
                 }}
               >
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
                     item #{err.index + 1}
                   </span>
-                  <span style={{ fontSize: 11, color: "var(--c-major)", fontWeight: 500 }}>
+                  <span style={{ fontSize: 11, color: "var(--c-major-fg)", fontWeight: 500 }}>
                     {err.reason}
                   </span>
                 </div>
@@ -175,7 +175,7 @@ export const ImportReport = ({
                   style={{
                     margin: 0,
                     fontSize: 10,
-                    color: "var(--fg-3)",
+                    color: "var(--fg-2)",
                     fontFamily: "var(--font-mono)",
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-all",

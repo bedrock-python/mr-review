@@ -24,10 +24,10 @@ export const ColorPicker = ({ value, onChange }: ColorPickerProps): React.ReactE
             style={{
               width: 20,
               height: 20,
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               border: isSelected ? "2px solid var(--fg-0)" : "2px solid transparent",
-              outline: isSelected ? "2px solid var(--bg-1)" : "none",
-              outlineOffset: -3,
+              // Selection is an inner ring, so the outline stays free for keyboard focus.
+              boxShadow: isSelected ? "inset 0 0 0 1px var(--bg-1)" : undefined,
               background: color.value.startsWith("var(") ? "var(--fg-2)" : color.value,
               cursor: "pointer",
               padding: 0,

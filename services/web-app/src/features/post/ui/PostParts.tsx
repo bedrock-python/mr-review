@@ -49,7 +49,7 @@ export const Stat = ({ label, value }: { label: string; value: number }): React.
       padding: "12px 8px",
       background: "var(--bg-2)",
       border: "1px solid var(--border)",
-      borderRadius: 8,
+      borderRadius: "var(--radius-3)",
       textAlign: "center",
     }}
   >
@@ -57,7 +57,7 @@ export const Stat = ({ label, value }: { label: string; value: number }): React.
       style={{
         fontFamily: "var(--font-mono)",
         fontSize: 22,
-        fontWeight: 700,
+        fontWeight: 600,
         color: "var(--fg-0)",
       }}
     >
@@ -66,7 +66,7 @@ export const Stat = ({ label, value }: { label: string; value: number }): React.
     <div
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         textTransform: "uppercase",
         letterSpacing: "0.06em",
         marginTop: 2,
@@ -103,7 +103,7 @@ const OPTION_ROW_STYLE: React.CSSProperties = {
   padding: "8px 12px",
   background: "var(--bg-1)",
   border: "1px solid var(--border)",
-  borderRadius: 8,
+  borderRadius: "var(--radius-3)",
   fontSize: 12.5,
 };
 
@@ -145,7 +145,7 @@ export const PostOptions = ({
           background: "var(--bg-2)",
           color: "var(--fg-0)",
           border: "1px solid var(--border)",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
           padding: "3px 6px",
           fontSize: 12,
         }}

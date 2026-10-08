@@ -20,8 +20,9 @@
 
 ## UI & Styling
 
-- **UI Library:** Radix UI (Dialog)
-- **CSS:** Tailwind CSS v4
+- **UI Library:** own primitives in `src/shared/ui` (see its README) on Radix UI (Dialog, Tooltip)
+- **CSS:** design tokens + `ui-*` component classes; Tailwind CSS v4 for layout utilities
+- **Fonts:** IBM Plex Sans and JetBrains Mono, bundled with `@fontsource` (400/500/600)
 - **Icons:** Lucide React
 - **Animations:** tailwindcss-animate
 - **Class Utils:** tailwind-merge + clsx

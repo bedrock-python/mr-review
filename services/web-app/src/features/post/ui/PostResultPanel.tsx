@@ -6,9 +6,9 @@ import { ButtonSpinner, PostOptions, Stat } from "./PostParts";
 import type { PostOptionsProps } from "./PostParts";
 
 const STATE_LOOK: Record<Exclude<PostState, "ready">, { color: string; title: string }> = {
-  posted: { color: "var(--c-add)", title: "Posted to" },
-  partial: { color: "var(--c-minor)", title: "Partly posted to" },
-  failed: { color: "var(--c-critical)", title: "Nothing was posted to" },
+  posted: { color: "var(--c-add-fg)", title: "Posted to" },
+  partial: { color: "var(--c-minor-fg)", title: "Partly posted to" },
+  failed: { color: "var(--c-critical-fg)", title: "Nothing was posted to" },
 };
 
 const StateIcon = ({ state }: { state: Exclude<PostState, "ready"> }): React.ReactElement => (

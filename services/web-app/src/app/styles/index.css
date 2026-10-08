@@ -1,8 +1,19 @@
 @import "tailwindcss";
+@import "../../shared/ui/primitives.css";
 
 /* ─────────────────────────────────────────────────────────────
    Mr. Reviewer — design tokens
    Three themes: ink (dark) · paper (light) · phosphor (terminal green)
+   :root is ink; paper and phosphor override on <html data-theme>.
+
+   Text contrast (WCAG AA, checked for all three themes):
+   - fg-0 / fg-1 / fg-2 are text colours, ≥ 4.5:1 on bg-0…bg-3.
+   - fg-3 is for non-text only (icons, dividers, disabled), ≥ 3:1.
+   - Placeholders are fg-2: readable, yet apart from typed text (fg-0).
+   - A form control's outline is --border-control (≥ 3:1 on bg-0…bg-2);
+     --border / --border-strong stay subtle for dividers and cards.
+   - A hue used as text or a thin border uses its -fg variant (--accent-fg,
+     --c-major-fg, …); the base hue is for dots, fills and tints.
    ───────────────────────────────────────────────────────────── */
 
 @theme {
@@ -14,24 +25,31 @@
   --color-bg-hover: var(--bg-hover);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-border-control: var(--border-control);
   --color-fg-0: var(--fg-0);
   --color-fg-1: var(--fg-1);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
   --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
   --color-accent-ink: var(--accent-ink);
   --color-c-critical: var(--c-critical);
   --color-c-major: var(--c-major);
   --color-c-minor: var(--c-minor);
   --color-c-suggest: var(--c-suggest);
+  --color-c-critical-fg: var(--c-critical-fg);
+  --color-c-major-fg: var(--c-major-fg);
+  --color-c-minor-fg: var(--c-minor-fg);
+  --color-c-suggest-fg: var(--c-suggest-fg);
+  --color-c-add-fg: var(--c-add-fg);
+  --color-c-del-fg: var(--c-del-fg);
   --color-diff-add-fg: var(--diff-add-fg);
   --color-diff-del-fg: var(--diff-del-fg);
 
-  /* Radii */
+  /* Radii: 1 badges/kbd · 2 controls · 3 cards, dialogs, popovers · pill */
   --radius-1: 3px;
   --radius-2: 6px;
   --radius-3: 10px;
-  --radius-4: 14px;
   --radius-pill: 999px;
 
   /* Font families */
@@ -59,62 +77,68 @@
       height: 0;
     }
   }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+}
+
+/* The app's own keyframes. Outside @theme on purpose: Tailwind drops theme keyframes that
+   no utility uses, and these are used from inline styles it cannot see. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0;
-    }
+}
+/* A text cursor: on, then off. Not `pulse`, which Tailwind's animate-pulse uses. */
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
   }
-  @keyframes fadeSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  50% {
+    opacity: 0;
   }
-  @keyframes pulse-ring {
-    0% {
-      transform: scale(1);
-      opacity: 0.8;
-    }
-    70% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
+}
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
-  @keyframes pulse-ring-centered {
-    0% {
-      transform: translateY(-50%) scale(1);
-      opacity: 0.8;
-    }
-    70% {
-      transform: translateY(-50%) scale(1.5);
-      opacity: 0;
-    }
-    100% {
-      transform: translateY(-50%) scale(1.5);
-      opacity: 0;
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes pulse-ring-centered {
+  0% {
+    transform: translateY(-50%) scale(1);
+    opacity: 0.8;
+  }
+  70% {
+    transform: translateY(-50%) scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(-50%) scale(1.5);
+    opacity: 0;
   }
 }
 
 /* ── INK (dark) — default ──────────────────────────────────── */
 :root {
+  /* Native controls, scrollbars and select menus follow the theme */
+  color-scheme: dark;
   --bg-0: #0c0d10;
   --bg-1: #14161b;
   --bg-2: #1b1e24;
@@ -122,10 +146,12 @@
   --bg-hover: #1f2329;
   --border: #2a2e36;
   --border-strong: #3a3f48;
+  --border-control: #666b74;
+  --border-control-hover: #7c818a;
   --fg-0: #f3f4f3;
   --fg-1: #c8ccca;
   --fg-2: #8a8f8a;
-  --fg-3: #5b605c;
+  --fg-3: #6b706c;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.4);
 
   --accent: oklch(86% 0.22 120);
@@ -146,6 +172,57 @@
   --diff-hunk: #1a1d22;
   --diff-gutter: #15171c;
 
+  /* Elevation: popovers and menus · dialogs · side drawers; one scrim for all modals */
+  --shadow-pop: 0 6px 20px rgb(0 0 0 / 0.4);
+  --shadow-dialog: 0 16px 48px rgb(0 0 0 / 0.55);
+  --shadow-drawer: -8px 0 32px rgb(0 0 0 / 0.35);
+  --overlay: rgb(0 0 0 / 0.55);
+
+  /* Spacing, 4px base (Tailwind numbering: --space-8 is 32px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius roles (the scale is --radius-1/2/3/pill above) */
+  --radius-badge: var(--radius-1);
+  --radius-control: var(--radius-2);
+  --radius-card: var(--radius-3);
+
+  /* Type scale, base 13. Mono 10 is only for eyebrows and badges. */
+  --fs-eyebrow: 10px;
+  --fs-meta: 11px;
+  --fs-control: 12px;
+  --fs-body: 13px;
+  --fs-title: 15px;
+  --fs-page: 20px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --lh-tight: 1.3;
+  --lh-body: 1.5;
+
+  /* Control heights and icon sizes */
+  --control-sm: 24px;
+  --control-md: 30px;
+  --control-lg: 36px;
+  --icon-inline: 14px;
+  --icon-button: 16px;
+
+  /* Motion */
+  --dur-fast: 0.08s;
+  --dur-base: 0.15s;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layers */
+  --z-drawer: 50;
+  --z-dialog: 200;
+  --z-popover: 250;
+  --z-tooltip: 300;
+
   /* Legacy compat kept for any remaining shadcn components */
   --background: 224 12% 6%;
   --foreground: 150 2% 95%;
@@ -156,6 +233,7 @@
 
 /* ── PAPER (light) ─────────────────────────────────────────── */
 [data-theme="paper"] {
+  color-scheme: light;
   --bg-0: #fafaf7;
   --bg-1: #ffffff;
   --bg-2: #f3f3ef;
@@ -163,23 +241,39 @@
   --bg-hover: #efefe9;
   --border: #e4e4dc;
   --border-strong: #cdcdc4;
+  --border-control: #868b8f;
+  --border-control-hover: #6f7479;
   --fg-0: #14171a;
   --fg-1: #404449;
-  --fg-2: #6f7479;
-  --fg-3: #9aa0a4;
+  --fg-2: #62676c;
+  --fg-3: #7a8085;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 4px 16px rgba(20, 23, 26, 0.06);
 
   --accent: oklch(72% 0.2 130);
+  /* Darker than ink so dots, fills and 40% borders hold 3:1 on white */
+  --c-critical: oklch(62% 0.21 25);
+  --c-major: oklch(64% 0.16 55);
+  --c-minor: oklch(64% 0.13 90);
+  --c-suggest: oklch(62% 0.13 235);
+  --c-add: oklch(62% 0.17 145);
+  --c-del: oklch(62% 0.21 25);
+
   --diff-add-bg: rgba(80, 170, 70, 0.1);
   --diff-add-fg: #2d6d22;
   --diff-del-bg: rgba(190, 60, 60, 0.1);
   --diff-del-fg: #8b2a2a;
   --diff-hunk: #f0efe9;
   --diff-gutter: #f4f3ed;
+
+  --shadow-pop: 0 6px 20px rgb(20 23 26 / 0.12);
+  --shadow-dialog: 0 16px 48px rgb(20 23 26 / 0.2);
+  --shadow-drawer: -8px 0 32px rgb(20 23 26 / 0.12);
+  --overlay: rgb(20 23 26 / 0.4);
 }
 
 /* ── PHOSPHOR (terminal) ───────────────────────────────────── */
 [data-theme="phosphor"] {
+  color-scheme: dark;
   --bg-0: #04140a;
   --bg-1: #061a0e;
   --bg-2: #082212;
@@ -187,10 +281,12 @@
   --bg-hover: #0a2614;
   --border: #0f3a1f;
   --border-strong: #1a5530;
+  --border-control: #33794b;
+  --border-control-hover: #418a5a;
   --fg-0: #b8ffcc;
   --fg-1: #74e093;
   --fg-2: #4a9d63;
-  --fg-3: #2d6440;
+  --fg-3: #3a7f51;
   --shadow: 0 0 0 1px #0f3a1f, 0 0 24px rgba(116, 224, 147, 0.06);
   --accent: oklch(88% 0.24 145);
   --accent-ink: #04140a;
@@ -202,8 +298,63 @@
   --diff-hunk: #061a0e;
   --diff-gutter: #051710;
 
+  --shadow-pop: 0 0 0 1px #0f3a1f, 0 6px 24px rgb(0 0 0 / 0.5);
+  --shadow-dialog: 0 0 0 1px #1a5530, 0 16px 48px rgb(0 0 0 / 0.6);
+  --shadow-drawer: -8px 0 32px rgb(0 0 0 / 0.5);
+
   --font-sans: "JetBrains Mono", ui-monospace, monospace;
   --font-display: "JetBrains Mono", monospace;
+}
+
+/* ── derived tokens — recomputed wherever a theme applies ──── */
+:root,
+[data-theme] {
+  /* Text variants of the hues; paper overrides them below */
+  --accent-fg: var(--accent);
+  --c-critical-fg: var(--c-critical);
+  --c-major-fg: var(--c-major);
+  --c-minor-fg: var(--c-minor);
+  --c-suggest-fg: var(--c-suggest);
+  --c-add-fg: var(--c-add);
+  --c-del-fg: var(--c-del);
+
+  /* Role aliases */
+  --c-danger: var(--c-critical);
+  --c-danger-fg: var(--c-critical-fg);
+  --c-warn: var(--c-major);
+  --c-warn-fg: var(--c-major-fg);
+  --c-success: var(--c-add);
+  --c-success-fg: var(--c-add-fg);
+  --c-info: var(--c-suggest);
+  --c-info-fg: var(--c-suggest-fg);
+
+  /* Tints: 12% fill, 40% border, for every hue that tags something */
+  --accent-tint: color-mix(in oklch, var(--accent) 12%, transparent);
+  --accent-line: color-mix(in oklch, var(--accent) 40%, transparent);
+  --c-critical-tint: color-mix(in oklch, var(--c-critical) 12%, transparent);
+  --c-critical-line: color-mix(in oklch, var(--c-critical) 40%, transparent);
+  --c-major-tint: color-mix(in oklch, var(--c-major) 12%, transparent);
+  --c-major-line: color-mix(in oklch, var(--c-major) 40%, transparent);
+  --c-minor-tint: color-mix(in oklch, var(--c-minor) 12%, transparent);
+  --c-minor-line: color-mix(in oklch, var(--c-minor) 40%, transparent);
+  --c-suggest-tint: color-mix(in oklch, var(--c-suggest) 12%, transparent);
+  --c-suggest-line: color-mix(in oklch, var(--c-suggest) 40%, transparent);
+  --c-add-tint: color-mix(in oklch, var(--c-add) 12%, transparent);
+  --c-add-line: color-mix(in oklch, var(--c-add) 40%, transparent);
+
+  /* Focus: a 2px ring on everything focusable, a soft halo around text fields */
+  --focus-ring: var(--accent-fg);
+  --focus-ring-soft: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+[data-theme="paper"] {
+  --accent-fg: #457200;
+  --c-critical-fg: #be222a;
+  --c-major-fg: #ae5000;
+  --c-minor-fg: #876700;
+  --c-suggest-fg: #0072a3;
+  --c-add-fg: #1e7729;
+  --c-del-fg: #be222a;
 }
 
 /* ── base reset ─────────────────────────────────────────────── */
@@ -248,6 +399,71 @@
     color: inherit;
   }
 
+  ::placeholder {
+    color: var(--fg-2);
+    opacity: 1;
+  }
+
+  /* Native checkboxes, radios and sliders in the accent instead of the browser's blue */
+  input,
+  progress {
+    accent-color: var(--accent);
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--accent) 32%, transparent);
+  }
+
+  /* One focus style for the whole app. Inline `outline: none` defeats it — don't. */
+  :where(
+      a,
+      button,
+      summary,
+      [tabindex],
+      [role="button"],
+      [role="tab"],
+      [role="option"],
+      [role="radio"],
+      [role="checkbox"],
+      [role="switch"],
+      [role="menuitem"],
+      input[type="checkbox"],
+      input[type="radio"],
+      input[type="range"]
+    ):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  /* Text fields: a 2px ring laid over the border, plus a soft halo. An outline, not a border
+     colour: inline borders and border utilities cannot hide it. */
+  :where(
+      input:not([type="checkbox"], [type="radio"], [type="range"]),
+      textarea,
+      select
+    ):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 4px var(--focus-ring-soft);
+  }
+
+  /* The search field's clear button, in the theme instead of the browser's blue */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    margin-left: 4px;
+    cursor: pointer;
+    background-color: var(--fg-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  input[type="search"]::-webkit-search-cancel-button:hover {
+    background-color: var(--fg-0);
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -266,6 +482,18 @@
     background-clip: padding-box;
     border: 2px solid transparent;
   }
+
+  /* Motion stops for people who asked for less — inline animations included. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /* ── reusable design system utilities ───────────────────────── */
@@ -275,9 +503,6 @@
   }
   .dim {
     color: var(--fg-2);
-  }
-  .dimmer {
-    color: var(--fg-3);
   }
 
   /* chips */
@@ -314,7 +539,7 @@
     background: var(--bg-2);
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: var(--radius-1);
     color: var(--fg-2);
   }
 
@@ -349,29 +574,33 @@
     height: 6px;
   }
   .sev.critical {
-    color: var(--c-critical);
-    border-color: color-mix(in oklch, var(--c-critical) 40%, transparent);
+    color: var(--c-critical-fg);
+    background: var(--c-critical-tint);
+    border-color: var(--c-critical-line);
   }
   .sev.critical .dot {
     background: var(--c-critical);
   }
   .sev.major {
-    color: var(--c-major);
-    border-color: color-mix(in oklch, var(--c-major) 40%, transparent);
+    color: var(--c-major-fg);
+    background: var(--c-major-tint);
+    border-color: var(--c-major-line);
   }
   .sev.major .dot {
     background: var(--c-major);
   }
   .sev.minor {
-    color: var(--c-minor);
-    border-color: color-mix(in oklch, var(--c-minor) 40%, transparent);
+    color: var(--c-minor-fg);
+    background: var(--c-minor-tint);
+    border-color: var(--c-minor-line);
   }
   .sev.minor .dot {
     background: var(--c-minor);
   }
   .sev.suggestion {
-    color: var(--c-suggest);
-    border-color: color-mix(in oklch, var(--c-suggest) 40%, transparent);
+    color: var(--c-suggest-fg);
+    background: var(--c-suggest-tint);
+    border-color: var(--c-suggest-line);
   }
   .sev.suggestion .dot {
     background: var(--c-suggest);
@@ -478,10 +707,6 @@
     background: transparent;
     border-color: transparent;
   }
-  .btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
 
   .icon-btn {
     width: 28px;
@@ -516,40 +741,11 @@
     transform: scale(0.88);
     transition: transform 0.04s;
   }
-  .icon-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -1px;
-  }
-
-  /* form fields — keep outline out of inline styles, or keyboard focus becomes invisible */
-  .field {
-    width: 100%;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--fg-0);
-  }
-  textarea.field {
-    resize: vertical;
-    line-height: 1.5;
-  }
-  .field:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -1px;
-  }
-  .field[aria-invalid="true"] {
-    border-color: var(--c-critical);
-  }
-  .field-label {
-    display: block;
-    margin-bottom: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--fg-3);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+  /* Rows and icon buttons sit in clipped, tight containers: their ring goes inside */
+  .icon-btn:focus-visible,
+  .row-btn:focus-visible,
+  [data-row-focus]:focus-visible {
+    outline-offset: -2px;
   }
 
   /* diff: active row and the pin being edited */
@@ -561,21 +757,7 @@
   .diff-pin-active {
     box-shadow:
       0 0 0 2px var(--bg-0),
-      0 0 0 3.5px var(--accent);
-  }
-
-  /* side sheets (review history, iterations) slide in from the right */
-  .side-sheet[data-state="open"] {
-    animation: side-sheet-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .side-sheet[data-state="closed"] {
-    animation: side-sheet-out 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .side-sheet-overlay[data-state="open"] {
-    animation: side-sheet-fade-in 0.2s ease-out;
-  }
-  .side-sheet-overlay[data-state="closed"] {
-    animation: side-sheet-fade-out 0.18s ease-in;
+      0 0 0 3.5px var(--focus-ring);
   }
 
   /* history rows: the delete button shows on hover and on keyboard focus */
@@ -594,7 +776,6 @@
     background: color-mix(in oklch, var(--c-critical) 15%, transparent);
   }
   .history-row-open:focus-visible {
-    outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
 
@@ -603,11 +784,6 @@
     animation: fadeSlideIn 0.13s ease-out;
   }
   @media (prefers-reduced-motion: reduce) {
-    .comment-editor,
-    .side-sheet,
-    .side-sheet-overlay {
-      animation: none;
-    }
     .icon-btn:not(:disabled):active {
       transform: none;
     }
@@ -647,41 +823,10 @@
 
   [data-theme="phosphor"] .chip,
   [data-theme="phosphor"] .btn,
-  [data-theme="phosphor"] .sev {
+  [data-theme="phosphor"] .sev,
+  [data-theme="phosphor"] .ui-btn,
+  [data-theme="phosphor"] .ui-chip {
     text-transform: uppercase;
     letter-spacing: 0.05em;
-  }
-}
-
-@keyframes side-sheet-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-@keyframes side-sheet-out {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-@keyframes side-sheet-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes side-sheet-fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }

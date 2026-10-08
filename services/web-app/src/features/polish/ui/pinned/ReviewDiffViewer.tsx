@@ -65,7 +65,7 @@ export const ReviewDiffViewer = ({
           justifyContent: "center",
           height: "100%",
           gap: 8,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <div

@@ -64,8 +64,7 @@ export const AddRepoByUrlModal = ({
             position: "fixed",
             inset: 0,
             zIndex: 50,
-            background: "rgba(0,0,0,0.6)",
-            backdropFilter: "blur(4px)",
+            background: "var(--overlay)",
           }}
         />
         <Dialog.Content
@@ -80,7 +79,7 @@ export const AddRepoByUrlModal = ({
             width: 448,
             maxWidth: "calc(100vw - 32px)",
             padding: 24,
-            boxShadow: "var(--shadow)",
+            boxShadow: "var(--shadow-dialog)",
           }}
         >
           <Dialog.Title
@@ -88,7 +87,7 @@ export const AddRepoByUrlModal = ({
           >
             Add repository by URL
           </Dialog.Title>
-          <Dialog.Description style={{ color: "var(--fg-3)", fontSize: 11, margin: "0 0 20px" }}>
+          <Dialog.Description style={{ color: "var(--fg-2)", fontSize: 11, margin: "0 0 20px" }}>
             Pin a repository the host token can read — even if you are not a member.
           </Dialog.Description>
 
@@ -113,12 +112,11 @@ export const AddRepoByUrlModal = ({
                 style={{
                   background: "var(--bg-2)",
                   border: `1px solid ${urlError ? "var(--c-critical)" : "var(--border)"}`,
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   padding: "7px 10px",
                   fontSize: 13,
                   color: "var(--fg-0)",
                   fontFamily: "var(--font-mono)",
-                  outline: "none",
                   width: "100%",
                 }}
               />
@@ -126,7 +124,7 @@ export const AddRepoByUrlModal = ({
                 <p
                   id="add-repo-url-error"
                   role="alert"
-                  style={{ fontSize: 11, color: "var(--c-critical)", margin: 0 }}
+                  style={{ fontSize: 11, color: "var(--c-critical-fg)", margin: 0 }}
                 >
                   {urlError.message}
                 </p>

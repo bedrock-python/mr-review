@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Markdown } from "@shared/ui";
 import { SEV_COLOR } from "../../lib";
 import { PinnedCommentEditor } from "./PinnedCommentEditor";
 import { ReviewDiffViewer } from "./ReviewDiffViewer";
@@ -81,7 +82,7 @@ export const PolishPinned = ({
               {active.line !== null && (
                 <span
                   className="mono"
-                  style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 4 }}
+                  style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 4 }}
                 >
                   :{active.line}
                 </span>
@@ -129,7 +130,7 @@ export const PolishPinned = ({
                     className="mono"
                     style={{
                       fontSize: 10,
-                      color: "var(--fg-3)",
+                      color: "var(--fg-2)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 4,
@@ -149,7 +150,7 @@ export const PolishPinned = ({
                         alignItems: "flex-start",
                         gap: 8,
                         padding: "8px 10px",
-                        borderRadius: 7,
+                        borderRadius: "var(--radius-2)",
                         border: "1px solid var(--border)",
                         background: "var(--bg-2)",
                         cursor: "pointer",
@@ -169,7 +170,7 @@ export const PolishPinned = ({
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           className="mono"
-                          style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 2 }}
+                          style={{ fontSize: 10, color: "var(--fg-2)", marginBottom: 2 }}
                         >
                           {c.file?.split("/").pop()}
                           {c.line !== null ? `:${String(c.line)}` : ""}
@@ -194,7 +195,7 @@ export const PolishPinned = ({
                 <div
                   style={{
                     textAlign: "center",
-                    color: "var(--fg-3)",
+                    color: "var(--fg-2)",
                     fontSize: 12,
                     paddingTop: 20,
                   }}
@@ -214,7 +215,7 @@ export const PolishPinned = ({
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontWeight: 600,
                   marginBottom: 10,
                 }}
@@ -228,7 +229,7 @@ export const PolishPinned = ({
                     padding: 12,
                     background: "var(--bg-1)",
                     border: "1px solid var(--border)",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-3)",
                     marginBottom: 8,
                     opacity: c.status === "dismissed" ? 0.45 : 1,
                   }}
@@ -273,9 +274,7 @@ export const PolishPinned = ({
                       </button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-1)" }}>
-                    {c.body}
-                  </div>
+                  <Markdown>{c.body}</Markdown>
                 </div>
               ))}
             </div>

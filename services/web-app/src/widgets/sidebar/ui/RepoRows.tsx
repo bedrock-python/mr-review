@@ -122,7 +122,7 @@ const RepoRowComponent = ({
         border: "none",
         cursor: "pointer",
         padding: "2px 4px",
-        color: isFavourite ? "var(--c-warn, #e6a817)" : "var(--fg-3)",
+        color: isFavourite ? "var(--c-warn-fg)" : "var(--fg-3)",
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
@@ -209,7 +209,7 @@ export const SectionLabelRow = ({ label }: { label: string }): React.ReactElemen
       padding: "0 10px",
       fontSize: 10,
       fontWeight: 600,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       textTransform: "uppercase",
       letterSpacing: "0.06em",
     }}

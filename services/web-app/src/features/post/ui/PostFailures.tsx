@@ -1,10 +1,10 @@
 import type { Comment, PostFailureKind } from "@entities/review";
 
 const KIND_LOOK: Record<PostFailureKind, { label: string; color: string }> = {
-  position_rejected: { label: "Not anchored", color: "var(--c-critical)" },
-  rejected: { label: "Refused", color: "var(--c-critical)" },
-  ambiguous: { label: "May already be on the MR", color: "var(--c-minor)" },
-  blocked: { label: "Blocked", color: "var(--c-major)" },
+  position_rejected: { label: "Not anchored", color: "var(--c-critical-fg)" },
+  rejected: { label: "Refused", color: "var(--c-critical-fg)" },
+  ambiguous: { label: "May already be on the MR", color: "var(--c-minor-fg)" },
+  blocked: { label: "Blocked", color: "var(--c-major-fg)" },
 };
 
 const location = (c: Comment): string =>
@@ -23,7 +23,7 @@ export const FailedCommentList = ({ comments }: { comments: Comment[] }): React.
             marginBottom: 6,
             background: `color-mix(in oklch, ${look.color} 8%, var(--bg-1))`,
             border: `1px solid color-mix(in oklch, ${look.color} 30%, transparent)`,
-            borderRadius: 8,
+            borderRadius: "var(--radius-3)",
             fontSize: 12,
           }}
         >
@@ -60,7 +60,7 @@ export const ResendConfirm = ({
       padding: "12px 14px",
       background: "color-mix(in oklch, var(--c-minor) 10%, var(--bg-1))",
       border: "1px solid color-mix(in oklch, var(--c-minor) 40%, transparent)",
-      borderRadius: 8,
+      borderRadius: "var(--radius-3)",
       fontSize: 12.5,
       color: "var(--fg-1)",
     }}

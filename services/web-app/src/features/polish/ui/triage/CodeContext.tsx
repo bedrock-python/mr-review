@@ -13,7 +13,7 @@ const ROW_CLASS: Record<DiffRow["kind"], string> = {
   added: "bg-[var(--diff-add-bg)] text-diff-add-fg",
   removed: "bg-[var(--diff-del-bg)] text-diff-del-fg",
   context: "text-fg-1",
-  hunk: "text-fg-3",
+  hunk: "text-fg-2",
 };
 
 const SIGN: Record<DiffRow["kind"], string> = { added: "+", removed: "−", context: " ", hunk: " " };
@@ -27,7 +27,7 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
 
   if (snippet === null) {
     return (
-      <div className="text-fg-3 px-2.5 py-2 font-mono text-[11px]" role="status">
+      <div className="text-fg-2 px-2.5 py-2 font-mono text-[11px]" role="status">
         {isDiffLoading
           ? "Loading code…"
           : `Line ${String(line)} of ${file} is not shown in the diff.`}
@@ -55,8 +55,8 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
               aria-current={isTarget ? "true" : undefined}
               className={cn(ROW_CLASS[row.kind], isTarget && "diff-row-highlight")}
             >
-              <td className="text-fg-3 px-1.5 text-right select-none">{row.oldLine ?? ""}</td>
-              <td className="text-fg-3 px-1.5 text-right select-none">{row.newLine ?? ""}</td>
+              <td className="text-fg-2 px-1.5 text-right select-none">{row.oldLine ?? ""}</td>
+              <td className="text-fg-2 px-1.5 text-right select-none">{row.newLine ?? ""}</td>
               <td className="text-center select-none" aria-hidden="true">
                 {SIGN[row.kind]}
               </td>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageNavigation } from "@widgets/stage-bar";
 import { useMR, useDiff, getDiffStats, sumDiffStats } from "@entities/mr";
-import { Markdown } from "@shared/ui";
+import { Markdown, StageLoading } from "@shared/ui";
 import { DiffViewer } from "./DiffViewer";
 import { FileList } from "./FileList";
 import type { MR, MRDiffStats, PipelineStatus } from "@entities/mr";
@@ -52,7 +52,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
               className="mono"
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 marginBottom: 8,
@@ -70,7 +70,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               textTransform: "uppercase",
               letterSpacing: "0.08em",
               marginBottom: 8,
@@ -85,10 +85,10 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
                 alignItems: "center",
                 gap: 5,
                 padding: "2px 8px",
-                borderRadius: 3,
+                borderRadius: "var(--radius-1)",
                 border: "1px solid color-mix(in oklch, var(--accent) 40%, transparent)",
                 background: "color-mix(in oklch, var(--accent) 12%, transparent)",
-                color: "var(--accent)",
+                color: "var(--accent-fg)",
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
                 textTransform: "uppercase",
@@ -139,7 +139,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
               className="mono"
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 marginBottom: 8,
@@ -199,7 +199,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
             className="kbd"
             style={{
               background: "var(--accent-ink)",
-              color: "var(--accent)",
+              color: "var(--accent-fg)",
               borderColor: "transparent",
             }}
           >
@@ -241,30 +241,7 @@ const PickWorkspace = (): React.ReactElement => {
   };
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          gap: 10,
-          color: "var(--fg-3)",
-        }}
-      >
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin"
-        />
-        <span style={{ fontSize: 13 }}>Loading merge request…</span>
-      </div>
-    );
+    return <StageLoading label="Loading merge request…" />;
   }
 
   if (isError) {
@@ -277,7 +254,7 @@ const PickWorkspace = (): React.ReactElement => {
           justifyContent: "center",
           height: "100%",
           gap: 8,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <span style={{ fontSize: 24 }}>⚠</span>
@@ -314,7 +291,7 @@ const PickWorkspace = (): React.ReactElement => {
               justifyContent: "center",
               height: "100%",
               fontSize: 13,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
             }}
           >
             No changes in this MR

@@ -62,7 +62,7 @@ export const ChangelogModal = ({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: "var(--overlay)",
             zIndex: 200,
           }}
         />
@@ -78,7 +78,7 @@ export const ChangelogModal = ({
             maxHeight: "80vh",
             background: "var(--bg-1)",
             border: "1px solid var(--border)",
-            borderRadius: 10,
+            borderRadius: "var(--radius-3)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -101,7 +101,7 @@ export const ChangelogModal = ({
               }}
             >
               <Dialog.Title
-                style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-0)", margin: 0 }}
+                style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-0)", margin: 0 }}
               >
                 What&apos;s new in v{component.latest}
               </Dialog.Title>
@@ -112,9 +112,9 @@ export const ChangelogModal = ({
                     background: "transparent",
                     border: "none",
                     cursor: "pointer",
-                    color: "var(--fg-3)",
+                    color: "var(--fg-2)",
                     padding: 4,
-                    borderRadius: 4,
+                    borderRadius: "var(--radius-1)",
                     lineHeight: 1,
                   }}
                   aria-label="Close"
@@ -123,7 +123,7 @@ export const ChangelogModal = ({
                 </button>
               </Dialog.Close>
             </div>
-            <Dialog.Description style={{ fontSize: 12, color: "var(--fg-3)", margin: 0 }}>
+            <Dialog.Description style={{ fontSize: 12, color: "var(--fg-2)", margin: 0 }}>
               You are on v{component.current}
             </Dialog.Description>
           </div>
@@ -133,7 +133,7 @@ export const ChangelogModal = ({
             {component.release.body ? (
               <Markdown>{component.release.body}</Markdown>
             ) : (
-              <p style={{ fontSize: 12, color: "var(--fg-3)" }}>No changelog provided.</p>
+              <p style={{ fontSize: 12, color: "var(--fg-2)" }}>No changelog provided.</p>
             )}
           </div>
 
@@ -146,7 +146,7 @@ export const ChangelogModal = ({
               background: "var(--bg-0)",
             }}
           >
-            <p style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8 }}>
+            <p style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 8 }}>
               Run this command to update ({deploymentMode}):
             </p>
             <div
@@ -156,7 +156,7 @@ export const ChangelogModal = ({
                 gap: 8,
                 background: "var(--bg-3)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "8px 12px",
               }}
             >
@@ -174,9 +174,9 @@ export const ChangelogModal = ({
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  color: isCopied ? "var(--accent)" : "var(--fg-3)",
+                  color: isCopied ? "var(--accent-fg)" : "var(--fg-2)",
                   padding: 4,
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-1)",
                   display: "flex",
                   alignItems: "center",
                   flexShrink: 0,

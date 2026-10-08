@@ -23,7 +23,11 @@ export type PresetEditorProps = {
   children?: React.ReactNode;
 };
 
-const errorStyle: React.CSSProperties = { fontSize: 11, color: "var(--c-critical)", marginTop: 4 };
+const errorStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "var(--c-critical-fg)",
+  marginTop: 4,
+};
 
 export const PresetEditor = ({
   initial,
@@ -95,7 +99,7 @@ export const PresetEditor = ({
         />
         <div
           id={`${id}-instructions-hint`}
-          style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}
+          style={{ fontSize: 11, color: "var(--fg-2)", marginTop: 4 }}
         >
           Opens the prompt in place of the built-in preset&apos;s instructions. Leave empty to keep
           them.

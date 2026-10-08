@@ -1,7 +1,7 @@
 import type { CommentSeverity, ReviewStage } from "@entities/review";
 
 export const STAGE_META: Record<ReviewStage, { label: string; color: string }> = {
-  pick: { label: "Picking", color: "var(--fg-3)" },
+  pick: { label: "Picking", color: "var(--fg-2)" },
   brief: { label: "Brief", color: "var(--fg-2)" },
   dispatch: { label: "Dispatching", color: "var(--c-major)" },
   polish: { label: "Polishing", color: "var(--accent)" },

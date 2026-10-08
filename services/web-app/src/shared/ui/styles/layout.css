@@ -1,0 +1,118 @@
+/* Toolbar, SegmentedControl, StageFooter. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Toolbar / SegmentedControl / StageFooter ──────────────── */
+  .ui-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+  }
+  .ui-toolbar--sm {
+    min-height: 40px;
+  }
+  .ui-toolbar--flush {
+    border-bottom: 0;
+  }
+  .ui-toolbar__spacer {
+    flex: 1;
+  }
+  .ui-toolbar__divider {
+    width: 1px;
+    height: 18px;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+
+  .ui-segmented {
+    display: inline-flex;
+    align-items: stretch;
+    flex-shrink: 0;
+    gap: 2px;
+    height: var(--control-md);
+    padding: 2px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-control);
+    background: var(--bg-2);
+  }
+  .ui-segmented--sm {
+    height: var(--control-sm);
+    padding: 1px;
+  }
+  .ui-segmented__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-2);
+    font-size: var(--fs-control);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background var(--dur-fast),
+      color var(--dur-fast);
+  }
+  .ui-segmented--sm .ui-segmented__item {
+    padding: 0 8px;
+    border-radius: 3px;
+  }
+  .ui-segmented__item:hover:not([aria-disabled="true"], [aria-checked="true"]) {
+    color: var(--fg-0);
+  }
+  .ui-segmented__item[aria-checked="true"] {
+    background: var(--bg-0);
+    color: var(--fg-0);
+    font-weight: var(--fw-medium);
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .ui-segmented__item[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .ui-segmented__item:focus-visible {
+    outline-offset: -1px;
+  }
+  .ui-segmented__count {
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    color: var(--fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ui-stage-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+    min-height: 56px;
+    padding: 10px var(--space-4);
+    border-top: 1px solid var(--border);
+    background: var(--bg-1);
+  }
+  .ui-stage-footer__summary {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-control);
+    color: var(--fg-2);
+  }
+  .ui-stage-footer__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+}

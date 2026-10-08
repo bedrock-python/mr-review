@@ -149,7 +149,7 @@ export const DiffTable = <T,>({
     return (
       <div
         className={cn(
-          "flex h-full items-center justify-center text-[12px] text-[var(--fg-3)]",
+          "flex h-full items-center justify-center text-[12px] text-[var(--fg-2)]",
           className
         )}
         role="status"

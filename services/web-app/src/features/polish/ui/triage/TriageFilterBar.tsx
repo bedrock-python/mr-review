@@ -32,7 +32,7 @@ const toggleSeverity = (
 
 const segmentClass = (isActive: boolean): string =>
   cn(
-    "rounded-[5px] px-2.5 py-1 font-mono text-[11px]",
+    "rounded-[var(--radius-2)] px-2.5 py-1 font-mono text-[11px]",
     isActive ? "bg-bg-0 text-fg-0" : "text-fg-2 hover:text-fg-0"
   );
 
@@ -51,8 +51,8 @@ export const TriageFilterBar = ({
 
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <label className="border-border bg-bg-0 focus-within:border-border-strong flex min-w-[200px] flex-1 items-center gap-2 rounded-md border px-2.5 py-1">
-        <Search size={13} className="text-fg-3" aria-hidden="true" />
+      <label className="border-border bg-bg-0 ui-focus-within flex min-w-[200px] flex-1 items-center gap-2 rounded-md border px-2.5 py-1">
+        <Search size={13} className="text-fg-2" aria-hidden="true" />
         <input
           ref={searchRef}
           type="search"
@@ -68,7 +68,7 @@ export const TriageFilterBar = ({
             if (filters.search.length > 0) update({ search: "" });
             else event.currentTarget.blur();
           }}
-          className="text-fg-0 placeholder:text-fg-3 min-w-0 flex-1 bg-transparent text-[12px] outline-none"
+          className="text-fg-0 placeholder:text-fg-2 min-w-0 flex-1 bg-transparent text-[12px]"
         />
       </label>
 
@@ -99,7 +99,7 @@ export const TriageFilterBar = ({
       </div>
 
       <div
-        className="border-border bg-bg-2 inline-flex gap-0.5 rounded-[7px] border p-0.5"
+        className="border-border bg-bg-2 inline-flex gap-0.5 rounded-[var(--radius-2)] border p-0.5"
         role="group"
         aria-label="Filter by status"
       >

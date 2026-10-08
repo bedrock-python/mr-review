@@ -36,19 +36,19 @@ export const VersionBadge = (): React.ReactElement => {
         className="mono"
         style={{
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           background: "transparent",
           border: "none",
           cursor: "pointer",
           padding: "2px 4px",
-          borderRadius: 3,
+          borderRadius: "var(--radius-1)",
           transition: "color 0.15s",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = "var(--fg-1)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.color = "var(--fg-3)";
+          e.currentTarget.style.color = "var(--fg-2)";
         }}
       >
         v{__APP_VERSION__}
@@ -76,9 +76,9 @@ export const VersionBadge = (): React.ReactElement => {
             width: 220,
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-3)",
             padding: "12px 14px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+            boxShadow: "var(--shadow-pop)",
             zIndex: 100,
           }}
         >
@@ -86,11 +86,11 @@ export const VersionBadge = (): React.ReactElement => {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: "var(--fg-3)" }}>Backend</span>
+              <span style={{ color: "var(--fg-2)" }}>Backend</span>
               <span
                 className="mono"
                 style={{
-                  color: updateInfo?.backend.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                  color: updateInfo?.backend.isUpdateAvailable ? "var(--accent-fg)" : "var(--fg-0)",
                 }}
               >
                 v{updateInfo?.backend.current ?? __APP_VERSION__}
@@ -98,11 +98,13 @@ export const VersionBadge = (): React.ReactElement => {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: "var(--fg-3)" }}>Frontend</span>
+              <span style={{ color: "var(--fg-2)" }}>Frontend</span>
               <span
                 className="mono"
                 style={{
-                  color: updateInfo?.frontend?.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                  color: updateInfo?.frontend?.isUpdateAvailable
+                    ? "var(--accent-fg)"
+                    : "var(--fg-0)",
                 }}
               >
                 v{updateInfo?.frontend?.current ?? __APP_VERSION__}
@@ -116,7 +118,7 @@ export const VersionBadge = (): React.ReactElement => {
                   borderTop: "1px solid var(--border)",
                   paddingTop: 6,
                   marginTop: 2,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                 }}
               >
                 Update available — see banner above
@@ -132,7 +134,7 @@ export const VersionBadge = (): React.ReactElement => {
               width: "100%",
               background: "var(--bg-3)",
               border: "1px solid var(--border)",
-              borderRadius: 5,
+              borderRadius: "var(--radius-2)",
               cursor: isFetching ? "default" : "pointer",
               color: isFetching ? "var(--fg-3)" : "var(--fg-0)",
               fontSize: 11,

@@ -37,11 +37,11 @@ const pillStyle = (isActive: boolean, color: string): React.CSSProperties => ({
   alignItems: "center",
   gap: 4,
   padding: "2px 8px",
-  borderRadius: 999,
+  borderRadius: "var(--radius-pill)",
   fontSize: 10,
   fontFamily: "var(--font-mono)",
   background: isActive ? `color-mix(in oklch, ${color} 15%, var(--bg-2))` : "var(--bg-2)",
-  color: isActive ? color : "var(--fg-3)",
+  color: isActive ? color : "var(--fg-2)",
   border: isActive
     ? `1px solid color-mix(in oklch, ${color} 40%, transparent)`
     : "1px solid var(--border)",
@@ -58,10 +58,10 @@ const ReviewCount = (): React.ReactElement | null => {
       aria-label={`${String(reviews.length)} reviews`}
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         padding: "1px 6px",
       }}
     >
@@ -88,12 +88,18 @@ const ListSkeleton = (): React.ReactElement => (
             height: 11,
             width: 100 + (i % 3) * 30,
             background: "var(--bg-2)",
-            borderRadius: 3,
+            borderRadius: "var(--radius-1)",
             opacity: 0.5,
           }}
         />
         <div
-          style={{ height: 9, width: 70, background: "var(--bg-2)", borderRadius: 3, opacity: 0.3 }}
+          style={{
+            height: 9,
+            width: 70,
+            background: "var(--bg-2)",
+            borderRadius: "var(--radius-1)",
+            opacity: 0.3,
+          }}
         />
       </div>
     ))}
@@ -149,17 +155,18 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
     <>
       <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div
+          className="ui-focus-within"
           style={{
             display: "flex",
             alignItems: "center",
             gap: 6,
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             padding: "5px 8px",
           }}
         >
-          <span style={{ color: "var(--fg-3)", flexShrink: 0, display: "flex" }}>
+          <span style={{ color: "var(--fg-2)", flexShrink: 0, display: "flex" }}>
             <SearchIcon />
           </span>
           <input
@@ -174,7 +181,6 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
             style={{
               background: "none",
               border: "none",
-              outline: "none",
               fontSize: 12,
               color: "var(--fg-0)",
               width: "100%",
@@ -271,7 +277,7 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
                 borderBottom: "1px solid var(--border)",
                 fontSize: 10,
                 fontWeight: 600,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
               }}

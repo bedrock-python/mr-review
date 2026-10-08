@@ -6,9 +6,9 @@ import type { DiffLineWithFile, LineDecorationRenderer } from "./types";
 const rowBackgroundClass = (type: DiffLineWithFile["type"]): string => {
   switch (type) {
     case "file":
-      return "bg-[var(--bg-2)] text-[var(--accent)]";
+      return "bg-[var(--bg-2)] text-[var(--fg-0)] font-medium border-t border-[var(--border)]";
     case "header":
-      return "bg-[var(--diff-hunk)] text-[var(--fg-3)]";
+      return "bg-[var(--diff-hunk)] text-[var(--fg-2)]";
     case "added":
       return "bg-[var(--diff-add-bg)] text-[var(--diff-add-fg)]";
     case "removed":
@@ -62,14 +62,14 @@ const DiffRowBase = <T,>({
       {showOldGutter && (
         <th
           scope="row"
-          className="px-1.5 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-3)] select-none"
+          className="px-1.5 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
         >
           {line.oldLine ?? ""}
         </th>
       )}
       <th
         scope="row"
-        className="px-2 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-3)] select-none"
+        className="px-2 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
       >
         {line.newLine ?? ""}
       </th>
@@ -78,7 +78,7 @@ const DiffRowBase = <T,>({
           "text-center select-none",
           line.type === "added" && "text-[var(--diff-add-fg)]",
           line.type === "removed" && "text-[var(--diff-del-fg)]",
-          !changeLabel && "text-[var(--fg-3)]"
+          !changeLabel && "text-[var(--fg-2)]"
         )}
       >
         <span aria-hidden="true">{SIGNS[line.type]}</span>

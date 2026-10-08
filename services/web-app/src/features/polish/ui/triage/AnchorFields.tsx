@@ -35,7 +35,7 @@ export const AnchorFields = ({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-fg-3 font-mono text-[10px] tracking-[0.08em] uppercase">anchor</span>
+        <span className="text-fg-2 font-mono text-[10px] tracking-[0.08em] uppercase">anchor</span>
         <select
           aria-label="Anchor file"
           value={file ?? GENERAL_OPTION}
@@ -52,7 +52,7 @@ export const AnchorFields = ({
           ))}
         </select>
         {file !== null && (
-          <label className="text-fg-3 flex items-center gap-1.5 font-mono text-[11px]">
+          <label className="text-fg-2 flex items-center gap-1.5 font-mono text-[11px]">
             line
             <input
               aria-label="Line number"
@@ -66,15 +66,15 @@ export const AnchorFields = ({
             />
           </label>
         )}
-        {isDiffLoading && <span className="text-fg-3 text-[11px]">Loading diff files…</span>}
+        {isDiffLoading && <span className="text-fg-2 text-[11px]">Loading diff files…</span>}
       </div>
       {lineError !== null && (
-        <p role="alert" className="text-[11px] text-[var(--c-critical)]">
+        <p role="alert" className="text-[11px] text-[var(--c-critical-fg)]">
           {lineError}
         </p>
       )}
       {warning !== null && (
-        <p role="note" className="flex items-center gap-1.5 text-[11px] text-[var(--c-major)]">
+        <p role="note" className="flex items-center gap-1.5 text-[11px] text-[var(--c-major-fg)]">
           <TriangleAlert size={12} aria-hidden="true" />
           {warning}
         </p>

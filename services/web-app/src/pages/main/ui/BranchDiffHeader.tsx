@@ -24,7 +24,7 @@ export const BranchDiffHeader = (): React.ReactElement | null => {
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="mono" style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 6 }}>
+        <div className="mono" style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 6 }}>
           {selectedRepoPath} › branch diff
         </div>
         <h1

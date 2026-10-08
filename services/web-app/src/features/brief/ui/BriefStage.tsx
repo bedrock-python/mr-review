@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { copyText } from "@shared/lib";
+import { StageLoading } from "@shared/ui";
 import { useDiffSize } from "@entities/review";
 import { isEverythingExcluded } from "../lib";
 import { useBriefDraft, useExcludedFiles, usePromptPreview } from "../model";
@@ -25,7 +26,7 @@ const CenteredMessage = ({ children }: { children: React.ReactNode }): React.Rea
       justifyContent: "center",
       height: "100%",
       gap: 10,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       fontSize: 13,
     }}
   >
@@ -101,22 +102,7 @@ export const BriefStage = (): React.ReactElement => {
   }
 
   if (isLoading) {
-    return (
-      <CenteredMessage>
-        <div
-          aria-hidden="true"
-          className="animate-spin"
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-        />
-        <span>Loading review…</span>
-      </CenteredMessage>
-    );
+    return <StageLoading label="Loading review…" />;
   }
 
   const footer = (

@@ -61,9 +61,9 @@ const CommentCardBase = ({
         if (!isFocused) handlers.onFocus(id);
       }}
       className={cn(
-        "bg-bg-1 rounded-[10px] border px-3.5 py-3 transition-colors outline-none",
+        "bg-bg-1 rounded-[var(--radius-3)] border px-3.5 py-3 transition-colors outline-none",
         isFocused
-          ? "border-accent shadow-[inset_3px_0_0_var(--accent)]"
+          ? "border-accent-fg shadow-[inset_3px_0_0_var(--accent)]"
           : "border-border hover:border-border-strong"
       )}
     >
@@ -78,12 +78,12 @@ const CommentCardBase = ({
           <span className="text-fg-1 font-mono text-[11px] break-all">{locationOf(comment)}</span>
         )}
         {anchorProblem !== null && (
-          <span className="chip text-[var(--c-major)]" title={anchorProblem}>
+          <span className="chip text-[var(--c-major-fg)]" title={anchorProblem}>
             <TriangleAlert size={11} aria-hidden="true" />
             not in diff
           </span>
         )}
-        {isDismissed && <span className="chip text-fg-3">dismissed</span>}
+        {isDismissed && <span className="chip text-fg-2">dismissed</span>}
         <div className="ml-auto flex gap-0.5">
           <button
             type="button"
@@ -146,7 +146,7 @@ const CommentCardBase = ({
             onClick={() => {
               handlers.onToggleContext(id);
             }}
-            className="text-fg-3 hover:text-fg-1 flex items-center gap-1 font-mono text-[10px] tracking-[0.06em] uppercase"
+            className="text-fg-2 hover:text-fg-1 flex items-center gap-1 font-mono text-[10px] tracking-[0.06em] uppercase"
           >
             <ChevronRight
               size={11}

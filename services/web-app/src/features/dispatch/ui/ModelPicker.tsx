@@ -52,11 +52,12 @@ export const ModelPicker = ({
   return (
     <div style={{ position: "relative" }}>
       <div
+        className="ui-focus-within"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          borderRadius: 8,
+          borderRadius: "var(--radius-3)",
           border: `1.5px solid ${isOpen ? accentColor : "var(--border)"}`,
           background: "var(--bg-1)",
           padding: "0 10px",
@@ -70,7 +71,7 @@ export const ModelPicker = ({
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          style={{ flexShrink: 0, color: "var(--fg-3)" }}
+          style={{ flexShrink: 0, color: "var(--fg-2)" }}
           aria-hidden="true"
         >
           <circle cx="11" cy="11" r="8" />
@@ -102,7 +103,6 @@ export const ModelPicker = ({
           style={{
             flex: 1,
             border: "none",
-            outline: "none",
             background: "transparent",
             fontSize: 13,
             fontFamily: "var(--font-mono)",
@@ -141,10 +141,10 @@ export const ModelPicker = ({
             left: 0,
             right: 0,
             zIndex: 100,
-            borderRadius: 8,
+            borderRadius: "var(--radius-3)",
             border: "1px solid var(--border)",
             background: "var(--bg-1)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            boxShadow: "var(--shadow-pop)",
             maxHeight: 240,
             overflowY: "auto",
           }}
@@ -171,7 +171,7 @@ export const ModelPicker = ({
             />
           ))}
           {matches.length === 0 && !canUseTyped && (
-            <div style={{ padding: 12, fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
+            <div style={{ padding: 12, fontSize: 12, color: "var(--fg-2)", textAlign: "center" }}>
               No models configured — type a model id
             </div>
           )}

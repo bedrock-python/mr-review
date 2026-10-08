@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 import type React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { reloadOnStaleChunk } from "@shared/lib";
-import { Spinner } from "@shared/ui/Spinner";
+// Straight from the module: the shared/ui barrel would pull every primitive into the entry chunk.
+import { StageLoading } from "@shared/ui/loading";
 
 const MainPage = lazy(
   reloadOnStaleChunk(() =>
@@ -19,7 +20,7 @@ const SettingsPage = lazy(
 export const Router = (): React.ReactElement => {
   return (
     <BrowserRouter>
-      <Suspense fallback={<Spinner />}>
+      <Suspense fallback={<StageLoading />}>
         <Routes>
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<MainPage />} />

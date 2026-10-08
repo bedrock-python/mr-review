@@ -8,8 +8,8 @@ const cardStyle = (isSelected: boolean): React.CSSProperties => ({
   gap: 4,
   width: "100%",
   padding: "10px 12px",
-  borderRadius: 6,
-  border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+  borderRadius: "var(--radius-2)",
+  border: `1px solid ${isSelected ? "var(--accent-fg)" : "var(--border)"}`,
   background: isSelected ? "color-mix(in oklch, var(--accent) 10%, var(--bg-2))" : "var(--bg-2)",
   boxShadow: isSelected
     ? "0 0 0 1px var(--accent), 0 2px 12px color-mix(in oklch, var(--accent) 15%, transparent)"
@@ -37,16 +37,16 @@ const PresetCard = ({
       className="mono"
       style={{
         fontSize: 10,
-        fontWeight: 700,
+        fontWeight: 600,
         letterSpacing: "0.08em",
-        color: isSelected ? "var(--accent)" : "var(--fg-2)",
+        color: isSelected ? "var(--accent-fg)" : "var(--fg-2)",
       }}
     >
       {label}
     </span>
     {description && (
       <span
-        style={{ fontSize: 11, color: isSelected ? "var(--fg-1)" : "var(--fg-3)", lineHeight: 1.4 }}
+        style={{ fontSize: 11, color: isSelected ? "var(--fg-1)" : "var(--fg-2)", lineHeight: 1.4 }}
       >
         {description}
       </span>
@@ -135,7 +135,7 @@ export const SavedPresetList = ({
             style={{
               padding: "3px 8px",
               fontSize: 11,
-              color: confirmingDeleteId === preset.id ? "var(--c-critical)" : undefined,
+              color: confirmingDeleteId === preset.id ? "var(--c-critical-fg)" : undefined,
             }}
             aria-label={
               confirmingDeleteId === preset.id

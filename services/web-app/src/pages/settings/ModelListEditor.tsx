@@ -21,10 +21,10 @@ export type ModelListEditorProps = {
 const smallButtonCss: React.CSSProperties = {
   background: "none",
   border: "1px solid var(--border)",
-  borderRadius: 4,
+  borderRadius: "var(--radius-1)",
   padding: "1px 6px",
   fontSize: 10,
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
   cursor: "pointer",
   flexShrink: 0,
 };
@@ -34,7 +34,7 @@ const rowCss: React.CSSProperties = {
   alignItems: "center",
   gap: 8,
   padding: "5px 10px",
-  borderRadius: 6,
+  borderRadius: "var(--radius-2)",
   border: "1px solid var(--border)",
   background: "var(--bg-0)",
 };
@@ -112,10 +112,10 @@ export const ModelListEditor = ({
           <li
             style={{
               padding: "8px 10px",
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               border: "1px dashed var(--border)",
               fontSize: 11,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               fontStyle: "italic",
               textAlign: "center",
             }}
@@ -200,10 +200,10 @@ export const ModelListEditor = ({
           {fetchState.status === "loading" ? "Fetching…" : "Fetch models from API"}
         </button>
         {fetchBlockedReason && (
-          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>{fetchBlockedReason}</span>
+          <span style={{ fontSize: 11, color: "var(--fg-2)" }}>{fetchBlockedReason}</span>
         )}
         {fetchState.status === "error" && (
-          <span role="alert" style={{ fontSize: 11, color: "var(--c-critical)" }}>
+          <span role="alert" style={{ fontSize: 11, color: "var(--c-critical-fg)" }}>
             {fetchState.message}
           </span>
         )}
@@ -215,7 +215,7 @@ export const ModelListEditor = ({
           aria-label="Models offered by the API"
           style={{
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             padding: 8,
             display: "flex",
             flexDirection: "column",

@@ -1,0 +1,82 @@
+/* ── Toaster (sonner) ─────────────────────────────────────────
+   Unlayered on purpose: sonner injects its own unlayered stylesheet at
+   runtime, and a layered rule would lose to it whatever its specificity.
+   The `html` prefix outranks sonner's two-attribute selectors. */
+html [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--bg-2);
+  --normal-bg-hover: var(--bg-3);
+  --normal-border: var(--border-strong);
+  --normal-border-hover: var(--border-strong);
+  --normal-text: var(--fg-0);
+  --border-radius: var(--radius-card);
+  font-family: var(--font-sans);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  gap: 10px;
+  padding: 12px 14px 12px 16px;
+  font-size: var(--fs-control);
+  box-shadow: var(--shadow-pop);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+  font-weight: var(--fw-medium);
+  white-space: pre-line;
+}
+html [data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-description] {
+  color: var(--fg-2);
+}
+/* The severity bar: a 3px edge in the toast's tone */
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="error"] {
+  box-shadow:
+    inset 3px 0 0 var(--c-critical),
+    var(--shadow-pop);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="warning"] {
+  box-shadow:
+    inset 3px 0 0 var(--c-major),
+    var(--shadow-pop);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="success"] {
+  box-shadow:
+    inset 3px 0 0 var(--c-add),
+    var(--shadow-pop);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="info"] {
+  box-shadow:
+    inset 3px 0 0 var(--c-suggest),
+    var(--shadow-pop);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--c-critical-fg);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--c-major-fg);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--c-add-fg);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-type="info"] [data-icon] {
+  color: var(--c-suggest-fg);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
+  height: var(--control-sm);
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: var(--fw-semibold);
+}
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:focus-visible,
+html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+html [data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button] {
+  background: var(--bg-2);
+  border-color: var(--border-strong);
+  color: var(--fg-1);
+}
+html [data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button]:hover {
+  background: var(--bg-3);
+  color: var(--fg-0);
+}

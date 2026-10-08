@@ -6,6 +6,8 @@ import { ListMessage, ListStatusBar } from "@shared/ui";
 import { useDebouncedSearch, useStableCallback } from "@shared/lib";
 import { AddRepoByUrlModal } from "@features/add-repo-by-url";
 import { useRepoListRows } from "../model/useRepoListRows";
+import { hostConnectionOf } from "../lib/hostConnection";
+import { HostStatus } from "./HostStatus";
 import { InboxEntry } from "./InboxEntry";
 import { RepoList } from "./RepoList";
 import { ReposPaneHeader } from "./ReposPaneHeader";
@@ -142,26 +144,14 @@ export const ReposPane = (): React.ReactElement => {
           justifyContent: "space-between",
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            color: "var(--fg-3)",
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: selectedHostId ? "var(--c-add)" : "var(--fg-3)",
-              display: "inline-block",
-            }}
+        {selectedHostId === null ? (
+          <span />
+        ) : (
+          <HostStatus
+            connection={hostConnectionOf(reposQuery)}
+            errorMessage={reposQuery.error?.message}
           />
-          {selectedHostId ? "connected" : "disconnected"}
-        </span>
+        )}
         <VersionBadge />
       </div>
       <AddRepoByUrlModal

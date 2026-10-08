@@ -43,6 +43,7 @@ import { ExportImportSection } from "@features/export-import";
 import { ReviewPresetsManager } from "@features/manage-review-presets";
 
 import { ModelListEditor } from "./ModelListEditor";
+import { formatPlatform } from "./formatPlatform";
 
 const UpdateHostFormSchema = UpdateHostSchema.extend({ colorId: z.string() });
 type UpdateHostFormValues = z.infer<typeof UpdateHostFormSchema>;
@@ -145,7 +146,7 @@ type FieldProps = {
 const Field = ({ label, hint, icon, error, children }: FieldProps): React.ReactElement => (
   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      {icon && <span style={{ color: "var(--fg-3)" }}>{icon}</span>}
+      {icon && <span style={{ color: "var(--fg-2)" }}>{icon}</span>}
       <label
         style={{
           fontSize: 11,
@@ -159,20 +160,19 @@ const Field = ({ label, hint, icon, error, children }: FieldProps): React.ReactE
       </label>
     </div>
     {children}
-    {hint && !error && <p style={{ margin: 0, fontSize: 11, color: "var(--fg-3)" }}>{hint}</p>}
-    {error && <p style={{ margin: 0, fontSize: 11, color: "var(--c-critical)" }}>{error}</p>}
+    {hint && !error && <p style={{ margin: 0, fontSize: 11, color: "var(--fg-2)" }}>{hint}</p>}
+    {error && <p style={{ margin: 0, fontSize: 11, color: "var(--c-critical-fg)" }}>{error}</p>}
   </div>
 );
 
 const inputCss: React.CSSProperties = {
   background: "var(--bg-0)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-2)",
   padding: "7px 10px",
   fontSize: 12,
   fontFamily: "var(--font-mono)",
   color: "var(--fg-0)",
-  outline: "none",
   width: "100%",
   boxSizing: "border-box",
   transition: "border-color 0.1s",
@@ -208,7 +208,7 @@ const Section = ({ title, description, children }: SectionProps): React.ReactEle
         {title}
       </h2>
       {description && (
-        <p style={{ margin: 0, fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--fg-2)", lineHeight: 1.5 }}>
           {description}
         </p>
       )}
@@ -218,7 +218,7 @@ const Section = ({ title, description, children }: SectionProps): React.ReactEle
       style={{
         background: "var(--bg-1)",
         border: "1px solid var(--border)",
-        borderRadius: 10,
+        borderRadius: "var(--radius-3)",
         overflow: "hidden",
       }}
     >
@@ -402,11 +402,11 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
                 alignSelf: "flex-start",
                 fontSize: 11,
                 fontWeight: 600,
-                color: "var(--accent)",
+                color: "var(--accent-fg)",
                 textDecoration: "none",
                 background: "color-mix(in oklch, var(--accent) 12%, transparent)",
                 border: "1px solid color-mix(in oklch, var(--accent) 30%, transparent)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "4px 9px",
                 marginTop: 4,
                 transition: "background 0.1s, border-color 0.1s",
@@ -501,7 +501,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
           className="mono"
           style={{
             fontSize: 11,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -525,7 +525,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
       <button
         type="button"
         className="btn ghost"
-        style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
+        style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-2)" }}
         onClick={handleEdit}
         title="Edit host"
       >
@@ -540,11 +540,11 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
           padding: "4px 10px",
           gap: 5,
           fontSize: 11,
-          color: confirming ? "var(--c-critical)" : "var(--fg-3)",
+          color: confirming ? "var(--c-critical-fg)" : "var(--fg-2)",
           border: confirming
             ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
             : "1px solid transparent",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
         }}
         onClick={handleDelete}
         onBlur={() => {
@@ -697,11 +697,11 @@ const AddHostForm = (): React.ReactElement => {
               alignSelf: "flex-start",
               fontSize: 11,
               fontWeight: 600,
-              color: "var(--accent)",
+              color: "var(--accent-fg)",
               textDecoration: "none",
               background: "color-mix(in oklch, var(--accent) 12%, transparent)",
               border: "1px solid color-mix(in oklch, var(--accent) 30%, transparent)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               padding: "4px 9px",
               marginTop: 4,
               transition: "background 0.1s, border-color 0.1s",
@@ -816,7 +816,7 @@ type BaseUrlWarningProps = { message: string | null };
 
 const BaseUrlWarning = ({ message }: BaseUrlWarningProps): React.ReactElement | null =>
   message ? (
-    <div role="note" style={{ fontSize: 11, color: "var(--c-warn, #e6a817)", marginTop: 4 }}>
+    <div role="note" style={{ fontSize: 11, color: "var(--c-warn-fg)", marginTop: 4 }}>
       ⚠ {message}
     </div>
   ) : null;
@@ -849,7 +849,7 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
 
   if (models.length === 0) {
     return (
-      <span style={{ fontSize: 11, color: "var(--fg-3)", fontStyle: "italic" }}>
+      <span style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic" }}>
         No models configured
       </span>
     );
@@ -867,7 +867,7 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
           style={{
             fontSize: 10,
             padding: "2px 6px",
-            borderRadius: 4,
+            borderRadius: "var(--radius-1)",
             background: "var(--bg-1)",
             border: "1px solid var(--border)",
             color: "var(--fg-2)",
@@ -890,10 +890,10 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
           style={{
             background: "none",
             border: "1px solid var(--border)",
-            borderRadius: 4,
+            borderRadius: "var(--radius-1)",
             padding: "2px 6px",
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             whiteSpace: "nowrap",
           }}
@@ -910,10 +910,10 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
           style={{
             background: "none",
             border: "1px solid var(--border)",
-            borderRadius: 4,
+            borderRadius: "var(--radius-1)",
             padding: "2px 6px",
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             whiteSpace: "nowrap",
           }}
@@ -1167,7 +1167,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
             <span
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 marginLeft: 2,
               }}
             >
@@ -1183,7 +1183,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
         <button
           type="button"
           className="btn ghost"
-          style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
+          style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-2)" }}
           onClick={handleEdit}
           title="Edit provider"
         >
@@ -1198,11 +1198,11 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
             padding: "4px 10px",
             gap: 5,
             fontSize: 11,
-            color: confirming ? "var(--c-critical)" : "var(--fg-3)",
+            color: confirming ? "var(--c-critical-fg)" : "var(--fg-2)",
             border: confirming
               ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
               : "1px solid transparent",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
           }}
           onClick={handleDelete}
           onBlur={() => {
@@ -1435,8 +1435,8 @@ const ThemeOption = ({
       flexDirection: "column",
       gap: 8,
       padding: 12,
-      borderRadius: 8,
-      border: isActive ? "2px solid var(--accent)" : "2px solid var(--border)",
+      borderRadius: "var(--radius-3)",
+      border: isActive ? "2px solid var(--accent-fg)" : "2px solid var(--border)",
       background: isActive ? "color-mix(in oklch, var(--accent) 8%, var(--bg-1))" : "var(--bg-1)",
       cursor: "pointer",
       textAlign: "left",
@@ -1452,7 +1452,7 @@ const ThemeOption = ({
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)", marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{description}</div>
+      <div style={{ fontSize: 11, color: "var(--fg-2)" }}>{description}</div>
     </div>
   </button>
 );
@@ -1460,7 +1460,7 @@ const ThemeOption = ({
 const InkPreview = (): React.ReactElement => (
   <div
     style={{
-      borderRadius: 6,
+      borderRadius: "var(--radius-2)",
       overflow: "hidden",
       border: "1px solid #2a2e36",
       background: "#0c0d10",
@@ -1473,17 +1473,23 @@ const InkPreview = (): React.ReactElement => (
   >
     <div style={{ display: "flex", gap: 4 }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#2a2e36" }} />
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#14161b" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: "var(--radius-1)", background: "#14161b" }} />
     </div>
-    <div style={{ height: 4, width: "70%", borderRadius: 3, background: "#23272e" }} />
-    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#1b1e24" }} />
-    <div style={{ height: 4, width: "80%", borderRadius: 3, background: "#23272e" }} />
+    <div
+      style={{ height: 4, width: "70%", borderRadius: "var(--radius-1)", background: "#23272e" }}
+    />
+    <div
+      style={{ height: 4, width: "50%", borderRadius: "var(--radius-1)", background: "#1b1e24" }}
+    />
+    <div
+      style={{ height: 4, width: "80%", borderRadius: "var(--radius-1)", background: "#23272e" }}
+    />
     <div
       style={{
         marginTop: "auto",
         height: 4,
         width: 32,
-        borderRadius: 3,
+        borderRadius: "var(--radius-1)",
         background: "oklch(86% 0.22 120)",
         opacity: 0.8,
       }}
@@ -1494,7 +1500,7 @@ const InkPreview = (): React.ReactElement => (
 const PaperPreview = (): React.ReactElement => (
   <div
     style={{
-      borderRadius: 6,
+      borderRadius: "var(--radius-2)",
       overflow: "hidden",
       border: "1px solid #e4e4dc",
       background: "#fafaf7",
@@ -1507,17 +1513,23 @@ const PaperPreview = (): React.ReactElement => (
   >
     <div style={{ display: "flex", gap: 4 }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e4e4dc" }} />
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#ffffff" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: "var(--radius-1)", background: "#ffffff" }} />
     </div>
-    <div style={{ height: 4, width: "70%", borderRadius: 3, background: "#e9e9e3" }} />
-    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#f3f3ef" }} />
-    <div style={{ height: 4, width: "80%", borderRadius: 3, background: "#e9e9e3" }} />
+    <div
+      style={{ height: 4, width: "70%", borderRadius: "var(--radius-1)", background: "#e9e9e3" }}
+    />
+    <div
+      style={{ height: 4, width: "50%", borderRadius: "var(--radius-1)", background: "#f3f3ef" }}
+    />
+    <div
+      style={{ height: 4, width: "80%", borderRadius: "var(--radius-1)", background: "#e9e9e3" }}
+    />
     <div
       style={{
         marginTop: "auto",
         height: 4,
         width: 32,
-        borderRadius: 3,
+        borderRadius: "var(--radius-1)",
         background: "oklch(72% 0.2 130)",
         opacity: 0.8,
       }}
@@ -1528,7 +1540,7 @@ const PaperPreview = (): React.ReactElement => (
 const PhosphorPreview = (): React.ReactElement => (
   <div
     style={{
-      borderRadius: 6,
+      borderRadius: "var(--radius-2)",
       overflow: "hidden",
       border: "1px solid #0f3a1f",
       background: "#04140a",
@@ -1541,23 +1553,25 @@ const PhosphorPreview = (): React.ReactElement => (
   >
     <div style={{ display: "flex", gap: 4 }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#0f3a1f" }} />
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#061a0e" }} />
+      <div style={{ flex: 1, height: 6, borderRadius: "var(--radius-1)", background: "#061a0e" }} />
     </div>
     <div
       style={{
         height: 4,
         width: "70%",
-        borderRadius: 3,
+        borderRadius: "var(--radius-1)",
         background: "#0b2c18",
         boxShadow: "0 0 4px rgba(116,224,147,0.3)",
       }}
     />
-    <div style={{ height: 4, width: "50%", borderRadius: 3, background: "#082212" }} />
+    <div
+      style={{ height: 4, width: "50%", borderRadius: "var(--radius-1)", background: "#082212" }}
+    />
     <div
       style={{
         height: 4,
         width: "80%",
-        borderRadius: 3,
+        borderRadius: "var(--radius-1)",
         background: "#0b2c18",
         boxShadow: "0 0 4px rgba(116,224,147,0.3)",
       }}
@@ -1567,7 +1581,7 @@ const PhosphorPreview = (): React.ReactElement => (
         marginTop: "auto",
         height: 4,
         width: 32,
-        borderRadius: 3,
+        borderRadius: "var(--radius-1)",
         background: "oklch(88% 0.24 145)",
         opacity: 0.8,
       }}
@@ -1660,7 +1674,7 @@ const StorageSection = (): React.ReactElement => {
     >
       <div style={{ padding: "14px 16px" }}>
         {isLoading ? (
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Loading…</div>
+          <div style={{ fontSize: 12, color: "var(--fg-2)" }}>Loading…</div>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <code
@@ -1671,7 +1685,7 @@ const StorageSection = (): React.ReactElement => {
                 color: "var(--fg-1)",
                 background: "var(--bg-2)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "7px 10px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -1696,11 +1710,9 @@ const StorageSection = (): React.ReactElement => {
         )}
         {info && (
           <div
-            style={{ marginTop: 8, fontSize: 11, color: "var(--fg-3)", display: "flex", gap: 16 }}
+            style={{ marginTop: 8, fontSize: 11, color: "var(--fg-2)", display: "flex", gap: 16 }}
           >
-            <span>
-              {info.os} {info.os_version.split(" ")[0]}
-            </span>
+            <span>{formatPlatform(info.os, info.os_version)}</span>
             <span>Python {info.python_version}</span>
           </div>
         )}
@@ -1768,7 +1780,7 @@ export const SettingsPage = (): React.ReactElement => {
             description="Add GitLab, GitHub, Gitea, Forgejo or Bitbucket instances to browse their merge requests."
           >
             {hostsLoading && (
-              <div style={{ padding: "12px 16px", color: "var(--fg-3)", fontSize: 12 }}>
+              <div style={{ padding: "12px 16px", color: "var(--fg-2)", fontSize: 12 }}>
                 Loading…
               </div>
             )}
@@ -1778,7 +1790,7 @@ export const SettingsPage = (): React.ReactElement => {
                 style={{
                   padding: "16px",
                   fontSize: 12,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontStyle: "italic",
                 }}
               >
@@ -1798,7 +1810,7 @@ export const SettingsPage = (): React.ReactElement => {
             description="Configure language models used to generate code review comments."
           >
             {providersLoading && (
-              <div style={{ padding: "12px 16px", color: "var(--fg-3)", fontSize: 12 }}>
+              <div style={{ padding: "12px 16px", color: "var(--fg-2)", fontSize: 12 }}>
                 Loading…
               </div>
             )}
@@ -1808,7 +1820,7 @@ export const SettingsPage = (): React.ReactElement => {
                 style={{
                   padding: "16px",
                   fontSize: 12,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontStyle: "italic",
                 }}
               >

@@ -13,13 +13,13 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children: c }) => (
-            <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-0)", margin: "0 0 10px" }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-0)", margin: "0 0 10px" }}>
               {c}
             </h1>
           ),
           h2: ({ children: c }) => (
             <h2
-              style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-0)", margin: "12px 0 8px" }}
+              style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-0)", margin: "12px 0 8px" }}
             >
               {c}
             </h2>
@@ -37,7 +37,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
             </p>
           ),
           strong: ({ children: c }) => (
-            <strong style={{ fontWeight: 700, color: "var(--fg-0)" }}>{c}</strong>
+            <strong style={{ fontWeight: 600, color: "var(--fg-0)" }}>{c}</strong>
           ),
           em: ({ children: c }) => (
             <em style={{ fontStyle: "italic", color: "var(--fg-1)" }}>{c}</em>
@@ -63,7 +63,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
                     fontSize: 11,
                     background: "var(--bg-3)",
                     border: "1px solid var(--border)",
-                    borderRadius: 3,
+                    borderRadius: "var(--radius-1)",
                     padding: "1px 5px",
                     color: "var(--fg-0)",
                   }}
@@ -90,7 +90,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
               style={{
                 background: "var(--bg-3)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "10px 12px",
                 overflowX: "auto",
                 margin: "0 0 8px",
@@ -120,11 +120,29 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "var(--accent)", textDecoration: "underline", fontSize: 12 }}
+              style={{ color: "var(--accent-fg)", textDecoration: "underline", fontSize: 12 }}
             >
               {c}
             </a>
           ),
+          // Comment bodies come from a model: an image would make the browser fetch whatever
+          // URL it chose. Shown as a link instead, fetched only if the reader follows it.
+          img: ({ src, alt }) => {
+            const url = typeof src === "string" && /^https?:\/\//i.test(src) ? src : undefined;
+            const label = alt !== undefined && alt.trim() !== "" ? alt : (url ?? "image");
+            if (url === undefined) return <span style={{ color: "var(--fg-2)" }}>[{label}]</span>;
+            return (
+              <a
+                href={url}
+                title={url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                style={{ color: "var(--accent-fg)", textDecoration: "underline", fontSize: 12 }}
+              >
+                [image: {label}]
+              </a>
+            );
+          },
           hr: () => (
             <hr
               style={{ border: "none", borderTop: "1px solid var(--border)", margin: "10px 0" }}

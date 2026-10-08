@@ -26,7 +26,8 @@ const contentStyle: React.CSSProperties = {
   padding: "18px 20px",
   background: "var(--bg-1)",
   border: "1px solid var(--border)",
-  borderRadius: 10,
+  borderRadius: "var(--radius-3)",
+  boxShadow: "var(--shadow-dialog)",
 };
 
 const effectOf = (strategy: MergeStrategy, existing: number): string => {
@@ -64,10 +65,10 @@ export const ImportConfirmDialog = ({
     >
       <Dialog.Portal>
         <Dialog.Overlay
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200 }}
+          style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 200 }}
         />
         <Dialog.Content style={contentStyle}>
-          <Dialog.Title style={{ fontSize: 15, fontWeight: 700, color: "var(--fg-0)", margin: 0 }}>
+          <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-0)", margin: 0 }}>
             {isOverwriting ? "Replace existing data?" : "Import this file?"}
           </Dialog.Title>
           <Dialog.Description style={{ ...hintStyle, margin: "6px 0 12px", fontSize: 12 }}>

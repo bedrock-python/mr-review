@@ -46,10 +46,10 @@ export const MRHeaderActions = ({
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             padding: "0 5px",
             lineHeight: "1.6",
           }}
@@ -115,7 +115,7 @@ export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
           {mr.author.charAt(0).toUpperCase()}
         </div>
         <span style={{ fontSize: 12, color: "var(--fg-1)" }}>{mr.author}</span>
-        <span style={{ fontSize: 11, color: "var(--fg-3)" }}>{formatAge(mr.created_at)}</span>
+        <span style={{ fontSize: 11, color: "var(--fg-2)" }}>{formatAge(mr.created_at)}</span>
       </div>
 
       {hasBranches && (
@@ -130,7 +130,7 @@ export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
             )}
             {mr.target_branch && (
               <>
-                <span style={{ color: "var(--fg-3)" }}>→</span>
+                <span style={{ color: "var(--fg-2)" }}>→</span>
                 <span className="mono" style={{ fontSize: 10 }}>
                   {mr.target_branch}
                 </span>
@@ -147,7 +147,7 @@ export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
       )}
 
       {mr.draft && (
-        <span className="chip" style={{ color: "var(--fg-3)", fontSize: 10 }}>
+        <span className="chip" style={{ color: "var(--fg-2)", fontSize: 10 }}>
           DRAFT
         </span>
       )}

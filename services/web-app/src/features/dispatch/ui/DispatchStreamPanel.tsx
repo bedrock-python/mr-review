@@ -2,9 +2,11 @@ import { memo } from "react";
 
 import { useStore } from "zustand";
 
+import { SeverityBadge } from "@entities/review";
 import { useStickToBottom } from "@shared/lib";
+import { Markdown } from "@shared/ui";
 
-import type { CommentSeverity, DispatchCommentPreview } from "@entities/review";
+import type { DispatchCommentPreview } from "@entities/review";
 import type { StoreApi } from "zustand/vanilla";
 import type { DispatchSessionState } from "../model/dispatchSession";
 
@@ -14,13 +16,6 @@ export type DispatchRunInfo = {
   providerName: string;
   model: string;
   accentColor: string;
-};
-
-const SEVERITY_COLOR: Record<CommentSeverity, string> = {
-  critical: "var(--c-critical)",
-  major: "var(--c-major)",
-  minor: "var(--c-minor)",
-  suggestion: "var(--c-suggestion)",
 };
 
 const STATUS_LABEL: Record<DispatchRunStatus, string> = {
@@ -58,7 +53,7 @@ const PulseDot = ({ color, size }: { color: string; size: number }): React.React
 );
 
 const Cursor = ({ color }: { color: string }): React.ReactElement => (
-  <span style={{ animation: "pulse 1s step-end infinite", color }}>▌</span>
+  <span style={{ animation: "blink 1s step-end infinite", color }}>▌</span>
 );
 
 /* ── Header ─────────────────────────────────────────────────── */
@@ -104,7 +99,7 @@ const PanelHeader = memo(
           {run.providerName} · {STATUS_LABEL[status]}
         </span>
         {run.model && (
-          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
             {run.model}
           </span>
         )}
@@ -134,26 +129,13 @@ const CommentPreviewRow = memo(
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            padding: "1px 6px",
-            borderRadius: 4,
-            background: `color-mix(in oklch, ${SEVERITY_COLOR[comment.severity]} 15%, transparent)`,
-            color: SEVERITY_COLOR[comment.severity],
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {comment.severity}
-        </span>
+        <SeverityBadge severity={comment.severity} />
         {comment.file ? (
           <span
             className="mono"
             style={{
               fontSize: 10.5,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -163,14 +145,10 @@ const CommentPreviewRow = memo(
             {comment.line !== null ? `:${String(comment.line)}` : ""}
           </span>
         ) : (
-          <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>general note</span>
+          <span style={{ fontSize: 10.5, color: "var(--fg-2)" }}>general note</span>
         )}
       </div>
-      <div
-        style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}
-      >
-        {comment.body}
-      </div>
+      <Markdown>{comment.body}</Markdown>
     </li>
   )
 );
@@ -195,7 +173,7 @@ const LiveCommentList = memo(
             display: "flex",
             alignItems: "center",
             gap: 8,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             fontSize: 12,
           }}
         >
@@ -204,7 +182,7 @@ const LiveCommentList = memo(
           <Cursor color={accentColor} />
         </div>
       ) : (
-        <div style={{ padding: "16px 14px", fontSize: 12.5, color: "var(--fg-3)" }}>
+        <div style={{ padding: "16px 14px", fontSize: 12.5, color: "var(--fg-2)" }}>
           No comments were parsed from the response.
         </div>
       );
@@ -231,7 +209,7 @@ const LiveCommentList = memo(
               display: "flex",
               alignItems: "center",
               gap: 6,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               fontSize: 11,
             }}
           >
@@ -262,7 +240,7 @@ const RawStreamView = memo(({ store }: { store: SessionStore }): React.ReactElem
         style={{
           padding: "6px 14px",
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           background: "var(--bg-1)",
@@ -319,7 +297,7 @@ export const DispatchStreamPanel = memo(
     <section
       aria-label="Generation output"
       style={{
-        borderRadius: 10,
+        borderRadius: "var(--radius-3)",
         border: "1px solid var(--border)",
         overflow: "hidden",
         marginBottom: 16,

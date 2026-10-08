@@ -16,10 +16,10 @@ const Chip = ({ label, isActive, onClick }: ChipProps): React.ReactElement => (
     aria-pressed={isActive}
     style={{
       padding: "3px 8px",
-      borderRadius: 999,
+      borderRadius: "var(--radius-pill)",
       fontSize: 11,
       fontFamily: "var(--font-mono)",
-      border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+      border: `1px solid ${isActive ? "var(--accent-fg)" : "var(--border)"}`,
       background: isActive ? "var(--accent)" : "transparent",
       color: isActive ? "var(--accent-ink)" : "var(--fg-1)",
       cursor: "pointer",
@@ -161,13 +161,12 @@ export const MRListToolbar = ({
         style={{
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
           padding: "5px 8px",
           fontSize: 11,
           color: "var(--fg-1)",
           fontFamily: "var(--font-mono)",
           cursor: "pointer",
-          outline: "none",
         }}
       >
         {SORT_OPTIONS.map((option) => (

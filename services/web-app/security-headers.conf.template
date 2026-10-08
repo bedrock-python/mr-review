@@ -8,7 +8,6 @@
 # What the CSP sources are for:
 #   script-src 'unsafe-inline'   the theme bootstrap <script> in index.html
 #   style-src 'unsafe-inline'    React style={...} attributes
-#   fonts.googleapis.com/gstatic the IBM Plex Sans / JetBrains Mono web fonts
 #   api.github.com               the in-app update check (GitHub releases)
 #   API_URL                      empty unless API_BASE_URL points the UI at an
 #                                API on another origin
@@ -17,5 +16,5 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header X-XSS-Protection "1; mode=block" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.github.com ${API_URL}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.github.com ${API_URL}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
 ${HSTS_HEADER}

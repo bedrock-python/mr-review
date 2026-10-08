@@ -13,12 +13,12 @@ const STAGE_META: Record<IterationStage, { label: string; color: string; bg: str
   },
   dispatch: {
     label: "Dispatching",
-    color: "var(--c-major)",
+    color: "var(--c-major-fg)",
     bg: "color-mix(in oklch, var(--c-major) 10%, var(--bg-2))",
   },
   polish: {
     label: "Polishing",
-    color: "var(--accent)",
+    color: "var(--accent-fg)",
     bg: "color-mix(in oklch, var(--accent) 10%, var(--bg-2))",
   },
   post: {
@@ -124,7 +124,7 @@ const IterationCard = ({
           alignItems: "center",
           justifyContent: "center",
           fontSize: 11,
-          fontWeight: 700,
+          fontWeight: 600,
           fontFamily: "var(--font-mono)",
           color: isActive ? "var(--accent-ink)" : "var(--fg-2)",
           marginTop: 1,
@@ -145,7 +145,7 @@ const IterationCard = ({
               color: meta.color,
               background: meta.bg,
               padding: "1px 6px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
             }}
           >
             {meta.label}
@@ -156,7 +156,7 @@ const IterationCard = ({
               style={{
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
-                color: "var(--accent)",
+                color: "var(--accent-fg)",
                 display: "flex",
                 alignItems: "center",
                 gap: 3,
@@ -179,7 +179,7 @@ const IterationCard = ({
           )}
 
           {!isPosted && !isLatest && (
-            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-3)" }}>
+            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-2)" }}>
               not posted
             </span>
           )}
@@ -189,7 +189,7 @@ const IterationCard = ({
               style={{
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
               }}
             >
               {formatRelative(completedAt)}
@@ -203,7 +203,7 @@ const IterationCard = ({
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               marginBottom: 4,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -219,7 +219,7 @@ const IterationCard = ({
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             marginBottom: keptComments.length > 0 ? 5 : 0,
           }}
         >
@@ -229,7 +229,7 @@ const IterationCard = ({
         {/* Comment severity breakdown */}
         {keptComments.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>
+            <span style={{ fontSize: 10, color: "var(--fg-2)", fontFamily: "var(--font-mono)" }}>
               {keptComments.length} comment{keptComments.length !== 1 ? "s" : ""}
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -327,7 +327,7 @@ const IterationList = ({
           justifyContent: "center",
           flex: 1,
           gap: 8,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <EmptyIcon />
@@ -364,10 +364,10 @@ const IterationCount = (): React.ReactElement | null => {
       aria-label={`${String(count)} iterations`}
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         padding: "1px 6px",
       }}
     >

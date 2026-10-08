@@ -164,7 +164,7 @@ export const ExportPanel = (): React.ReactElement => {
             />
           </label>
           {passphraseMismatch && (
-            <p role="alert" style={{ ...hintStyle, color: "var(--c-critical)" }}>
+            <p role="alert" style={{ ...hintStyle, color: "var(--c-critical-fg)" }}>
               The passphrases do not match.
             </p>
           )}

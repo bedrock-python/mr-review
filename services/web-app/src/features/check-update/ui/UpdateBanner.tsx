@@ -59,7 +59,7 @@ const SingleBanner = ({
           style={{
             background: "var(--bg-3)",
             border: "1px solid var(--border)",
-            borderRadius: 5,
+            borderRadius: "var(--radius-2)",
             cursor: "pointer",
             color: "var(--fg-0)",
             fontSize: 11,
@@ -77,7 +77,7 @@ const SingleBanner = ({
             background: "transparent",
             border: "none",
             cursor: "pointer",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             fontSize: 14,
             lineHeight: 1,
             padding: "2px 4px",

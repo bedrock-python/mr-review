@@ -1,0 +1,131 @@
+/* Card, SelectCard, SectionHeader. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Card / SelectCard ─────────────────────────────────────── */
+  .ui-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--bg-1);
+  }
+  .ui-card--sunken {
+    background: var(--bg-0);
+  }
+  .ui-card--raised {
+    background: var(--bg-2);
+  }
+  .ui-card--pad-sm {
+    padding: var(--space-3);
+  }
+  .ui-card--pad-md {
+    padding: var(--space-4);
+  }
+  .ui-card--pad-lg {
+    padding: var(--space-5);
+  }
+  .ui-card--interactive {
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast),
+      background var(--dur-fast);
+  }
+  .ui-card--interactive:hover {
+    border-color: var(--border-strong);
+  }
+
+  .ui-select-card-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--select-card-min, 180px), 1fr));
+    gap: var(--space-2);
+  }
+  .ui-select-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--bg-1);
+    color: var(--fg-1);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast),
+      background var(--dur-fast),
+      box-shadow var(--dur-fast);
+  }
+  .ui-select-card:hover:not([aria-disabled="true"]) {
+    border-color: var(--border-strong);
+    background: var(--bg-hover);
+  }
+  .ui-select-card[aria-checked="true"] {
+    border-color: var(--accent-fg);
+    box-shadow: inset 0 0 0 1px var(--accent-fg);
+    background: var(--bg-1);
+  }
+  .ui-select-card[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ui-select-card__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 20px;
+  }
+  .ui-select-card__title {
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    color: var(--fg-0);
+  }
+  .ui-select-card__description {
+    font-size: var(--fs-meta);
+    line-height: var(--lh-body);
+    color: var(--fg-2);
+  }
+  .ui-select-card__check {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  /* ── SectionHeader ─────────────────────────────────────────── */
+  .ui-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+  }
+  .ui-section-header__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .ui-section-header__title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ui-section-header__description {
+    margin: 0;
+    font-size: var(--fs-meta);
+    color: var(--fg-2);
+    line-height: var(--lh-body);
+  }
+  .ui-section-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+}

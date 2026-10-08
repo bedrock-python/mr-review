@@ -21,13 +21,12 @@ export const labelStyle: CSSProperties = {
 
 export const inputStyle: CSSProperties = {
   background: "var(--bg-0)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
+  border: "1px solid var(--border-control)",
+  borderRadius: "var(--radius-2)",
   padding: "7px 10px",
   fontSize: 12,
   fontFamily: "var(--font-mono)",
   color: "var(--fg-0)",
-  outline: "none",
   width: "100%",
   boxSizing: "border-box",
 };
@@ -41,7 +40,7 @@ export const choiceStyle: CSSProperties = {
   color: "var(--fg-1)",
 };
 
-export const hintStyle: CSSProperties = { margin: "2px 0 0", fontSize: 11, color: "var(--fg-3)" };
+export const hintStyle: CSSProperties = { margin: "2px 0 0", fontSize: 11, color: "var(--fg-2)" };
 
 export const warningStyle: CSSProperties = {
   margin: "8px 0 0",
@@ -50,7 +49,7 @@ export const warningStyle: CSSProperties = {
   color: "var(--fg-1)",
   background: "var(--bg-2)",
   borderLeft: "3px solid var(--c-major)",
-  borderRadius: 4,
+  borderRadius: "var(--radius-1)",
 };
 
 export const errorStyle: CSSProperties = {
@@ -60,7 +59,7 @@ export const errorStyle: CSSProperties = {
   color: "var(--fg-0)",
   background: "var(--bg-2)",
   borderLeft: "3px solid var(--c-critical)",
-  borderRadius: 4,
+  borderRadius: "var(--radius-1)",
 };
 
 export const cardStyle: CSSProperties = {
@@ -68,7 +67,7 @@ export const cardStyle: CSSProperties = {
   padding: "10px 12px",
   background: "var(--bg-2)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-2)",
   fontSize: 12,
   color: "var(--fg-1)",
 };
