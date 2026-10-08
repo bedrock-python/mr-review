@@ -1,19 +1,23 @@
+import { lazy, Suspense } from "react";
 import { useNav } from "@app/navigation";
 import { STAGE_PANEL_ID, stageTabId, useStageBarStore } from "@widgets/stage-bar";
-import { PickStage } from "@features/pick";
-import { BriefStage } from "@features/brief";
-import { DispatchStage } from "@features/dispatch";
-import { PolishStage } from "@features/polish";
-import { PostStage } from "@features/post";
+import { Spinner } from "@shared/ui";
 import type { ReviewStage } from "@entities/review";
 
-const STAGE_COMPONENTS: Record<ReviewStage, () => React.ReactElement> = {
-  pick: PickStage,
-  brief: BriefStage,
-  dispatch: DispatchStage,
-  polish: PolishStage,
-  post: PostStage,
+// Each stage is its own chunk: opening a merge request loads Pick, not the Polish editor.
+const STAGE_COMPONENTS: Record<ReviewStage, React.LazyExoticComponent<() => React.ReactElement>> = {
+  pick: lazy(() => import("@features/pick").then((m) => ({ default: m.PickStage }))),
+  brief: lazy(() => import("@features/brief").then((m) => ({ default: m.BriefStage }))),
+  dispatch: lazy(() => import("@features/dispatch").then((m) => ({ default: m.DispatchStage }))),
+  polish: lazy(() => import("@features/polish").then((m) => ({ default: m.PolishStage }))),
+  post: lazy(() => import("@features/post").then((m) => ({ default: m.PostStage }))),
 };
+
+const StageLoading = (): React.ReactElement => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+    <Spinner />
+  </div>
+);
 
 /** The stage the stage bar has selected, as the panel its tabs control. */
 export const ActiveStage = (): React.ReactElement => {
@@ -31,7 +35,9 @@ export const ActiveStage = (): React.ReactElement => {
       aria-labelledby={stageTabId(activeStage)}
       style={{ flex: 1, overflow: "auto" }}
     >
-      <Component key={workspaceKey} />
+      <Suspense fallback={<StageLoading />}>
+        <Component key={workspaceKey} />
+      </Suspense>
     </div>
   );
 };

@@ -11,7 +11,7 @@
 
 - **Server State:** TanStack Query (React Query)
 - **Client State:** Zustand
-- **URL State:** nuqs (search params management)
+- **URL State:** React Router search params (`?review=&stage=&it=`)
 - **Forms:** React Hook Form
 
 ## Routing
@@ -20,20 +20,18 @@
 
 ## UI & Styling
 
-- **UI Library:** Radix UI
+- **UI Library:** Radix UI (Dialog)
 - **CSS:** Tailwind CSS v4
 - **Icons:** Lucide React
 - **Animations:** tailwindcss-animate
-- **Class Utils:** tailwind-merge + class-variance-authority
+- **Class Utils:** tailwind-merge + clsx
 - **Theme:** Dark / Light / System (next-themes)
 - **Responsive:** Mobile-first, все устройства (320px → 4K)
 
 ## Advanced UI Patterns
 
 - **Virtualization:** TanStack Virtual (для больших списков/таблиц)
-- **Tables:** TanStack Table (sorting, filtering, pagination)
 - **Notifications:** Sonner (toast notifications)
-- **Command Palette:** cmdk (Cmd+K universal search)
 - **Keyboard Shortcuts:** react-hotkeys-hook
 
 ## UX Patterns
