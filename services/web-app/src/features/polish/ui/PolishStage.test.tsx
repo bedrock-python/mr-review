@@ -12,6 +12,9 @@ import { PolishStage } from "./PolishStage";
 import type { UserEvent } from "@testing-library/user-event";
 
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
+// The Markdown renderer is a lazy chunk: its first import takes seconds when suites run in
+// parallel, well past findBy's 1 s default.
+const MARKDOWN_LOAD_TIMEOUT_MS = 10_000;
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
 
 const DIFF = [
@@ -394,7 +397,12 @@ describe("PolishStage list — editing", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     await user.click(screen.getByRole("tab", { name: "Preview" }));
 
     const preview = screen.getByRole("tabpanel", { name: "Preview" });
-    expect(within(preview).getByText("strict").tagName).toBe("STRONG");
+    const strong = await within(preview).findByText(
+      "strict",
+      {},
+      { timeout: MARKDOWN_LOAD_TIMEOUT_MS }
+    );
+    expect(strong.tagName).toBe("STRONG");
   });
 
   it("asks before leaving a card with unsaved changes", async () => {
