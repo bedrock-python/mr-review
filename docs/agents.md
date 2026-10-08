@@ -95,8 +95,52 @@ The pipeline is the iteration's `stage`, and it only moves forward:
   explicit `"file": null` turns the comment into a general note. `POST` and `DELETE` on
   `/reviews/{id}/iterations/{iteration_id}/comments` add a hand-written comment or remove
   one.
-* **post** — `POST /reviews/{id}/post` sends every `kept` comment to the merge request,
-  five at a time, and marks the iteration completed.
+* **post** — `POST /reviews/{id}/post` sends the `kept` comments that are not on the merge
+  request yet and stores, on each comment, what became of it (see below). The iteration
+  moves to `post` once any comment is on the MR and gets `completed_at` once all of them
+  are; a completed iteration answers 409 unless the request sets `force`.
+
+Each comment's `post` field (absent or `null` until the comment was first sent) records the
+latest attempt:
+
+| Field | |
+|---|---|
+| `outcome` | `inline` (on its line), `general_note` (an MR-level note: no line, or the line could not be anchored), or `failed` |
+| `at` | when it was posted, or when the attempt failed |
+| `note_id`, `url` | the host's id for the note, discussion note, review comment or issue comment, and a link to it when known |
+| `reason` | for `failed`, the host's error; for `general_note`, why a comment with a line did not go inline |
+| `failure_kind` | for `failed`: `position_rejected` (the host refused the comment's place in the diff; nothing was posted), `rejected` (refused for another reason, or never sent; nothing was posted), `ambiguous` (a timeout, a 5xx or a dropped connection: it may be on the MR after all) or `blocked` (not sent on purpose, see Gitea below) |
+
+A post sends only comments without a successful record, so retrying after a partial post or
+a dropped connection never duplicates what already landed. Only a `position_rejected`
+comment can fall back to a general note; an `ambiguous` or `blocked` one never does, and an
+`ambiguous` one is not sent again unless the request sets `resend_ambiguous` (the UI asks
+first). Every outcome is written as soon as the host answers, and the post runs to the end
+even if the client disconnects. While a post of a review runs, another post of it (any
+iteration) and any comment change — `PATCH /reviews/{id}`, adding or deleting a comment —
+answer 409, since each write replaces the stored review. The request body takes
+`iteration_id`, `fallback_to_general_note` (default `true`), `severity_label` (`bold` —
+`**Major** · …`, `tag` — `[major] …`, or `off`), `resend_ambiguous` and `force`; the
+answer is `{posted, failed, skipped, held_back, completed, results: [{comment_id, post}],
+review}`, `held_back` counting the ambiguous comments left alone.
+
+Inline comments are anchored only to lines the MR diff shows (new-file line numbers). Diffs
+are parsed by their `@@` counts, the backend and the web app alike: `\ No newline at end of
+file` is not a line, a content line starting with `--` or `++` stays a content line, and
+deleted (`+++ /dev/null`), binary and rename-only files are kept, without hunks. GitHub
+and Gitea/Forgejo get one review (`event: COMMENT`) with every inline comment. When GitHub
+refuses it with 422 the comments are posted one by one so a bad position fails alone; any
+other failure of the review leaves every comment failed. When Gitea refuses it with 400 or
+422, the pending review it left behind is deleted and the comments go one per review; after
+a 5xx the post first looks for a review of the user's at that commit that it created anyway
+(and records its comments as posted), and only when there is none deletes the leftovers and
+goes one by one — if that cannot be told, the comments are ambiguous. Gitea will not post
+inline at all while the token's user has a review of their own pending on the pull request
+(`blocked`). GitLab gets one discussion per comment, its position naming `old_path`/`new_path`
+and `new_line`, plus `old_line` for an unchanged line; a 400 naming the position is a
+position refusal. Bitbucket gets one comment per request with `inline.to`. GitLab's draft
+notes are not used: `bulk_publish` publishes every pending draft of the user, and silently
+drops one whose position does not persist.
 
 The model is asked for a bare JSON array of `{file, line, severity, body}` objects,
 severity being one of `critical`, `major`, `minor`, `suggestion` — or, with structured output
@@ -378,7 +422,7 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/import-response` | POST | Paste a model's answer in by hand |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/raw-response` | GET | The stored model answer as text; 404 if none |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/reparse` | POST | Parse the stored answer again, replacing the comments; 409 once posted |
-| `/api/v1/reviews/{id}/post` | POST | Post `kept` comments to the merge request |
+| `/api/v1/reviews/{id}/post` | POST | Post the `kept` comments not yet on the merge request; per-comment results and the updated review. 409 once completed (unless `force`) or while another post of it runs |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments` | POST | Add a comment (`file`, `line`, `severity`, `body`); the server assigns the id and answers 201 with the review |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
 | `/api/v1/review-presets` | GET, POST | Saved review presets, oldest first; create one (`name`, `description`, `instructions`, `brief_config`). A name taken by another preset, ignoring case, is a 409; an unknown or invalid `brief_config` field is a 422 |
@@ -603,10 +647,15 @@ when the host does not report the commit.
     an answer: its complete comments, or, for an unreadable answer, the text as one general
     comment. An iteration that is completed, or already in `post`, refuses to be
     re-dispatched or re-parsed at all — start a new iteration instead.
-15. **Only `kept` comments are posted**, and posting completes the iteration. An inline
-    comment the host rejects is retried as a general note unless
-    `fallback_to_general_note` is `false`. After that the iteration's comment list is
-    frozen: adding or deleting a comment answers 409, though `PATCH` still edits them.
+15. **Only `kept` comments are posted, each at most once.** A comment whose line the diff
+    does not show, or whose position the host refuses, is posted as a general note headed
+    with `path:line` unless `fallback_to_general_note` is `false`, in which case it is
+    recorded as failed. A timeout or a 5xx never becomes a general note: the comment is
+    recorded as `ambiguous` and is sent again only with `resend_ambiguous` — check the MR
+    first. The iteration completes only when every kept comment is on the MR; a failed
+    post leaves it open for a retry, which sends only what is missing. Once any comment is
+    on the MR the iteration's comment list is frozen: adding or deleting a comment answers
+    409, though `PATCH` still edits them (an edit does not change what was posted).
 16. **Local storage is not local inference.** The diff, whatever context you enabled and
     your custom instructions go to whatever endpoint the provider names. Only a provider
     pointed at a model on your own machine keeps the code on it.
@@ -731,10 +780,10 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 | 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 401 | `Claude rejected the API key (401): …` — listing or previewing an AI provider's models with a key the endpoint refuses |
-| 409 | Posting a review whose source is a branch diff, dispatching, re-parsing, adding or deleting comments on an iteration that was posted, or a review preset name that is already taken |
+| 409 | Posting a review whose source is a branch diff, posting an iteration that was already posted (without `force`), posting or changing the comments of a review (`PATCH`, add, delete) while a post of it runs, dispatching, re-parsing, adding or deleting comments on an iteration that was posted, or a review preset name that is already taken |
 | 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config`; a prompt or dispatch whose path filters exclude every changed file |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
-| 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
+| 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly. For a post this means it could not start (the MR or its diff could not be read); a comment the host refuses is reported in the answer's `results`, not as an error |
 | 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |
 | 504 | `VCS host timed out (<error>)` — the host took longer than `MR_REVIEW__VCS_TIMEOUT` |
 | 502, 504 | `Could not reach …`, `… answered <status>: …`, `… did not answer in time` — an AI provider's endpoint failing while its models are listed |

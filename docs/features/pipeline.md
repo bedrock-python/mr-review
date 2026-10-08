@@ -193,4 +193,58 @@ asks the browser to confirm.
 
 ## POST — publish to the MR
 
-Click **Post to MR**. Approved comments are submitted as inline review comments on the merge request, on whichever host it came from.
+Click **Post N comments**. Every kept comment goes to the merge request, on whichever host
+it came from:
+
+* A comment on a line the MR diff shows is posted **inline**, on that line — an added line
+  or an unchanged one around it.
+* A comment with no file, or with a file but no line, becomes a **general note** on the MR.
+  A file-level note starts with the file's path, so it is clear what it is about.
+* A comment whose line the diff does not show, or that the host refuses to anchor, becomes a
+  general note headed with `path:line`, as long as **Fall back to general note** is on. With
+  it off, the comment is reported as failed instead. A comment the host did not answer for
+  (a timeout, a server error) is never turned into a general note: it may be on the MR
+  already.
+
+**Severity label** puts the comment's severity in front of what is posted: `**Major** · …`
+(bold), `[major] …` (a plain tag), or nothing. The choice is remembered in this browser.
+
+How the comments reach the host:
+
+| Host | Inline comments |
+|---|---|
+| GitHub | One review (`COMMENT`) holding all of them, so they appear together. If GitHub refuses the review because one line cannot be commented on, the comments are posted one by one: that one fails, the rest land. |
+| Gitea, Forgejo | One review holding all of them. If you have a review of your own pending on the pull request in Gitea, inline comments are not posted and are reported as blocked (posting would publish your pending review too); submit or discard it there first, then retry. |
+| GitLab | One thread per comment, in diff order. |
+| Bitbucket Cloud | One comment per request, in diff order. |
+
+General notes are posted one at a time on every host.
+
+### What the result screen shows
+
+When posting finishes, the screen shows what actually happened, read back from the review
+rather than from the click: how many comments went inline, how many as general notes, and
+how many failed, each failure with the host's reason. The same screen comes back after a
+page reload. The preview on the right lists every comment with what became of it, linked to
+it on the host where the host returned a link.
+
+* **Posted** — every kept comment is on the MR; the iteration is complete and shows the time
+  it was posted.
+* **Partly posted** — some comments landed, others failed. **Retry failed** sends only the
+  ones that are not on the MR yet; you can switch on the fallback to general notes first.
+* **Nothing was posted** — every comment failed (an expired token, no access to the MR). Fix
+  the cause and retry.
+
+Each failure says what kind it is. **May already be on the MR** means the host did not
+answer in time or answered with a server error, so the comment may have been posted anyway:
+look at the MR first. **Retry failed** asks before it sends such comments again, since that
+can post them twice. **Blocked** means the comment was not sent on purpose (your pending
+review in Gitea); **Not anchored** and **Refused** mean the host turned it down and nothing
+was posted.
+
+A comment is never posted twice by a retry. Each one remembers whether it is already on the
+MR (and its id and link there), and posting again only sends the rest. Once every comment is
+on the MR, posting the iteration again is refused. Posting a large review can take a while:
+the page waits for it, and the server finishes the post and records every comment even if
+you close the page in the meantime. Until it is done, the review's comments cannot be
+changed.
