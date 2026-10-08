@@ -163,7 +163,7 @@ export const AdvancedSection = ({
               }}
             />
             <div id={`${id}-budget-hint`} style={{ ...HINT_STYLE, marginTop: 4 }}>
-              {`≈ ${Math.round(config.prompt_budget_chars / CHARS_PER_TOKEN).toLocaleString()} tokens (estimate: characters ÷ 4). The default, ${DEFAULT_PROMPT_BUDGET_CHARS.toLocaleString()}, suits a ~200k-token model. Instructions and the diff come first, then the MR description, previous comments, project context, full files, tests, related code and commit history — what does not fit is cut from the end of that list.`}
+              {`≈ ${Math.round(config.prompt_budget_chars / CHARS_PER_TOKEN).toLocaleString()} tokens (estimate: characters ÷ 4). The default, ${DEFAULT_PROMPT_BUDGET_CHARS.toLocaleString()}, suits a ~200k-token model. The instructions take at most a quarter of it; the diff comes next, then the MR description, previous comments, project context, full files, tests, related code and commit history — what does not fit is cut from the end of that list.`}
             </div>
           </div>
         </div>

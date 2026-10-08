@@ -23,7 +23,7 @@ const CONTEXT_TOGGLES: { key: ToggleKey; label: string; hint?: string }[] = [
   {
     key: "include_full_files",
     label: "Full file contents",
-    hint: "The first 15 changed files that still have content, up to 50 KB each. Deleted and binary files are skipped; the prompt budget trims what does not fit.",
+    hint: "The first 15 changed files that were not deleted, up to 50 KB each. Binary content is skipped; the prompt budget trims what does not fit.",
   },
   {
     key: "include_test_context",
