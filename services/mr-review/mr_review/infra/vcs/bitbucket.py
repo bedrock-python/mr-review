@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections.abc import AsyncIterator, Sequence
 from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import quote
@@ -10,7 +11,9 @@ import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostedNote, PostResult
 from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
+from mr_review.infra.vcs._posting import failure_from, mentions_position
 
 _BITBUCKET_API = "https://api.bitbucket.org/2.0"
 
@@ -252,33 +255,49 @@ class BitbucketProvider:
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]:
         return {}
 
-    async def post_inline_comment(
+    async def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None:
-        workspace, repo_slug = _split_repo_path(repo_path)
-        await self._post(
-            f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}/comments",
-            {
-                "content": {"raw": body},
-                "inline": {
-                    "to": line,
-                    "path": file,
-                },
-            },
-        )
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """One comment per request, in order: Bitbucket Cloud has no review to batch them in.
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
+        ``inline.to`` is the line in the new file, for added and unchanged lines alike (``from`` is the
+        old-file line and would take precedence).
+        """
+        for comment in comments:
+            yield await self._post_comment(
+                repo_path,
+                mr_iid,
+                {
+                    "content": {"raw": comment.body},
+                    "inline": {"to": comment.anchor.new_line, "path": comment.anchor.path},
+                },
+                inline=True,
+            )
+
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
+        return await self._post_comment(repo_path, mr_iid, {"content": {"raw": body}}, inline=False)
+
+    async def _post_comment(self, repo_path: str, mr_iid: int, payload: dict[str, Any], *, inline: bool) -> PostResult:
         workspace, repo_slug = _split_repo_path(repo_path)
-        await self._post(
-            f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}/comments",
-            {"content": {"raw": body}},
-        )
+        try:
+            data: dict[str, Any] = await self._post(
+                f"/repositories/{workspace}/{repo_slug}/pullrequests/{mr_iid}/comments", payload
+            )
+        except httpx.HTTPError as exc:
+            # A refused anchor comes back as a 400 about the "inline" part of the comment.
+            position = (
+                inline
+                and isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code == httpx.codes.BAD_REQUEST
+                and mentions_position(exc, "inline", "line")
+            )
+            return failure_from(exc, position_rejected=position)
+        url = ((data.get("links") or {}).get("html") or {}).get("href")
+        return PostedNote(note_id=str(data["id"]), url=str(url) if url else None)
 
     async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
         workspace, repo_slug = _split_repo_path(repo_path)

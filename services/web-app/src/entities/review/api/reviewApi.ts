@@ -4,14 +4,30 @@ import { env } from "@shared/config";
 import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
 import { ExcludedFilesSchema, PromptPreviewSchema } from "../model/prompt.schema";
+import { PostReviewResultSchema } from "../model/post.schema";
 import { parseDispatchStreamEvent } from "./parseDispatchStreamEvent";
 import type { DispatchRequest, DispatchStreamEvent } from "../model/dispatch.schema";
 import type { ExcludedFiles, PromptPreview } from "../model/prompt.schema";
+import type { PostReviewResult, SeverityLabel } from "../model/post.schema";
 import type { Review, BriefConfig, Comment } from "../model/review.schema";
 
 const HTTP_NOT_FOUND = 404;
 // Building a prompt fetches context files from the VCS host first; that can take a while.
 const PROMPT_TIMEOUT_MS = 120_000;
+// Posting waits on the VCS host for every comment. With the client default of 30 s the browser
+// gave up while the server went on posting, and a second click then posted everything twice.
+const POST_TIMEOUT_MS = 10 * 60 * 1000;
+
+export type PostReviewOptions = {
+  iterationId: string | null;
+  // Post a comment whose line cannot be anchored as a general note instead of failing it.
+  fallbackToGeneralNote: boolean;
+  severityLabel: SeverityLabel;
+  // Post every kept comment again, even the ones already on the MR.
+  force?: boolean;
+  // Also send the comments whose last attempt was ambiguous: they may be on the MR already.
+  resendAmbiguous?: boolean;
+};
 
 const CommentParseErrorSchema = z.object({
   index: z.number(),
@@ -193,18 +209,21 @@ export const reviewApi = {
     return ImportResponseResultSchema.parse(res.data);
   },
 
-  post: async (
-    reviewId: string,
-    diff_refs?: Record<string, string>,
-    iterationId?: string | null,
-    fallbackToGeneralNote = true
-  ): Promise<{ posted: number }> => {
-    const res = await httpClient.post<unknown>(`/api/v1/reviews/${reviewId}/post`, {
-      diff_refs: diff_refs ?? {},
-      iteration_id: iterationId ?? null,
-      fallback_to_general_note: fallbackToGeneralNote,
-    });
-    return res.data as { posted: number };
+  // Sends the kept comments that are not on the MR yet; each outcome is stored on its comment.
+  // Answers 409 for a completed iteration (unless `force`) and while another post of it runs.
+  post: async (reviewId: string, options: PostReviewOptions): Promise<PostReviewResult> => {
+    const res = await httpClient.post<unknown>(
+      `/api/v1/reviews/${reviewId}/post`,
+      {
+        iteration_id: options.iterationId,
+        fallback_to_general_note: options.fallbackToGeneralNote,
+        severity_label: options.severityLabel,
+        force: options.force ?? false,
+        resend_ambiguous: options.resendAmbiguous ?? false,
+      },
+      { timeout: POST_TIMEOUT_MS }
+    );
+    return PostReviewResultSchema.parse(res.data);
   },
 
   addComment: async (

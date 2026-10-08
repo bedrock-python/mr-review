@@ -3,6 +3,9 @@ export {
   BriefConfigSchema,
   SeveritySchema,
   CommentStatusSchema,
+  PostOutcomeSchema,
+  PostFailureKindSchema,
+  CommentPostSchema,
   CommentSchema,
   IterationStageSchema,
   IterationSchema,
@@ -26,12 +29,22 @@ export type {
   BriefConfig,
   CommentSeverity,
   CommentStatus,
+  PostOutcome,
+  PostFailureKind,
+  CommentPost,
   Comment,
   IterationStage,
   Iteration,
   ReviewStage,
   Review,
 } from "./review.schema";
+export {
+  SeverityLabelSchema,
+  CommentPostResultSchema,
+  PostReviewResultSchema,
+} from "./post.schema";
+export type { SeverityLabel, CommentPostResult, PostReviewResult } from "./post.schema";
+export { usePostReview } from "./usePostReview";
 export {
   PatchStatusSchema,
   PatchStatsSchema,

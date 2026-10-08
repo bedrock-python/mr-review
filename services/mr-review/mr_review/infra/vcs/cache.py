@@ -7,7 +7,7 @@ import hashlib
 import itertools
 import time
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Hashable
+from collections.abc import AsyncIterator, Awaitable, Callable, Hashable, Sequence
 from dataclasses import dataclass
 from functools import partial
 from typing import cast
@@ -18,6 +18,7 @@ import httpx
 from mr_review.core.hosts.entities import Host
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostResult
 from mr_review.core.vcs.protocols import VCSProvider
 from mr_review.infra.vcs._tree import WholeTreeListing, files_under
 from mr_review.infra.vcs.factory import build_vcs_provider
@@ -274,7 +275,7 @@ class CachedVCSProvider:
     that has to be fetched well after its page 1 retires that snapshot instead of being cached,
     so the next load of the list starts again from a fresh page 1.
 
-    Write methods (post_inline_comment, post_general_note) and test_connection bypass the cache.
+    Write methods (post_inline_comments, post_general_note) and test_connection bypass the cache.
     """
 
     def __init__(
@@ -428,19 +429,17 @@ class CachedVCSProvider:
             ("diff_refs", repo_path, mr_iid), lambda: self._provider.get_diff_refs(repo_path, mr_iid)
         )
 
-    async def post_inline_comment(
+    def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None:
-        await self._provider.post_inline_comment(repo_path, mr_iid, diff_refs, file, line, body)
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        return self._provider.post_inline_comments(repo_path, mr_iid, diff_refs, comments)
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
-        await self._provider.post_general_note(repo_path, mr_iid, body)
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
+        return await self._provider.post_general_note(repo_path, mr_iid, body)
 
     async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
         return await self._content.get_or_load(

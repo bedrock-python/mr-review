@@ -64,6 +64,7 @@ from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase
+from mr_review.use_cases.reviews.posting_registry import PostingRegistry
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
@@ -216,16 +217,20 @@ class UseCaseProvider(Provider):
         return GetReviewUseCase(repo)
 
     @provide
-    def get_update_review_use_case(self, repo: FileReviewRepository) -> UpdateReviewUseCase:
-        return UpdateReviewUseCase(repo)
+    def get_update_review_use_case(self, repo: FileReviewRepository, registry: PostingRegistry) -> UpdateReviewUseCase:
+        return UpdateReviewUseCase(repo, registry)
 
     @provide
-    def get_create_comment_use_case(self, repo: FileReviewRepository) -> CreateCommentUseCase:
-        return CreateCommentUseCase(repo)
+    def get_create_comment_use_case(
+        self, repo: FileReviewRepository, registry: PostingRegistry
+    ) -> CreateCommentUseCase:
+        return CreateCommentUseCase(repo, registry)
 
     @provide
-    def get_delete_comment_use_case(self, repo: FileReviewRepository) -> DeleteCommentUseCase:
-        return DeleteCommentUseCase(repo)
+    def get_delete_comment_use_case(
+        self, repo: FileReviewRepository, registry: PostingRegistry
+    ) -> DeleteCommentUseCase:
+        return DeleteCommentUseCase(repo, registry)
 
     @provide
     def get_delete_review_use_case(self, repo: FileReviewRepository) -> DeleteReviewUseCase:
@@ -336,17 +341,24 @@ class UseCaseProvider(Provider):
     def get_iteration_raw_response_use_case(self, review_repo: FileReviewRepository) -> GetIterationRawResponseUseCase:
         return GetIterationRawResponseUseCase(review_repo=review_repo)
 
+    @provide(scope=Scope.APP)
+    def get_posting_registry(self) -> PostingRegistry:
+        """One for the process: it is what stops two requests from posting the same iteration at once."""
+        return PostingRegistry()
+
     @provide
     def get_post_review_use_case(
         self,
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
+        registry: PostingRegistry,
     ) -> PostReviewUseCase:
         return PostReviewUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
             vcs_factory=_make_vcs_factory(vcs_cache),
+            registry=registry,
         )
 
     @provide

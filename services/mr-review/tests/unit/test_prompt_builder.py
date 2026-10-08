@@ -269,13 +269,6 @@ def test__hunk_header__counts_the_lines_actually_written() -> None:
     assert lines[7] == "--- a/b.py"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the diff parser counts '\\ No newline at end of file' as a context line and numbers the "
-        "lines after it one too high (infra/vcs/_diff_parser.py); fixed by fix/posting-and-diffs"
-    ),
-)
 def test__annotation__no_newline_marker_does_not_shift_line_numbers() -> None:
     patch = (
         "@@ -1,2 +1,3 @@\n first\n-second\n\\ No newline at end of file\n+second\n+third\n"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -8,9 +9,11 @@ import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostedNote, PostResult
 from mr_review.infra.vcs._diff_parser import diff_file_from_patch
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._pagination import gitlab_has_more, json_list, optional_int, optional_str
+from mr_review.infra.vcs._posting import failure_from, mentions_position
 
 # /merge_requests/:iid/diffs is paginated; 100 pages of 100 files is far beyond what GitLab
 # itself renders, and keeps a pathological MR from looping forever.
@@ -25,6 +28,32 @@ _PERSONAL_SCOPES: dict[PersonalMRScope, str] = {
 
 def _encode_path(repo_path: str) -> str:
     return quote(repo_path, safe="")
+
+
+def _refuses_position(exc: httpx.HTTPError) -> bool:
+    """GitLab answers a position it cannot place with 400 naming ``line_code`` or ``position``."""
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response.status_code in (httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY)
+        and mentions_position(exc, "line_code", "position", "line")
+    )
+
+
+def _position(comment: InlineComment, diff_refs: dict[str, str]) -> dict[str, Any]:
+    """A text position: ``new_line`` for an added line, both sides for an unchanged one."""
+    anchor = comment.anchor
+    position: dict[str, Any] = {
+        "position_type": "text",
+        "base_sha": diff_refs.get("base_sha", ""),
+        "start_sha": diff_refs.get("start_sha", ""),
+        "head_sha": diff_refs.get("head_sha", ""),
+        "old_path": anchor.old_path,
+        "new_path": anchor.path,
+        "new_line": anchor.new_line,
+    }
+    if anchor.old_line is not None:
+        position["old_line"] = anchor.old_line
+    return position
 
 
 def _pipeline_status(mr_data: dict[str, Any]) -> str | None:
@@ -218,35 +247,46 @@ class GitLabProvider:
             "head_sha": str(dr.get("head_sha", "")),
         }
 
-    async def post_inline_comment(
+    async def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None:
-        encoded = _encode_path(repo_path)
-        payload: dict[str, Any] = {
-            "body": body,
-            "position": {
-                "position_type": "text",
-                "base_sha": diff_refs.get("base_sha", ""),
-                "start_sha": diff_refs.get("start_sha", ""),
-                "head_sha": diff_refs.get("head_sha", ""),
-                "new_path": file,
-                "new_line": line,
-            },
-        }
-        await self._post(f"/projects/{encoded}/merge_requests/{mr_iid}/discussions", payload)
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """One discussion per comment, in order.
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
+        Draft notes with ``bulk_publish`` would show the review at once, but bulk publish also
+        publishes every other draft the user has pending on the MR, and a draft whose position does
+        not persist is deleted with only a server-side log line, so nothing could tell it was lost.
+        """
         encoded = _encode_path(repo_path)
-        await self._post(
-            f"/projects/{encoded}/merge_requests/{mr_iid}/notes",
-            {"body": body},
-        )
+        for comment in comments:
+            payload: dict[str, Any] = {"body": comment.body, "position": _position(comment, diff_refs)}
+            try:
+                data: dict[str, Any] = await self._post(
+                    f"/projects/{encoded}/merge_requests/{mr_iid}/discussions", payload
+                )
+            except httpx.HTTPError as exc:
+                yield failure_from(exc, position_rejected=_refuses_position(exc))
+                continue
+            notes: list[dict[str, Any]] = data.get("notes") or []
+            note_id = str(notes[0]["id"]) if notes else str(data.get("id", ""))
+            yield PostedNote(note_id=note_id, url=self._note_url(repo_path, mr_iid, note_id) if notes else None)
+
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
+        encoded = _encode_path(repo_path)
+        try:
+            data: dict[str, Any] = await self._post(
+                f"/projects/{encoded}/merge_requests/{mr_iid}/notes", {"body": body}
+            )
+        except httpx.HTTPError as exc:
+            return failure_from(exc)
+        note_id = str(data["id"])
+        return PostedNote(note_id=note_id, url=self._note_url(repo_path, mr_iid, note_id))
+
+    def _note_url(self, repo_path: str, mr_iid: int, note_id: str) -> str:
+        return f"{self._base_url}/{repo_path}/-/merge_requests/{mr_iid}#note_{note_id}"
 
     async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
         encoded = _encode_path(repo_path)

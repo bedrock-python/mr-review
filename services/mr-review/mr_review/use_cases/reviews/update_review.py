@@ -9,6 +9,7 @@ from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.use_cases.reviews._review_change import apply_review_change
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
 from mr_review.use_cases.reviews.iteration_comments import find_iteration_index, patch_comments, replace_iteration
+from mr_review.use_cases.reviews.posting_registry import PostingRegistry
 
 
 def _apply_brief_config(review: Review, brief_config: BriefConfig) -> Review:
@@ -26,7 +27,7 @@ def _apply_brief_config(review: Review, brief_config: BriefConfig) -> Review:
             completed_at=None,
         )
         return review.model_copy(update={"iterations": [first]})
-    if last.completed_at is None:
+    if not last.reached_post:
         updated_last = last.model_copy(update={"brief_config": brief_config})
         return replace_iteration(review, len(review.iterations) - 1, updated_last)
     return review
@@ -62,8 +63,9 @@ def apply_review_update(
 
 
 class UpdateReviewUseCase:
-    def __init__(self, repo: ReviewRepository) -> None:
+    def __init__(self, repo: ReviewRepository, registry: PostingRegistry | None = None) -> None:
         self._repo = repo
+        self._registry = registry
 
     async def execute(
         self,
@@ -73,7 +75,13 @@ class UpdateReviewUseCase:
         iteration_stage: IterationStage | None = None,
         comment_patches: Sequence[CommentPatchDTO] | None = None,
     ) -> Review:
-        """Apply the update to the stored review in one read-modify-write."""
+        """Apply the update to the stored review in one read-modify-write.
+
+        Raises ``PostInProgressError`` while the review is being posted: the write would replace
+        the stored review and could undo the outcomes the post records.
+        """
+        if self._registry is not None:
+            self._registry.ensure_idle(review_id)
         return await apply_review_change(
             self._repo,
             review_id,

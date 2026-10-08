@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError, computed_field, field_va
 
 from mr_review.core.reviews.severity import Severity
 from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
+from mr_review.core.vcs.entities import PostFailureKind
 
 # Sized for a model with a ~200k-token context window at ~4 characters per token, leaving
 # room for the answer.
@@ -141,6 +142,36 @@ def normalize_brief_overrides(data: Mapping[str, object], *, strict: bool) -> di
         return {key: dumped[key] for key in fields}
 
 
+PostOutcome = Literal["inline", "general_note", "failed"]
+
+
+class CommentPost(BaseModel):
+    """What happened the last time the comment was sent to the MR."""
+
+    # inline: anchored to its line; general_note: posted as an MR-level note (no line, or the line
+    # could not be anchored); failed: the host refused it or could not be reached.
+    outcome: PostOutcome
+    # When it was posted, or when the attempt failed.
+    at: datetime
+    # The host's id for the created note (GitLab note, GitHub/Gitea review or issue comment, Bitbucket
+    # comment) and a link to it when one is known.
+    note_id: str | None = None
+    url: str | None = None
+    # failed: the host's error. general_note: why a comment with a line did not go inline.
+    reason: str | None = None
+    # failed only: what kind of failure (see PostFailureKind). An "ambiguous" one may be on the MR
+    # after all, so it is not sent again unless that is asked for explicitly.
+    failure_kind: PostFailureKind | None = None
+
+    @property
+    def is_on_mr(self) -> bool:
+        return self.outcome != "failed"
+
+    @property
+    def is_ambiguous(self) -> bool:
+        return self.outcome == "failed" and self.failure_kind == "ambiguous"
+
+
 class Comment(BaseModel):
     id: UUID
     file: str | None = None
@@ -149,6 +180,12 @@ class Comment(BaseModel):
     body: str
     status: Literal["kept", "dismissed"] = "kept"
     resolved: bool = False
+    # Set by Post; ``None`` until the comment was first sent.
+    post: CommentPost | None = None
+
+    @property
+    def is_on_mr(self) -> bool:
+        return self.post is not None and self.post.is_on_mr
 
 
 class IterationStage(str, Enum):
@@ -171,6 +208,11 @@ class Iteration(BaseModel):
     # The model's answer exactly as received (dispatched or imported), kept so it can be shown
     # and parsed again; API payloads leave it out to stay small.
     raw_response: str | None = None
+
+    @property
+    def reached_post(self) -> bool:
+        """Some or all of its comments are on the MR (``completed_at`` is set once all of them are)."""
+        return self.completed_at is not None or self.stage == IterationStage.post
 
 
 class Review(BaseModel):
@@ -214,9 +256,11 @@ __all__ = [
     "BriefConfig",
     "BriefPreset",
     "Comment",
+    "CommentPost",
     "Iteration",
     "IterationStage",
     "MRSource",
+    "PostOutcome",
     "Review",
     "ReviewSource",
     "normalize_brief_overrides",

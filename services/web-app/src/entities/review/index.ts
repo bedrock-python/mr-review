@@ -1,10 +1,22 @@
 export { reviewApi } from "./api";
-export type { ImportResponseResult, CommentParseError, UpdateCommentInput } from "./api";
+export type {
+  ImportResponseResult,
+  CommentParseError,
+  UpdateCommentInput,
+  PostReviewOptions,
+} from "./api";
 export {
   BriefPresetSchema,
   BriefConfigSchema,
   SeveritySchema,
   CommentStatusSchema,
+  PostOutcomeSchema,
+  PostFailureKindSchema,
+  CommentPostSchema,
+  SeverityLabelSchema,
+  CommentPostResultSchema,
+  PostReviewResultSchema,
+  usePostReview,
   CommentSchema,
   IterationStageSchema,
   IterationSchema,
@@ -52,6 +64,12 @@ export type {
   BriefConfig,
   CommentSeverity,
   CommentStatus,
+  PostOutcome,
+  PostFailureKind,
+  CommentPost,
+  SeverityLabel,
+  CommentPostResult,
+  PostReviewResult,
   Comment,
   IterationStage,
   Iteration,

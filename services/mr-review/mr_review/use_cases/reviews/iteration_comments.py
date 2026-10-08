@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Literal
 from uuid import UUID
 
-from mr_review.core.reviews.entities import Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.entities import Comment, Iteration, Review
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
 
 CommentSeverity = Literal["critical", "major", "minor", "suggestion"]
@@ -33,7 +33,7 @@ def find_iteration_index(review: Review, iteration_id: UUID) -> int:
 
 def ensure_iteration_editable(iteration: Iteration) -> None:
     """Refuse changes to an iteration that was posted — the same rule dispatch applies."""
-    if iteration.completed_at is not None or iteration.stage == IterationStage.post:
+    if iteration.reached_post:
         raise IterationLockedError(f"Iteration {iteration.id} was already posted; its comments can no longer change")
 
 
