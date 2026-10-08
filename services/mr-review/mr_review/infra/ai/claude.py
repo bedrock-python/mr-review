@@ -16,7 +16,7 @@ import httpx2
 from anthropic import Omit, omit
 from anthropic.types import Message, OutputConfigParam, ThinkingConfigParam
 
-from mr_review.core.ai.capabilities import DEFAULT_MAX_OUTPUT_TOKENS
+from mr_review.core.ai.capabilities import DEFAULT_MAX_OUTPUT_TOKENS, is_vendor_endpoint
 from mr_review.core.ai.entities import AIStreamEnd, AIStreamItem, GenerationPlan
 from mr_review.core.ai.errors import AIProviderRefusalError
 from mr_review.core.ai.review_format import REVIEW_COMMENTS_SCHEMA
@@ -78,6 +78,20 @@ def _refusal(message: Message) -> AIProviderRefusalError:
     return AIProviderRefusalError(f"{reason}. What it wrote before stopping was kept.")
 
 
+def sdk_base_url(base_url: str | None) -> str | None:
+    """The base URL to hand the SDK, which appends ``/v1/messages`` itself.
+
+    Blank, or Anthropic's own host, means the SDK default. A trailing ``/v1`` — the form an OpenAI
+    endpoint or a copied ``https://api.anthropic.com/v1`` takes — is dropped so the path is not
+    doubled.
+    """
+    url = (base_url or "").strip().rstrip("/")
+    url = url.removesuffix("/v1").rstrip("/")
+    if not url or is_vendor_endpoint("claude", url):
+        return None
+    return url
+
+
 class ClaudeProvider:
     def __init__(
         self,
@@ -90,7 +104,7 @@ class ClaudeProvider:
     ) -> None:
         self._api_key = api_key
         # An empty base URL means Anthropic's own endpoint; a set one reaches a gateway (LiteLLM, a proxy).
-        self._base_url = base_url or None
+        self._base_url = sdk_base_url(base_url)
         self._ssl_verify = ssl_verify
         self._timeout = timeout
         self._transport = transport

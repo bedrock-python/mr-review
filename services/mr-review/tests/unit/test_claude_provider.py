@@ -165,6 +165,24 @@ async def test__dispatch__base_url__request_goes_to_the_gateway() -> None:
     assert str(transport.requests[0].url) == "https://llm-gateway.example.com/anthropic/v1/messages"
 
 
+@pytest.mark.parametrize(
+    ("base_url", "expected"),
+    [
+        ("https://api.anthropic.com/v1", "https://api.anthropic.com/v1/messages"),
+        ("https://api.anthropic.com/", "https://api.anthropic.com/v1/messages"),
+        ("http://litellm:4000/v1/", "http://litellm:4000/v1/messages"),
+        ("  ", "https://api.anthropic.com/v1/messages"),
+    ],
+)
+async def test__dispatch__base_url_with_v1__path_not_doubled(base_url: str, expected: str) -> None:
+    """Regression: a saved ``…/v1`` base URL (copied, or left over from an OpenAI type) became ``/v1/v1/messages``."""
+    transport = _Recorder(_streaming(_message_stream(["[]"])))
+
+    await _dispatch(transport, "claude-opus-5-5", base_url=base_url)
+
+    assert str(transport.requests[0].url) == expected
+
+
 async def test__dispatch__streams_text_then_reports_a_complete_answer_and_closes_the_client() -> None:
     transport = _Recorder(_streaming(_message_stream(['[{"body": ', '"x"}]'])))
 
