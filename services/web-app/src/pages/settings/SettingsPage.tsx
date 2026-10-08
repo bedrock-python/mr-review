@@ -789,6 +789,37 @@ const BASE_URL_HINT: Record<AIProviderType, string> = {
 
 const MODELS_HINT = "The first model is used when a dispatch names none.";
 
+const ANTHROPIC_HOST = "api.anthropic.com";
+
+const normalizeEndpoint = (url: string): string => url.trim().replace(/\/+$/, "");
+
+const hostOf = (url: string): string | null => {
+  try {
+    return new URL(url.includes("://") ? url : `https://${url}`).hostname;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * A Claude provider with a base URL sends every request there instead of to Anthropic. Before
+ * base URLs were honoured for Claude, the add form could keep one from another provider type.
+ */
+const claudeBaseUrlWarning = (type: AIProviderType, baseUrl: string): string | null => {
+  const url = baseUrl.trim();
+  if (type !== "claude" || !url || hostOf(url) === ANTHROPIC_HOST) return null;
+  return `Requests go to ${url} instead of Anthropic. Clear Base URL unless this is a gateway such as LiteLLM.`;
+};
+
+type BaseUrlWarningProps = { message: string | null };
+
+const BaseUrlWarning = ({ message }: BaseUrlWarningProps): React.ReactElement | null =>
+  message ? (
+    <div role="note" style={{ fontSize: 11, color: "var(--c-warn, #e6a817)", marginTop: 4 }}>
+      ⚠ {message}
+    </div>
+  ) : null;
+
 type ProviderFormValues = {
   api_key?: string | undefined;
   base_url?: string | undefined;
@@ -915,6 +946,13 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
 
   const watchedModels: string[] =
     useWatch({ control: form.control, name: "models" }) ?? provider.models;
+  const watchedBaseUrl = useWatch({ control: form.control, name: "base_url" }) ?? provider.base_url;
+  const watchedApiKey = useWatch({ control: form.control, name: "api_key" }) ?? "";
+  // The saved key only goes to the saved endpoint; the server refuses otherwise.
+  const fetchBlockedReason =
+    !watchedApiKey && normalizeEndpoint(watchedBaseUrl) !== normalizeEndpoint(provider.base_url)
+      ? "Enter the API key to fetch models from a changed base URL"
+      : null;
 
   const typeLabel: Record<AIProvider["type"], string> = {
     claude: "Claude",
@@ -1025,6 +1063,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
             placeholder={BASE_URL_PLACEHOLDER[provider.type]}
             style={inputCss}
           />
+          <BaseUrlWarning message={claudeBaseUrlWarning(provider.type, watchedBaseUrl)} />
         </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1068,6 +1107,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
               form.setValue("models", models, { shouldDirty: true });
             }}
             onFetchModels={handleFetchModels}
+            fetchBlockedReason={fetchBlockedReason}
             inputStyle={inputCss}
           />
         </Field>
@@ -1135,6 +1175,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
           )}
         </div>
         <ModelChips models={provider.models} />
+        <BaseUrlWarning message={claudeBaseUrlWarning(provider.type, provider.base_url)} />
       </div>
 
       <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
@@ -1196,6 +1237,7 @@ const AddAIProviderForm = (): React.ReactElement => {
 
   const providerType = useWatch({ control: form.control, name: "type" });
   const apiKey = useWatch({ control: form.control, name: "api_key" });
+  const baseUrl = useWatch({ control: form.control, name: "base_url" });
   const models = useWatch({ control: form.control, name: "models" }) ?? [];
 
   const handleFetchModels = (): Promise<string[]> =>
@@ -1262,7 +1304,12 @@ const AddAIProviderForm = (): React.ReactElement => {
         </Field>
         <Field label="Type">
           <select
-            {...form.register("type")}
+            {...form.register("type", {
+              // A base URL belongs to the type it was typed for: never carry it to another.
+              onChange: () => {
+                form.setValue("base_url", "");
+              },
+            })}
             style={{ ...inputCss, cursor: "pointer", width: "auto", minWidth: 140 }}
           >
             <option value="claude">Claude</option>
@@ -1293,6 +1340,7 @@ const AddAIProviderForm = (): React.ReactElement => {
           placeholder={BASE_URL_PLACEHOLDER[providerType]}
           style={inputCss}
         />
+        <BaseUrlWarning message={claudeBaseUrlWarning(providerType, baseUrl ?? "")} />
       </Field>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

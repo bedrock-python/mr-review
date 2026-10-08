@@ -1,8 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { configure, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 
 import { SettingsPage } from "./SettingsPage";
 
@@ -10,6 +12,9 @@ import type { AIProvider } from "@entities/ai-provider";
 import type * as AIProviderEntity from "@entities/ai-provider";
 import type * as HostEntity from "@entities/host";
 import type * as SharedApi from "@shared/api";
+
+// The provider forms take many interactions per test; give them room when suites run in parallel.
+configure({ asyncUtilTimeout: 5000 });
 
 const providerHooks = vi.hoisted(() => ({
   providers: [] as AIProvider[],
@@ -76,12 +81,20 @@ const renderPage = (): void => {
   );
 };
 
+type User = ReturnType<typeof userEvent.setup>;
+
+// One paste event instead of a key event per character: fast and steady under load.
+const fill = async (user: User, field: HTMLElement, text: string): Promise<void> => {
+  await user.click(field);
+  await user.paste(text);
+};
+
 const configuredModels = (): string[] =>
   within(screen.getByRole("list", { name: "Configured models" }))
     .getAllByRole("listitem")
     .map((item) => item.querySelector(".mono")?.textContent ?? "");
 
-describe("SettingsPage — AI provider models", () => {
+describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     providerHooks.providers = [PROVIDER];
@@ -93,8 +106,9 @@ describe("SettingsPage — AI provider models", () => {
     renderPage();
 
     await user.click(screen.getByRole("button", { name: /Edit/ }));
-    await user.type(screen.getByPlaceholderText("New API key (optional)"), "sk-ant-new");
-    await user.type(
+    await fill(user, screen.getByPlaceholderText("New API key (optional)"), "sk-ant-new");
+    await fill(
+      user,
       screen.getByPlaceholderText("https://api.anthropic.com"),
       "https://llm-gateway.example.com"
     );
@@ -165,18 +179,17 @@ describe("SettingsPage — AI provider models", () => {
     await user.click(screen.getByRole("button", { name: "Add Provider" }));
     const fetchButton = screen.getByRole("button", { name: "Fetch models from API" });
     expect(fetchButton).toBeDisabled();
-    await user.type(screen.getByPlaceholderText("My Claude"), "Gateway Claude");
-    await user.type(screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
-    await user.type(
+    await fill(user, screen.getByPlaceholderText("My Claude"), "Gateway Claude");
+    await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
+    await fill(
+      user,
       screen.getByPlaceholderText("https://api.anthropic.com"),
       "https://gw.example.com"
     );
     await user.click(fetchButton);
     await user.click(await screen.findByRole("button", { name: "Add claude-opus-5-5" }));
-    await user.type(
-      screen.getByRole("textbox", { name: "New model ID" }),
-      "claude-haiku-4-5{Enter}"
-    );
+    await fill(user, screen.getByRole("textbox", { name: "New model ID" }), "claude-haiku-4-5");
+    await user.keyboard("{Enter}");
     await user.click(screen.getByRole("button", { name: "Add Provider" }));
 
     expect(providerHooks.previewModels).toHaveBeenCalledWith(
@@ -193,6 +206,71 @@ describe("SettingsPage — AI provider models", () => {
           base_url: "https://gw.example.com",
           models: ["claude-opus-5-5", "claude-haiku-4-5"],
         }),
+        expect.anything()
+      );
+    });
+  });
+
+  it("asks for the key before fetching from a changed base URL", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: /Edit/ }));
+    await fill(
+      user,
+      screen.getByPlaceholderText("https://api.anthropic.com"),
+      "https://evil.example.com"
+    );
+
+    expect(screen.getByRole("button", { name: "Fetch models from API" })).toBeDisabled();
+    expect(
+      screen.getByText("Enter the API key to fetch models from a changed base URL")
+    ).toBeInTheDocument();
+    await fill(user, screen.getByPlaceholderText("New API key (optional)"), "sk-ant-new");
+    expect(screen.getByRole("button", { name: "Fetch models from API" })).toBeEnabled();
+    expect(providerHooks.previewModels).not.toHaveBeenCalled();
+  });
+
+  it("warns when a Claude provider sends its requests somewhere other than Anthropic", () => {
+    providerHooks.providers = [
+      { ...PROVIDER, base_url: "http://localhost:11434/v1" },
+      {
+        ...PROVIDER,
+        id: "55555555-5555-4555-8555-555555555555",
+        base_url: "https://api.anthropic.com/v1",
+      },
+    ];
+    renderPage();
+
+    const notes = screen.getAllByRole("note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent(
+      "Requests go to http://localhost:11434/v1 instead of Anthropic"
+    );
+  });
+
+  it("clears the base URL when the provider type changes", async () => {
+    providerHooks.providers = [];
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    const typeSelect = screen.getByDisplayValue("Claude");
+    await user.selectOptions(typeSelect, "openai_compat");
+    await fill(
+      user,
+      screen.getByPlaceholderText("http://localhost:11434/v1"),
+      "http://localhost:11434/v1"
+    );
+    await user.selectOptions(typeSelect, "claude");
+    await fill(user, screen.getByPlaceholderText("My Claude"), "Claude");
+    await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
+    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(providerHooks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "claude", base_url: "" }),
         expect.anything()
       );
     });
