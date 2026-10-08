@@ -155,6 +155,28 @@ const reasoningRequest = (
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
+// Mirrors the server: deeper effort and thinking budgets get a larger output limit by default.
+const DEEP_EFFORT_OUTPUT_TOKENS = 64_000;
+const DEFAULT_ANSWER_TOKENS = 16_000;
+
+/** The output limit the server picks when none is set; `null` when the endpoint decides. */
+export const defaultMaxOutputTokens = (
+  settings: ProviderDispatchSettings,
+  caps: ModelCapabilities | undefined
+): number | null => {
+  const base = caps?.default_max_output_tokens;
+  if (base == null) return null;
+  const reasoning = reasoningRequest(settings, caps);
+  let wanted = base;
+  if (reasoning.reasoningEffort === "xhigh" || reasoning.reasoningEffort === "max") {
+    wanted = Math.max(wanted, DEEP_EFFORT_OUTPUT_TOKENS);
+  }
+  if (reasoning.reasoningBudget != null) {
+    wanted = Math.max(wanted, reasoning.reasoningBudget + DEFAULT_ANSWER_TOKENS);
+  }
+  return Math.min(wanted, caps?.max_output_tokens ?? wanted);
+};
+
 /**
  * The dispatch request for these settings, holding only what the model accepts: temperature only
  * where supported and while reasoning is off, effort or budget per the model's reasoning mode, the

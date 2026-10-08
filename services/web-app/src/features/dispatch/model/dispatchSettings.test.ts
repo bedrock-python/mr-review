@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildDispatchRequest,
+  defaultMaxOutputTokens,
   defaultSettingsFor,
   loadProviderSettings,
   saveProviderSettings,
@@ -156,6 +157,25 @@ describe("buildDispatchRequest", () => {
       buildDispatchRequest(PROVIDER.id, { ...settings, systemPrompt: "  " }, undefined, null)
         .systemPrompt
     ).toBeNull();
+  });
+});
+
+describe("defaultMaxOutputTokens", () => {
+  it("is the model default, raised for deep effort and thinking budgets", () => {
+    const deep = { ...settings, reasoningEffort: "max" as const };
+    const budget = {
+      ...settings,
+      isReasoningOn: true,
+      reasoningMode: "budget" as const,
+      reasoningBudget: 40_000,
+    };
+
+    expect(defaultMaxOutputTokens(settings, CURRENT_CLAUDE)).toBe(32_000);
+    expect(defaultMaxOutputTokens(deep, CURRENT_CLAUDE)).toBe(64_000);
+    expect(defaultMaxOutputTokens(budget, { ...COMPAT, default_max_output_tokens: 32_000 })).toBe(
+      56_000
+    );
+    expect(defaultMaxOutputTokens(settings, COMPAT)).toBeNull();
   });
 });
 

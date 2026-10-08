@@ -4,6 +4,7 @@ import type { ModelCapabilities, ReasoningEffort } from "@entities/ai-provider";
 
 import {
   activeReasoningMode,
+  defaultMaxOutputTokens,
   isReasoningActive,
   maxReasoningBudget,
   MAX_OUTPUT_TOKENS,
@@ -259,7 +260,7 @@ const AdvancedSettings = ({
 }: Omit<GenerationSettingsProps, "accentColor">): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
   const cap = caps?.max_output_tokens ?? MAX_OUTPUT_TOKENS;
-  const defaultOutput = caps?.default_max_output_tokens;
+  const defaultOutput = defaultMaxOutputTokens(settings, caps);
   const outputPlaceholder = defaultOutput
     ? `Default (${formatTokens(defaultOutput)})`
     : "Default (the endpoint's)";
