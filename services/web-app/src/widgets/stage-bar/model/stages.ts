@@ -1,4 +1,4 @@
-import { getReviewSource, isIterationCompleted } from "@entities/review";
+import { getReviewSource, isIterationPosted } from "@entities/review";
 import type { Iteration, Review, ReviewStage } from "@entities/review";
 
 /** Id of the region the stage tabs control; the page gives it to the active stage. */
@@ -69,7 +69,7 @@ export const normaliseStageTarget = (
     next = stage;
     if (iteration === null && (next !== "pick" || iterationId !== null)) iteration = latest;
   }
-  if (next === "brief" && iteration !== null && isIterationCompleted(iteration)) {
+  if (next === "brief" && iteration !== null && isIterationPosted(iteration)) {
     next = iteration.stage;
   }
   if (isBranchDiffReview(review)) next = BRANCH_DIFF_STAGE_FALLBACK[next] ?? next;

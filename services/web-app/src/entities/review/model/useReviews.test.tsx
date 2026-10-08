@@ -4,7 +4,13 @@ import { ApiError } from "@shared/api";
 import { createQueryClientWrapper, createTestQueryClient } from "@shared/lib/test-utils";
 import { reviewApi } from "../api/reviewApi";
 import { DEFAULT_BRIEF_CONFIG } from "./review.schema";
-import { useCreateIteration, useCreateReview, useReviews, useUpdateReview } from "./useReviews";
+import {
+  useCreateIteration,
+  useCreateReview,
+  useReview,
+  useReviews,
+  useUpdateReview,
+} from "./useReviews";
 import type { Review } from "./review.schema";
 
 const toastError = vi.hoisted(() => vi.fn());
@@ -114,5 +120,43 @@ describe("review mutations keep the history list current", () => {
       "This iteration was already posted",
       expect.objectContaining({ description: expect.stringContaining("new round") as unknown })
     );
+  });
+});
+
+describe("a review fetch in flight while the review changes", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("does not put the copy it fetched over the newer one a mutation stored", async () => {
+    const withIteration = { ...REVIEW, iterations: [ITERATION] };
+    let answerSlowFetch: (review: Review) => void = () => undefined;
+    vi.spyOn(reviewApi, "get")
+      .mockResolvedValueOnce(REVIEW)
+      .mockImplementationOnce(
+        () =>
+          new Promise<Review>((resolve) => {
+            answerSlowFetch = resolve;
+          })
+      );
+    vi.spyOn(reviewApi, "createIteration").mockResolvedValue(withIteration);
+    const wrapper = createQueryClientWrapper(createTestQueryClient());
+    const { result } = renderHook(
+      () => ({ review: useReview(REVIEW.id), mutation: useCreateIteration() }),
+      { wrapper }
+    );
+    await waitFor(() => {
+      expect(result.current.review.data).toEqual(REVIEW);
+    });
+
+    // A refetch leaves before the iteration is created and answers after it.
+    void result.current.review.refetch();
+    await act(() => result.current.mutation.mutateAsync({ reviewId: REVIEW.id }));
+    await act(async () => {
+      answerSlowFetch(REVIEW);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.review.data?.iterations).toHaveLength(1);
   });
 });

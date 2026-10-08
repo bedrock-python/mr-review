@@ -1,6 +1,6 @@
 import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
-import { isIterationCompleted, useReview } from "@entities/review";
+import { isIterationPosted, useReview } from "@entities/review";
 import { ListMessage, SideSheet } from "@shared/ui";
 import type { Iteration, IterationStage } from "@entities/review";
 
@@ -66,7 +66,7 @@ const IterationCard = ({
 }: IterationCardProps): React.ReactElement => {
   const meta = STAGE_META[iteration.stage];
   const completedAt = iteration.completed_at;
-  const isCompleted = isIterationCompleted(iteration);
+  const isPosted = isIterationPosted(iteration);
   const keptComments = iteration.comments.filter((c) => c.status === "kept");
   const sevCounts: Record<string, number> = {};
   for (const c of keptComments) {
@@ -151,7 +151,7 @@ const IterationCard = ({
             {meta.label}
           </span>
 
-          {!isCompleted && isLatest && (
+          {!isPosted && isLatest && (
             <span
               style={{
                 fontSize: 10,
@@ -178,13 +178,13 @@ const IterationCard = ({
             </span>
           )}
 
-          {!isCompleted && !isLatest && (
+          {!isPosted && !isLatest && (
             <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-3)" }}>
               not posted
             </span>
           )}
 
-          {isCompleted && completedAt && (
+          {completedAt && (
             <span
               style={{
                 fontSize: 10,

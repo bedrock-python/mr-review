@@ -19,7 +19,7 @@ export {
   getReviewBriefConfig,
   getReviewSource,
   getReviewMRIid,
-  isIterationCompleted,
+  isIterationPosted,
 } from "./review.schema";
 export {
   ExcludedFileSchema,
@@ -74,6 +74,7 @@ export {
   useUpdateReview,
   useDeleteReview,
   isReviewNotFound,
+  fetchLatestReview,
   reviewKeys,
 } from "./useReviews";
 export type { UpdateReviewInput, CreateIterationInput, UseReviewsOptions } from "./useReviews";

@@ -22,6 +22,8 @@ const HOST_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const IT_1 = "22222222-2222-4222-8222-222222222222";
 const IT_2 = "33333333-3333-4333-8333-333333333333";
+const REVIEW_B = "44444444-4444-4444-8444-444444444444";
+const IT_B = "55555555-5555-4555-8555-555555555555";
 const MR_PATH = `/${HOST_A}/${encodeURIComponent("group/repo")}/mrs/12`;
 
 const iteration = (overrides: Partial<Iteration>): Iteration => ({
@@ -50,7 +52,7 @@ const review = (iterations: Iteration[]): Review => ({
 /** Shows the URL-backed stage state and offers the navigations the app performs. */
 const Probe = (): React.ReactElement => {
   const { activeStage, activeIterationId, setStage } = useStageBarStore();
-  const { setMR } = useNav();
+  const { setMR, openReview } = useNav();
   const { pathname, search } = useLocation();
   const captured = useRef<((stage: "post") => void) | null>(null);
   return (
@@ -65,6 +67,15 @@ const Probe = (): React.ReactElement => {
         }}
       >
         open other repo !12
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          // Another review on the same path, as two branch diffs of one repository are.
+          openReview({ hostId: HOST_A, repoPath: "group/repo", mrIid: 12, reviewId: REVIEW_B });
+        }}
+      >
+        open review B on the same page
       </button>
       <button
         type="button"
@@ -226,6 +237,87 @@ describe("StageBar — stage and iteration in the URL", () => {
     });
     expect(iterationId()).toBe(IT_2);
     expect(createIteration).toHaveBeenCalledWith(REVIEW_ID, posted.brief_config);
+  });
+
+  it("starts a new iteration from Brief when the review was posted after it was cached", async () => {
+    const user = userEvent.setup();
+    const client = createTestQueryClient();
+    // What this tab saw before the post; the server has moved on since.
+    client.setQueryData(reviewKeys.detail(REVIEW_ID), review([iteration({ stage: "polish" })]));
+    const posted = iteration({ stage: "post", completed_at: "2026-05-16T11:00:00+00:00" });
+    vi.spyOn(reviewApi, "get").mockResolvedValue(review([posted]));
+    const createIteration = vi
+      .spyOn(reviewApi, "createIteration")
+      .mockResolvedValue(review([posted, iteration({ id: IT_2, number: 2, stage: "brief" })]));
+    renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=polish&it=${IT_1}`, client);
+    await screen.findByRole("tab", { name: /Polish/, selected: true });
+
+    await user.click(tab("Brief"));
+
+    await waitFor(() => {
+      expect(iterationId()).toBe(IT_2);
+    });
+    expect(stage()).toBe("brief");
+    expect(createIteration).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a new iteration from Brief after only some comments were posted", async () => {
+    const user = userEvent.setup();
+    const partlyPosted = iteration({ stage: "post", completed_at: null });
+    vi.spyOn(reviewApi, "get").mockResolvedValue(review([partlyPosted]));
+    const createIteration = vi
+      .spyOn(reviewApi, "createIteration")
+      .mockResolvedValue(
+        review([partlyPosted, iteration({ id: IT_2, number: 2, stage: "brief" })])
+      );
+    renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=post&it=${IT_1}`);
+    await screen.findByRole("tab", { name: /Post/, selected: true });
+
+    await user.click(tab("Brief"));
+
+    await waitFor(() => {
+      expect(iterationId()).toBe(IT_2);
+    });
+    expect(createIteration).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays put when the server keeps the posted iteration as the latest", async () => {
+    const user = userEvent.setup();
+    const partlyPosted = iteration({ stage: "post", completed_at: null });
+    vi.spyOn(reviewApi, "get").mockResolvedValue(review([partlyPosted]));
+    vi.spyOn(reviewApi, "createIteration").mockResolvedValue(review([partlyPosted]));
+    renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=post&it=${IT_1}`);
+    await screen.findByRole("tab", { name: /Post/, selected: true });
+
+    await user.click(tab("Brief"));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith("Could not start a new iteration", expect.anything());
+    });
+    expect(stage()).toBe("post");
+  });
+
+  it("drops a stage change that arrives after another review opened on the same page", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(reviewApi, "get").mockImplementation((id: string) =>
+      Promise.resolve(
+        id === REVIEW_B
+          ? { ...review([iteration({ id: IT_B, stage: "brief" })]), id: REVIEW_B }
+          : review([iteration({ stage: "polish" })])
+      )
+    );
+    renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=polish&it=${IT_1}`);
+    await screen.findByRole("tab", { name: /Polish/, selected: true });
+
+    await user.click(screen.getByRole("button", { name: "start a slow save" }));
+    await user.click(screen.getByRole("button", { name: "open review B on the same page" }));
+    await waitFor(() => {
+      expect(iterationId()).toBe(IT_B);
+    });
+    await user.click(screen.getByRole("button", { name: "finish the slow save" }));
+
+    expect(search().get("review")).toBe(REVIEW_B);
+    expect(stage()).toBe("brief");
   });
 
   it("continues the open iteration from Brief instead of starting another", async () => {

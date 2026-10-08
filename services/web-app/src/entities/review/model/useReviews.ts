@@ -19,10 +19,28 @@ export const reviewKeys = {
   detail: (id: string) => [...reviewKeys.details(), id] as const,
 };
 
-/** Stores the server's copy of a changed review and marks the history list stale. */
-const storeReview = (qc: QueryClient, review: Review): void => {
+/**
+ * Stores the server's copy of a changed review and marks the history list stale. A fetch of
+ * the review still in flight was answered before this change: it is cancelled first, or it
+ * would land after this and put the old copy back.
+ */
+const storeReview = async (qc: QueryClient, review: Review): Promise<void> => {
+  await qc.cancelQueries({ queryKey: reviewKeys.detail(review.id) });
   qc.setQueryData(reviewKeys.detail(review.id), review);
   void qc.invalidateQueries({ queryKey: reviewKeys.lists() });
+};
+
+/**
+ * The review as the server has it now, for a decision the cache may be too old for (whether
+ * the last iteration was posted). Replaces the cached copy.
+ */
+export const fetchLatestReview = async (qc: QueryClient, reviewId: string): Promise<Review> => {
+  await qc.cancelQueries({ queryKey: reviewKeys.detail(reviewId) });
+  return qc.fetchQuery({
+    queryKey: reviewKeys.detail(reviewId),
+    queryFn: () => reviewApi.get(reviewId),
+    staleTime: 0,
+  });
 };
 
 export type UseReviewsOptions = {
@@ -69,9 +87,7 @@ export const useCreateReview = (): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: reviewApi.create,
-    onSuccess: (review) => {
-      storeReview(qc, review);
-    },
+    onSuccess: (review) => storeReview(qc, review),
     onError: (err) => {
       toast.error("Failed to create review", { description: err.message });
     },
@@ -90,9 +106,7 @@ export const useCreateIteration = (): UseMutationResult<Review, Error, CreateIte
   return useMutation({
     mutationFn: ({ reviewId, briefConfig }: CreateIterationInput) =>
       reviewApi.createIteration(reviewId, briefConfig),
-    onSuccess: (review) => {
-      storeReview(qc, review);
-    },
+    onSuccess: (review) => storeReview(qc, review),
     onError: (err) => {
       toast.error("Failed to start a new iteration", { description: err.message });
     },
@@ -126,9 +140,7 @@ export const useUpdateReview = (
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateReviewInput) => reviewApi.update(reviewId, data),
-    onSuccess: (updated) => {
-      storeReview(qc, updated);
-    },
+    onSuccess: (updated) => storeReview(qc, updated),
     onError: (err) => {
       if (err instanceof ApiError && err.status === HTTP_CONFLICT) {
         // The iteration was posted meanwhile (another tab, a late save): show what the

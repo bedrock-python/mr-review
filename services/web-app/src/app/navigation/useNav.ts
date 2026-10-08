@@ -150,12 +150,14 @@ export const useNav = (): NavState & NavActions => {
   const activeStage = parseStage(searchParams.get(STAGE_PARAM));
   const activeIterationId = searchParams.get(ITERATION_PARAM);
 
-  // Changes the query of the page this hook rendered for. A call that arrives after the
-  // user has moved to another page (an await finishing late) is dropped instead of being
-  // applied to, or navigating back from, the page they are on now.
+  // Changes the query of the page and review this hook rendered for. A call that arrives
+  // after the user moved on (an await finishing late) is dropped instead of being applied
+  // to, or navigating back from, what they are on now. The review counts as well as the
+  // path: the branch diff reviews of a repository all open on the repository's path.
   const patchSearch = (patch: SearchPatch, options?: NavigateOptions): void => {
     const current = readCurrentLocation(location);
     if (current.pathname !== pathname) return;
+    if (new URLSearchParams(current.search).get(REVIEW_PARAM) !== activeReviewId) return;
     const search = applySearchPatch(current.search, patch);
     if (search === current.search) return;
     void navigate({ pathname: current.pathname, search }, { replace: options?.replace ?? false });

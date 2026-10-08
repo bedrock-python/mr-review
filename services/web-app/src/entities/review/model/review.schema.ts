@@ -186,8 +186,10 @@ export const getReviewMRIid = (review: Review): number | null => {
 };
 
 /**
- * A posted iteration: the server keeps it as it was posted, so a new round of the review
- * starts a new iteration. Matches the server's own test for reusing the last iteration.
+ * An iteration that reached Post: all of its comments are on the merge request
+ * (`completed_at` is set), or some are (`stage` is "post"). Either way it stays as it was
+ * posted — the server refuses a new brief for it — so the next round is a new iteration.
+ * The server's `reached_post`.
  */
-export const isIterationCompleted = (iteration: Iteration): boolean =>
-  iteration.completed_at !== null;
+export const isIterationPosted = (iteration: Iteration): boolean =>
+  iteration.completed_at !== null || iteration.stage === "post";
