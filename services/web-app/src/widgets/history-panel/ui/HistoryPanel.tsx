@@ -3,8 +3,9 @@ import { History, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useAppStore } from "@app/store";
-import { getReviewMRIid, useDeleteReview, useReviews } from "@entities/review";
+import { getReviewMRIid, useReviews } from "@entities/review";
 import { useHosts } from "@entities/host";
+import { TRUNCATE } from "@shared/lib";
 import { Button, CountBadge, Drawer, EmptyState, ErrorState, Eyebrow, ICON_SIZE } from "@shared/ui";
 import {
   countReviewsByStage,
@@ -12,7 +13,7 @@ import {
   getReviewTargetLabel,
   groupReviewsByHost,
 } from "../lib/historyList";
-import { TRUNCATE } from "./historyStyles";
+import { useReviewDeletion } from "../model/useReviewDeletion";
 import { HistorySkeleton } from "./HistorySkeleton";
 import { HistoryToolbar } from "./HistoryToolbar";
 import { ReviewItem } from "./ReviewItem";
@@ -49,7 +50,6 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
   const nav = useNav();
   const reviewsQuery = useReviews();
   const { data: hosts } = useHosts();
-  const deleteReview = useDeleteReview();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<ReviewStage | null>(null);
 
@@ -61,6 +61,16 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
   );
   const groups = useMemo(() => groupReviewsByHost(filtered, hostNames), [filtered, hostNames]);
   const stageCounts = useMemo(() => countReviewsByStage(reviews ?? []), [reviews]);
+  const shownIds = useMemo(() => groups.flatMap((g) => g.reviews.map((r) => r.id)), [groups]);
+  const deletion = useReviewDeletion({
+    shownIds,
+    searchRef,
+    onDeleted: (review) => {
+      // The open review is gone: leave its page instead of requesting it again.
+      if (review.id === nav.activeReviewId) nav.setReview(null, { replace: true });
+      toast.success(`Deleted the review of ${review.repo_path} ${getReviewTargetLabel(review)}`);
+    },
+  });
 
   const handleOpen = (review: Review): void => {
     nav.openReview({
@@ -70,16 +80,6 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
       reviewId: review.id,
     });
     onOpened();
-  };
-
-  const handleDelete = (review: Review): void => {
-    deleteReview.mutate(review.id, {
-      onSuccess: () => {
-        // The open review is gone: leave its page instead of requesting it again.
-        if (review.id === nav.activeReviewId) nav.setReview(null, { replace: true });
-        toast.success(`Deleted the review of ${review.repo_path} ${getReviewTargetLabel(review)}`);
-      },
-    });
   };
 
   const clearFilters = (): void => {
@@ -146,13 +146,14 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
               <ReviewItem
                 key={review.id}
                 review={review}
+                openButtonRef={deletion.openButtonRef(review.id)}
                 isActive={review.id === nav.activeReviewId}
-                isDeleting={deleteReview.isPending && deleteReview.variables === review.id}
+                isDeleting={deletion.isDeleting(review.id)}
                 onOpen={() => {
                   handleOpen(review);
                 }}
                 onDelete={() => {
-                  handleDelete(review);
+                  deletion.deleteReview(review);
                 }}
               />
             ))}

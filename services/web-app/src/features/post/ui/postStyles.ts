@@ -1,3 +1,6 @@
+// Mono meta and the ellipsis are the side-list ones: one definition across the app.
+export { LIST_ROW_META as MONO_META, TRUNCATE } from "@shared/lib";
+
 /** The left column: what is posted where, or what became of it. The preview takes the rest. */
 export const ASIDE_WIDTH_PX = 400;
 
@@ -30,17 +33,4 @@ export const SECTION: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "var(--space-3)",
-};
-
-export const MONO_META: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--fs-meta)",
-  color: "var(--fg-2)",
-};
-
-export const TRUNCATE: React.CSSProperties = {
-  minWidth: 0,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
 };

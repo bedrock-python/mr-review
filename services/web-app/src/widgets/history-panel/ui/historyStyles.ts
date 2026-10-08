@@ -14,11 +14,6 @@ export const STAGE_META: Record<ReviewStage, { label: string; status: Status; to
 export const ROW_CLASS =
   "group relative flex items-center border-b border-border hover:bg-bg-hover";
 
-export const ROW_ACTIVE: React.CSSProperties = {
-  background: "var(--bg-2)",
-  boxShadow: "inset 2px 0 0 var(--accent)",
-};
-
 export const ROW_OPEN: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -31,30 +26,4 @@ export const ROW_OPEN: React.CSSProperties = {
   color: "inherit",
   textAlign: "left",
   cursor: "pointer",
-};
-
-export const ROW_LINE: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--space-2)",
-  minWidth: 0,
-};
-
-export const TRUNCATE: React.CSSProperties = {
-  minWidth: 0,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-export const MONO_META: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--fs-meta)",
-  color: "var(--fg-2)",
-};
-
-export const ROW_TITLE: React.CSSProperties = {
-  fontSize: "var(--fs-body)",
-  fontWeight: "var(--fw-medium)",
-  color: "var(--fg-0)",
 };

@@ -1,6 +1,13 @@
 import { SeverityCounts, countSeverities, isIterationPosted } from "@entities/review";
+import {
+  LIST_ROW_ACTIVE,
+  LIST_ROW_LINE,
+  LIST_ROW_META,
+  LIST_ROW_TITLE,
+  TRUNCATE,
+  formatRelative,
+} from "@shared/lib";
 import { StatusBadge } from "@shared/ui";
-import { formatRelative } from "../lib/formatRelative";
 import type { Iteration, IterationStage } from "@entities/review";
 import type { Status } from "@shared/ui";
 
@@ -22,24 +29,6 @@ const ROW: React.CSSProperties = {
   color: "inherit",
   textAlign: "left",
   cursor: "pointer",
-};
-
-const ROW_ACTIVE: React.CSSProperties = {
-  background: "var(--bg-2)",
-  boxShadow: "inset 2px 0 0 var(--accent)",
-};
-
-const LINE: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--space-2)",
-  minWidth: 0,
-};
-
-const META: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--fs-meta)",
-  color: "var(--fg-2)",
 };
 
 export type IterationRowProps = {
@@ -73,40 +62,24 @@ export const IterationRow = ({
       onClick={onClick}
       aria-current={isActive ? "true" : undefined}
       className="hover:bg-bg-hover bg-transparent focus-visible:-outline-offset-2"
-      style={isActive ? { ...ROW, ...ROW_ACTIVE } : ROW}
+      style={isActive ? { ...ROW, ...LIST_ROW_ACTIVE } : ROW}
     >
-      <span style={LINE}>
-        <span
-          style={{
-            fontSize: "var(--fs-body)",
-            fontWeight: "var(--fw-medium)",
-            color: "var(--fg-0)",
-          }}
-        >
-          Iteration {iteration.number}
-        </span>
-        <span style={{ ...META, marginLeft: "auto", flexShrink: 0 }}>
+      <span style={LIST_ROW_LINE}>
+        <span style={LIST_ROW_TITLE}>Iteration {iteration.number}</span>
+        <span style={{ ...LIST_ROW_META, marginLeft: "auto", flexShrink: 0 }}>
           <span className="ui-visually-hidden">Started </span>
           {formatRelative(iteration.created_at)}
         </span>
       </span>
-      <span
-        style={{
-          ...META,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <span style={{ ...LIST_ROW_META, ...TRUNCATE }}>
         {iteration.model ?? "No model yet"}
         {kept.length > 0 &&
           ` · ${String(kept.length)} ${kept.length === 1 ? "comment" : "comments"}`}
       </span>
-      <span style={{ ...LINE, gap: "var(--space-3)", marginTop: "var(--space-1)" }}>
-        <span style={{ ...LINE, gap: "var(--space-2)" }}>
+      <span style={{ ...LIST_ROW_LINE, gap: "var(--space-3)", marginTop: "var(--space-1)" }}>
+        <span style={{ ...LIST_ROW_LINE, gap: "var(--space-2)" }}>
           <StatusBadge status={stage.status} label={stage.label} isLive={isInProgress} />
-          {progress !== null && <span style={META}>{progress}</span>}
+          {progress !== null && <span style={LIST_ROW_META}>{progress}</span>}
         </span>
         {kept.length > 0 && <SeverityCounts counts={countSeverities(kept)} isCompact />}
       </span>

@@ -1,22 +1,23 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { SeverityCounts, countSeverities } from "@entities/review";
-import { Button, Callout, ICON_SIZE, IconButton, StatusBadge } from "@shared/ui";
-import { formatRelative, getReviewDisplayStage, getReviewTargetLabel } from "../lib/historyList";
 import {
-  MONO_META,
-  ROW_ACTIVE,
-  ROW_CLASS,
-  ROW_LINE,
-  ROW_OPEN,
-  ROW_TITLE,
-  STAGE_META,
+  LIST_ROW_ACTIVE,
+  LIST_ROW_LINE,
+  LIST_ROW_META,
+  LIST_ROW_TITLE,
   TRUNCATE,
-} from "./historyStyles";
+  formatRelative,
+} from "@shared/lib";
+import { Button, Callout, ICON_SIZE, IconButton, StatusBadge } from "@shared/ui";
+import { getReviewDisplayStage, getReviewTargetLabel } from "../lib/historyList";
+import { ROW_CLASS, ROW_OPEN, STAGE_META } from "./historyStyles";
 import type { Review } from "@entities/review";
 
 export type ReviewItemProps = {
   review: Review;
+  /** The row's open button, so focus can land on it after a neighbour is deleted. */
+  openButtonRef?: (button: HTMLButtonElement | null) => void;
   isActive: boolean;
   isDeleting: boolean;
   onOpen: () => void;
@@ -79,6 +80,7 @@ const DeleteConfirmation = ({
 /** A review in the history: repository, target, when, stage and what it found. */
 export const ReviewItem = ({
   review,
+  openButtonRef,
   isActive,
   isDeleting,
   onOpen,
@@ -115,24 +117,25 @@ export const ReviewItem = ({
   }
 
   return (
-    <div className={ROW_CLASS} style={isActive ? ROW_ACTIVE : undefined}>
+    <div className={ROW_CLASS} style={isActive ? LIST_ROW_ACTIVE : undefined}>
       <button
+        ref={openButtonRef}
         type="button"
         onClick={onOpen}
         aria-current={isActive ? "page" : undefined}
         className="focus-visible:-outline-offset-2"
         style={ROW_OPEN}
       >
-        <span style={ROW_LINE}>
-          <span style={{ ...ROW_TITLE, ...TRUNCATE, flexShrink: 1 }}>{repoName}</span>
+        <span style={LIST_ROW_LINE}>
+          <span style={{ ...LIST_ROW_TITLE, ...TRUNCATE, flexShrink: 1 }}>{repoName}</span>
           {/* A long branch pair gives way before the repository name does. */}
-          <span style={{ ...MONO_META, ...TRUNCATE, flexShrink: 4 }}>{target}</span>
-          <span style={{ ...MONO_META, marginLeft: "auto", flexShrink: 0 }}>
+          <span style={{ ...LIST_ROW_META, ...TRUNCATE, flexShrink: 4 }}>{target}</span>
+          <span style={{ ...LIST_ROW_META, marginLeft: "auto", flexShrink: 0 }}>
             {formatRelative(review.created_at)}
           </span>
         </span>
-        <span style={{ ...MONO_META, ...TRUNCATE }}>{review.repo_path}</span>
-        <span style={{ ...ROW_LINE, gap: "var(--space-3)", marginTop: "var(--space-1)" }}>
+        <span style={{ ...LIST_ROW_META, ...TRUNCATE }}>{review.repo_path}</span>
+        <span style={{ ...LIST_ROW_LINE, gap: "var(--space-3)", marginTop: "var(--space-1)" }}>
           <StatusBadge status={stage.status} label={stage.label} />
           {kept.length > 0 && <SeverityCounts counts={countSeverities(kept)} isCompact />}
         </span>
@@ -142,8 +145,8 @@ export const ReviewItem = ({
         size="sm"
         variant="danger"
         label={`Delete review of ${review.repo_path} ${target}`}
-        tooltip="Delete review"
-        tooltipSide="left"
+        // No tooltip: its name says what it does, and an open tooltip would take the first Esc.
+        tooltip={false}
         icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
         className="mr-3 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
         onClick={() => {
