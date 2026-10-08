@@ -215,6 +215,7 @@ export const ResponseImport = ({
             ref={textareaRef}
             isMono
             aria-label="AI response"
+            spellCheck={false}
             value={jsonText}
             onChange={(e) => {
               loadText(e.target.value);
