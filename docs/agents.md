@@ -496,7 +496,7 @@ unreadable.
 | `include_diff` | `true` | the diff itself |
 | `include_description` | `true` | title and description |
 | `include_context` | `true` | the files named in `context_files` (or the usual convention files when empty), at most 20 |
-| `include_full_files` | `false` | whole contents of the first 15 changed files that still have content — deleted, binary and rename-only changes are skipped |
+| `include_full_files` | `false` | whole contents of the first 15 changed files that were not deleted — including files whose diff the host sent empty (too large, binary, rename-only); binary content is then dropped |
 | `include_test_context` | `false` | at most 20 test files beside the changed ones, those named after a changed file first |
 | `include_related_code` | `false` | at most 20 files that the first 30 changed Python and JS/TS files import (relative imports only) |
 | `include_commit_history` | `false` | the last 8 commits touching each of the first 50 changed files |
@@ -507,19 +507,33 @@ unreadable.
 | `include_previous_comments` | `true` | from iteration 2 on, the previous iteration's kept comments are listed as already reported |
 | `prompt_budget_chars` | `600000` | 20 000–4 000 000; the prompt's size cap — sized for a ~200k-token model |
 
-Path patterns work like `.gitignore`: no `/` matches the file name at any depth (`*.snap`),
-a trailing `/` a directory at any depth (`gen/`), anything else the whole path from the
-repository root (`src/**/*.py`); `*` stays within a path segment and `**` crosses them.
-Excluded files are left out of the diff sent to the model and of every context collector.
+Path patterns work like `.gitignore` (checked against real git): a pattern with no slash, or
+only a trailing one, matches at any depth (`*.snap`, `docs`, `gen/`); any other slash ties it
+to the repository root (`src/generated` matches `src/generated/a.py`, not
+`tools/src/generated/b.py`); a pattern that matches a directory covers everything in it, so
+`include_paths: ["services/api"]` reviews that directory; a trailing `/` matches directories
+only; `*`, `?` and `[...]` stay within a path segment, `**` as a whole segment spans them;
+`\` escapes the next character, `#` starts a comment; the last matching pattern decides. Two
+deliberate differences from git: a leading `./` means the root, and `!pattern` takes a file
+back in even when its directory is excluded (`!/vendor/keep.go` against the default
+`vendor/`). Your patterns are case-sensitive, as git is on Linux; the built-in defaults ignore
+case (`*.png` covers `Shot.PNG`). Excluded files are left out of the diff sent to the model
+and of every context collector. When a change has files but the patterns leave none,
+`/prompt`, `/prompt/preview` and `/dispatch` answer 422 instead of building an empty review.
 
-The budget: the task, the instructions and the output format always go in. The rest is added
-in priority order — the diff, the MR description, the previous comments, project context,
-full files, tests, related code, commit history — file by file while it fits. The first file
-that does not fit is cut at a line break (when at least 2 000 characters of it fit) with a
-`… [cut: N of M characters shown]` marker, the rest of that part is left out with a
-`[Left out to fit the prompt budget: …]` note naming the files, and the parts below it get
-whatever room remains. Every file is also capped at 50 000 characters, and file content that
-looks binary (NUL bytes, or many U+FFFD from invalid UTF-8) is skipped. The preview reports
+The budget: the output format always goes in; the task text — the preset's or saved
+instructions, the additional instructions, the focus areas — takes at most a quarter of the
+budget and is cut from the end beyond that, so the diff always keeps most of the room. The
+rest is added in priority order — the diff, the MR description, the previous comments,
+project context, full files, tests, related code, commit history — file by file while it
+fits. The first file that does not fit is cut at a line break (when at least 2 000 characters
+of it fit) with a `… [cut: N of M characters shown]` marker, the rest of that part is left
+out with a `[Left out to fit the prompt budget: …]` note naming the files, and the parts
+below it get whatever room remains. Every file is also capped at 50 000 characters, and
+file content that looks binary — NUL bytes, or more than 30% U+FFFD from bytes that are not
+UTF-8 — is skipped; source in a legacy 8-bit encoding (cp1252, cp1251), which comes back
+with a few replacement characters, is kept. Hunk headers in the prompt, and in
+`GET /reviews/{id}/diff`, count the lines actually written under them. The preview reports
 all of it per part.
 
 Context fetches share one semaphore, five calls wide, and each starts as soon as a slot frees
@@ -718,7 +732,7 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 401 | `Claude rejected the API key (401): …` — listing or previewing an AI provider's models with a key the endpoint refuses |
 | 409 | Posting a review whose source is a branch diff, dispatching, re-parsing, adding or deleting comments on an iteration that was posted, or a review preset name that is already taken |
-| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config` |
+| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config`; a prompt or dispatch whose path filters exclude every changed file |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
 | 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
 | 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |

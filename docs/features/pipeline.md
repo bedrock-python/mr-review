@@ -39,11 +39,15 @@ Before dispatching to the AI, tune the review brief. Everything is saved as you 
 - **Custom instructions** — free text appended to the instructions.
 - **Advanced** — shows how many changed files are excluded even while collapsed:
   - *Path filters* — include and exclude glob patterns over changed-file paths, as in
-    `.gitignore` (`*.snap`, `gen/`, `src/**/*.py`), on top of default excludes for
-    lockfiles, minified bundles, source maps, generated and vendored code and binary assets.
-    Each excluded file is listed with the pattern that excluded it, and **Review anyway**
-    takes one back in (it adds `!/path` to the exclude patterns). Excluded files are left
-    out of the diff and of every context lookup.
+    `.gitignore`: `*.snap` or `docs` match at any depth, a directory pattern covers
+    everything in it, `src/generated` or `src/**/*.py` are paths from the repository root,
+    and `\` escapes a glob character. Your patterns are case-sensitive; the default excludes
+    — lockfiles, minified bundles, source maps, generated and vendored code, binary assets —
+    are not. Each excluded file is listed with the pattern that excluded it, and **Review
+    anyway** takes one back in (it adds `!/path`, escaped, to the exclude patterns), even
+    from an excluded directory. Excluded files are left out of the diff and of every context
+    lookup. If the patterns leave none of the changed files, the Brief says so and Dispatch
+    stays disabled.
   - *Number diff lines* (on by default) — each diff line carries its line number in the new
     file and the model is told to anchor comments to those numbers, so far fewer comments
     land on the wrong line.
@@ -51,9 +55,10 @@ Before dispatching to the AI, tune the review brief. Everything is saved as you 
     the comments kept last time are listed as already reported, so the model does not
     repeat them unless they are still unresolved.
   - *Prompt budget* — the prompt's size cap in characters (600 000 by default, sized for a
-    ~200k-token model). Instructions and the diff come first, then the MR description,
-    previous comments, project context, full files, tests, related code and commit history;
-    what does not fit is cut, with a marker in the prompt saying so.
+    ~200k-token model). The instructions take at most a quarter of it, so the diff always
+    keeps most of the room; after the diff come the MR description, previous comments,
+    project context, full files, tests, related code and commit history. What does not fit
+    is cut, with a marker in the prompt saying so.
 
 **Preview prompt** builds the exact prompt the model would get and breaks it down: the
 characters each part takes, roughly how many tokens (characters ÷ 4 — an estimate, not a
