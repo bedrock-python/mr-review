@@ -13,6 +13,7 @@ import { useMRListRows } from "../model/useMRListRows";
 import { InboxMRListItem } from "./InboxMRListItem";
 import { MRListItem } from "./MRListItem";
 import { MRListToolbar } from "./MRListToolbar";
+import { TruncatedReposNote } from "./TruncatedReposNote";
 import type { InboxMR, InboxScope, MR, MRStateFilter } from "@entities/mr";
 import type { ListPagination } from "@shared/ui";
 import type { MRSortKey, ReadinessFilter } from "../lib/mrListView";
@@ -61,9 +62,9 @@ export const MRList = (): React.ReactElement => {
   const [readiness, setReadiness] = useState<ReadinessFilter>(DEFAULT_READINESS);
   const [sort, setSort] = useState<MRSortKey>(DEFAULT_SORT);
   const search = useDebouncedSearch();
-  const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR } = useNav();
+  const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR, setRepo } = useNav();
 
-  const { rows, loadedCount, list } = useMRListRows({
+  const { rows, loadedCount, truncatedRepos, list } = useMRListRows({
     hostId: selectedHostId,
     repoPath: selectedRepoPath,
     isInbox,
@@ -79,6 +80,9 @@ export const MRList = (): React.ReactElement => {
   });
   const handleSelectInboxMR = useStableCallback((mr: InboxMR): void => {
     if (selectedHostId) setMR(selectedHostId, mr.repo_path, mr.iid);
+  });
+  const handleOpenRepo = useStableCallback((repoPath: string): void => {
+    if (selectedHostId) setRepo(selectedHostId, repoPath);
   });
 
   const renderRow = useCallback(
@@ -162,6 +166,10 @@ export const MRList = (): React.ReactElement => {
         sort={sort}
         onSortChange={setSort}
       />
+
+      {isInbox && scope === "all" && truncatedRepos.length > 0 && (
+        <TruncatedReposNote repoPaths={truncatedRepos} onOpenRepo={handleOpenRepo} />
+      )}
 
       {isScopeSelected ? (
         <InfiniteVirtualList

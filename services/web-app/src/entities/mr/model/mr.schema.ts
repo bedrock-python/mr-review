@@ -63,7 +63,11 @@ export const InboxMRSchema = MRSchema.extend({
 
 export const RepoPageSchema = PageMetaSchema.extend({ items: z.array(RepoSchema) });
 export const MRPageSchema = PageMetaSchema.extend({ items: z.array(MRSchema) });
-export const InboxMRPageSchema = PageMetaSchema.extend({ items: z.array(InboxMRSchema) });
+export const InboxMRPageSchema = PageMetaSchema.extend({
+  items: z.array(InboxMRSchema),
+  // scope=all: repositories that had more open MRs than the page took from each.
+  truncated_repos: z.array(z.string()).default([]),
+});
 
 export type Repo = z.infer<typeof RepoSchema>;
 export type MRStatus = z.infer<typeof MRStatusSchema>;

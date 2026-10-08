@@ -33,11 +33,11 @@ const nav = vi.hoisted(() => {
     selectedMRIid: null,
     isInbox: false,
   };
-  return { state, setMR: vi.fn() };
+  return { state, setMR: vi.fn(), setRepo: vi.fn() };
 });
 
 vi.mock("@app/navigation", () => ({
-  useNav: () => ({ ...nav.state, setMR: nav.setMR }),
+  useNav: () => ({ ...nav.state, setMR: nav.setMR, setRepo: nav.setRepo }),
 }));
 
 const server = setupServer(...mrHandlers);
@@ -263,6 +263,48 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     await waitFor(() => {
       expect(inboxPages()).toHaveLength(MAX_BARREN_AUTO_PAGES + 1);
     });
+  });
+
+  it("shows MRs newest first across pages and names the repositories cut short", async () => {
+    const inboxMR = (repoPath: string, iid: number, title: string, updatedAt: string) => ({
+      ...getMockMRs(MOCK_BUSY_REPO)[0],
+      repo_path: repoPath,
+      iid,
+      title,
+      draft: false,
+      updated_at: updatedAt,
+    });
+    server.use(
+      http.get("*/api/v1/hosts/:hostId/inbox", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page"));
+        return HttpResponse.json(
+          page === 1
+            ? {
+                items: [inboxMR("g/old", 1, "Older one", "2026-01-01T00:00:00Z")],
+                page,
+                per_page: 30,
+                has_more: true,
+                truncated_repos: ["g/busy"],
+              }
+            : {
+                items: [inboxMR("g/new", 2, "Newer one", "2026-02-01T00:00:00Z")],
+                page,
+                per_page: 30,
+                has_more: false,
+                truncated_repos: ["g/other", "g/busy"],
+              }
+        );
+      })
+    );
+    renderWithQueryClient(<MRList />);
+
+    await waitForStatus("2 loaded · all loaded");
+    expect(renderedTitles()).toEqual(["Newer one", "Older one"]);
+
+    const note = screen.getByText("2 repositories have more open MRs — open one to see them all");
+    await userEvent.click(note);
+    await userEvent.click(screen.getByRole("button", { name: "g/other" }));
+    expect(nav.setRepo).toHaveBeenCalledWith(MOCK_HOST_ID, "g/other");
   });
 
   it("navigates to the MR's own repository", async () => {

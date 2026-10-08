@@ -40,8 +40,12 @@ export type MRListRowsResult = {
   rows: MRListRow[];
   /** Items loaded from the server, before client-side filtering. */
   loadedCount: number;
+  /** Inbox: repositories (across loaded pages) that had more open MRs than were taken. */
+  truncatedRepos: string[];
   list: MRListQueryState;
 };
+
+const EMPTY_PATHS: string[] = [];
 
 const getRepoMRKey = (mr: MR): string => String(mr.iid);
 const getInboxMRKey = (mr: InboxMR): string => `${mr.repo_path}!${String(mr.iid)}`;
@@ -82,6 +86,12 @@ export const useMRListRows = ({
     }));
   }, [isInbox, inboxQuery.data, mrsQuery.data]);
 
+  const truncatedRepos = useMemo((): string[] => {
+    if (!isInbox || !inboxQuery.data) return EMPTY_PATHS;
+    const paths = inboxQuery.data.pages.flatMap((page) => page.truncated_repos);
+    return paths.length === 0 ? EMPTY_PATHS : [...new Set(paths)];
+  }, [isInbox, inboxQuery.data]);
+
   const rows = useMemo(
     () =>
       applyMRListView(loadedRows, getRowMR, {
@@ -103,6 +113,7 @@ export const useMRListRows = ({
   return {
     rows,
     loadedCount: loadedRows.length,
+    truncatedRepos,
     list: {
       hasData: activeQuery.data !== undefined,
       pageCount: activeQuery.data?.pages.length ?? 0,

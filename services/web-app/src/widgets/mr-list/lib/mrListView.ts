@@ -27,7 +27,7 @@ export const READINESS_OPTIONS: readonly Option<Exclude<ReadinessFilter, "any">>
   { label: "Ready", value: "ready" },
 ];
 
-/** "Updated" is the server order; the others re-sort what is loaded. */
+/** "Updated" is the server order, kept across pages; the others re-sort what is loaded. */
 export const SORT_OPTIONS: readonly Option<MRSortKey>[] = [
   { label: "Updated", value: "updated" },
   { label: "Created", value: "created" },
@@ -39,7 +39,7 @@ export const DEFAULT_SCOPE: InboxScope = "all";
 export const DEFAULT_SORT: MRSortKey = "updated";
 export const DEFAULT_READINESS: ReadinessFilter = "any";
 
-type ViewableMR = { title: string; draft: boolean; created_at: string };
+type ViewableMR = { title: string; draft: boolean; created_at: string; updated_at: string };
 
 export type MRListViewOptions = {
   readiness: ReadinessFilter;
@@ -59,12 +59,17 @@ const matchesReadiness = (mr: ViewableMR, readiness: ReadinessFilter): boolean =
 const compareCreatedDesc = (a: ViewableMR, b: ViewableMR): number =>
   Date.parse(b.created_at) - Date.parse(a.created_at);
 
+const compareUpdatedDesc = (a: ViewableMR, b: ViewableMR): number =>
+  Date.parse(b.updated_at) - Date.parse(a.updated_at);
+
 const compareTitle = (a: ViewableMR, b: ViewableMR): number =>
   titleCollator.compare(a.title, b.title);
 
 /**
  * Applies the client-side part of the list view to the loaded items. Sorting is
- * stable, so equal keys keep the server (updated) order.
+ * stable, so equal keys keep the server order. "Updated" is re-applied on the client
+ * too: the "All" inbox is ordered within each page only, so a later page can hold a
+ * more recently updated MR than the ones above it.
  */
 export const applyMRListView = <TItem>(
   items: readonly TItem[],
@@ -79,7 +84,7 @@ export const applyMRListView = <TItem>(
   });
   if (sort === "created") return visible.sort((a, b) => compareCreatedDesc(getMR(a), getMR(b)));
   if (sort === "title") return visible.sort((a, b) => compareTitle(getMR(a), getMR(b)));
-  return visible;
+  return visible.sort((a, b) => compareUpdatedDesc(getMR(a), getMR(b)));
 };
 
 /** True when client-side filtering may hide loaded items. */
