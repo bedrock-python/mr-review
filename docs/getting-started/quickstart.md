@@ -7,7 +7,7 @@ Once mr-review is running ([see installation](installation.md)), open the app in
 
 ## 1. Add an AI provider
 
-Go to **Settings → AI Providers → Add**.
+Go to **Settings → AI providers → Add provider**.
 
 Fill in:
 
@@ -33,7 +33,7 @@ accepts in a dispatch.
 
 ## 2. Add a VCS host
 
-Go to **Settings → Hosts → Add**.
+Go to **Settings → Git hosts → Add host**.
 
 Fill in:
 

@@ -1,7 +1,7 @@
 # AI providers
 
 An **AI provider** is one endpoint mr-review sends the diff to. Providers are created in the
-app under **Settings → AI Providers**, not in the environment: there is no `AI_PROVIDER`,
+app under **Settings → AI providers**, not in the environment: there is no `AI_PROVIDER`,
 `AI_API_KEY` or `AI_MODEL` variable. The form calls `POST /api/v1/ai-providers`, and the
 provider is stored in `ai_providers.yaml` in the [data directory](../getting-started/configuration.md),
 API key included.

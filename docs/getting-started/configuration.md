@@ -142,7 +142,7 @@ To move the data to another instance or keep a backup, use
 
 ## AI providers
 
-Configured in the app at **Settings → AI Providers**. No environment variables needed.
+Configured in the app at **Settings → AI providers**. No environment variables needed.
 
 Supported types:
 
@@ -154,7 +154,7 @@ See [AI providers](../features/ai-providers.md) for the fields and their default
 
 ## VCS hosts
 
-Configured in the app at **Settings → Hosts**. Supported types:
+Configured in the app at **Settings → Git hosts**. Supported types:
 
 - **GitLab** — gitlab.com or self-hosted
 - **GitHub** — github.com or GitHub Enterprise
