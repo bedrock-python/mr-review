@@ -17,38 +17,21 @@ export const TruncatedReposNote = ({
   repoPaths,
   onOpenRepo,
 }: TruncatedReposNoteProps): React.ReactElement => (
-  <details
-    style={{
-      flexShrink: 0,
-      borderBottom: "1px solid var(--border)",
-      padding: "5px 14px",
-      fontSize: 11,
-      color: "var(--fg-2)",
-    }}
-  >
-    <summary style={{ cursor: "pointer" }}>{describe(repoPaths.length)}</summary>
+  <details className="border-border text-fg-2 shrink-0 border-b px-(--space-3) py-(--space-1) text-(length:--fs-meta)">
+    <summary className="hover:text-fg-1 cursor-pointer">{describe(repoPaths.length)}</summary>
     <div
       role="group"
       aria-label="Repositories with more open MRs"
-      style={{ margin: "4px 0 0", display: "grid", gap: 2, justifyItems: "start" }}
+      className="mt-(--space-1) grid justify-items-start gap-px"
     >
       {repoPaths.map((repoPath) => (
         <button
           key={repoPath}
           type="button"
-          className="mono"
           onClick={() => {
             onOpenRepo(repoPath);
           }}
-          style={{
-            background: "transparent",
-            border: "none",
-            padding: "1px 0",
-            fontSize: 11,
-            color: "var(--fg-1)",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
+          className="text-fg-1 hover:text-fg-0 rounded-(--radius-1) px-(--space-1) font-mono text-(length:--fs-meta) hover:underline"
         >
           {repoPath}
         </button>

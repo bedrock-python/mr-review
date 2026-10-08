@@ -104,7 +104,7 @@ describe("isClientFiltered", () => {
 });
 
 describe("filter options", () => {
-  it("maps inbox relationship chips onto the server scope", () => {
+  it("maps the inbox relationship options onto the server scope", () => {
     expect(SCOPE_OPTIONS.map(({ label, value }) => [label, value])).toEqual([
       ["All", "all"],
       ["Review requested", "review_requested"],
@@ -113,7 +113,7 @@ describe("filter options", () => {
     ]);
   });
 
-  it("maps repository state chips onto the server state", () => {
+  it("maps the repository state options onto the server state", () => {
     expect(STATE_OPTIONS.map(({ label, value }) => [label, value])).toEqual([
       ["Open", "opened"],
       ["Merged", "merged"],
@@ -122,8 +122,8 @@ describe("filter options", () => {
     ]);
   });
 
-  it("offers the client-side readiness chips and sort keys", () => {
-    expect(READINESS_OPTIONS.map((option) => option.value)).toEqual(["draft", "ready"]);
+  it("offers the client-side readiness filter and sort keys", () => {
+    expect(READINESS_OPTIONS.map((option) => option.value)).toEqual(["any", "draft", "ready"]);
     expect(SORT_OPTIONS.map((option) => option.value)).toEqual(["updated", "created", "title"]);
   });
 });

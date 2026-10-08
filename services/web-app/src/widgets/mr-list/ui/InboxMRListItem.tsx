@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { formatBranchRange, getRepoNameFromPath } from "@entities/mr";
-import { MRDiffStats, MRItemAuthor, MRItemButton, MRItemTitle, MRItemTopLine } from "./MRItemParts";
+import { MRItemButton, MRItemHeadline, MRItemMeta } from "./MRItemParts";
 import type { InboxMR } from "@entities/mr";
 
 export type InboxMRListItemProps = {
@@ -21,30 +21,8 @@ const InboxMRListItemComponent = ({
     }}
     title={formatBranchRange(mr.source_branch, mr.target_branch) ?? undefined}
   >
-    <div style={{ marginBottom: 4 }}>
-      <span
-        className="mono"
-        title={mr.repo_path}
-        style={{
-          fontSize: 10,
-          color: "var(--fg-2)",
-          background: "var(--bg-2)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-1)",
-          padding: "1px 5px",
-        }}
-      >
-        {getRepoNameFromPath(mr.repo_path)}
-      </span>
-    </div>
-
-    <MRItemTopLine mr={mr} />
-    <MRItemTitle title={mr.title} isSelected={isSelected} />
-
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <MRItemAuthor author={mr.author} />
-      <MRDiffStats mr={mr} />
-    </div>
+    <MRItemHeadline mr={mr} isSelected={isSelected} />
+    <MRItemMeta mr={mr} repoName={getRepoNameFromPath(mr.repo_path)} repoPath={mr.repo_path} />
   </MRItemButton>
 );
 

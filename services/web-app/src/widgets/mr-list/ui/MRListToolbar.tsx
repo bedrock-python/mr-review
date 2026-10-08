@@ -1,62 +1,8 @@
-import { SearchField } from "@shared/ui";
-import { READINESS_OPTIONS, SCOPE_OPTIONS, SORT_OPTIONS, STATE_OPTIONS } from "../lib/mrListView";
+import { SearchField, SegmentedControl, Select, Toolbar } from "@shared/ui";
+import { SCOPE_OPTIONS, SORT_OPTIONS, STATE_OPTIONS } from "../lib/mrListView";
+import { ReadinessFilter } from "./ReadinessFilter";
 import type { InboxScope, MRStateFilter } from "@entities/mr";
-import type { MRSortKey, Option, ReadinessFilter } from "../lib/mrListView";
-
-type ChipProps = {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-};
-
-const Chip = ({ label, isActive, onClick }: ChipProps): React.ReactElement => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={isActive}
-    style={{
-      padding: "3px 8px",
-      borderRadius: "var(--radius-pill)",
-      fontSize: 11,
-      fontFamily: "var(--font-mono)",
-      border: `1px solid ${isActive ? "var(--accent-fg)" : "var(--border)"}`,
-      background: isActive ? "var(--accent)" : "transparent",
-      color: isActive ? "var(--accent-ink)" : "var(--fg-1)",
-      cursor: "pointer",
-      transition: "all 0.08s",
-      whiteSpace: "nowrap",
-    }}
-  >
-    {label}
-  </button>
-);
-
-type ChipGroupProps<TValue extends string> = {
-  ariaLabel: string;
-  options: readonly Option<TValue>[];
-  value: TValue;
-  onChange: (value: TValue) => void;
-};
-
-const ChipGroup = <TValue extends string>({
-  ariaLabel,
-  options,
-  value,
-  onChange,
-}: ChipGroupProps<TValue>): React.ReactElement => (
-  <div role="group" aria-label={ariaLabel} style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-    {options.map((option) => (
-      <Chip
-        key={option.value}
-        label={option.label}
-        isActive={option.value === value}
-        onClick={() => {
-          onChange(option.value);
-        }}
-      />
-    ))}
-  </div>
-);
+import type { MRSortKey, ReadinessFilter as Readiness } from "../lib/mrListView";
 
 export type MRListToolbarProps = {
   isInbox: boolean;
@@ -64,8 +10,8 @@ export type MRListToolbarProps = {
   onStateChange: (state: MRStateFilter) => void;
   scope: InboxScope;
   onScopeChange: (scope: InboxScope) => void;
-  readiness: ReadinessFilter;
-  onReadinessChange: (readiness: ReadinessFilter) => void;
+  readiness: Readiness;
+  onReadinessChange: (readiness: Readiness) => void;
   search: string;
   onSearchChange: (value: string) => void;
   isSearchBusy: boolean;
@@ -76,6 +22,13 @@ export type MRListToolbarProps = {
 const isSortKey = (value: string): value is MRSortKey =>
   SORT_OPTIONS.some((option) => option.value === value);
 
+/** The segment spans the row, one equal part per option. */
+const STRETCHED_SEGMENT = "flex w-full [&>button]:flex-1";
+
+/**
+ * Two rows over the list: which merge requests (the relationship in the inbox, the state in a
+ * repository), then search, order and the draft filter.
+ */
 export const MRListToolbar = ({
   isInbox,
   state,
@@ -91,60 +44,29 @@ export const MRListToolbar = ({
   onSortChange,
 }: MRListToolbarProps): React.ReactElement => (
   <>
-    <div
-      style={{
-        padding: "10px 12px 8px",
-        borderBottom: "1px solid var(--border)",
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: "6px 12px",
-      }}
-    >
-      {/* Relationship chips need the user's identity, which only the inbox endpoint has. */}
+    <Toolbar size="sm" hasBorder={false} className="px-(--space-3) pt-(--space-1)">
+      {/* Relationship options need the user's identity, which only the inbox endpoint has. */}
       {isInbox ? (
-        <ChipGroup
-          ariaLabel="Relationship"
+        <SegmentedControl
+          aria-label="Relationship"
+          size="sm"
           options={SCOPE_OPTIONS}
           value={scope}
-          onChange={onScopeChange}
+          onValueChange={onScopeChange}
+          className={STRETCHED_SEGMENT}
         />
       ) : (
-        <ChipGroup
-          ariaLabel="State"
+        <SegmentedControl
+          aria-label="State"
+          size="sm"
           options={STATE_OPTIONS}
           value={state}
-          onChange={onStateChange}
+          onValueChange={onStateChange}
+          className={STRETCHED_SEGMENT}
         />
       )}
-      {/* Client-side toggles sit apart, right-aligned; they wrap as one unit. */}
-      <div
-        role="group"
-        aria-label="Readiness"
-        style={{ display: "flex", gap: 4, marginLeft: "auto", flexShrink: 0 }}
-      >
-        {READINESS_OPTIONS.map((option) => (
-          <Chip
-            key={option.value}
-            label={option.label}
-            isActive={readiness === option.value}
-            onClick={() => {
-              onReadinessChange(readiness === option.value ? "any" : option.value);
-            }}
-          />
-        ))}
-      </div>
-    </div>
-
-    <div
-      style={{
-        padding: "8px 12px",
-        borderBottom: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
+    </Toolbar>
+    <Toolbar size="sm" className="px-(--space-3) pb-(--space-1)">
       <SearchField
         value={search}
         onValueChange={onSearchChange}
@@ -152,29 +74,21 @@ export const MRListToolbar = ({
         ariaLabel="Search merge requests"
         isBusy={isSearchBusy}
       />
-      <select
+      <Select
+        aria-label="Sort by"
         value={sort}
         onChange={(event) => {
           if (isSortKey(event.target.value)) onSortChange(event.target.value);
         }}
-        aria-label="Sort by"
-        style={{
-          background: "var(--bg-2)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-2)",
-          padding: "5px 8px",
-          fontSize: 11,
-          color: "var(--fg-1)",
-          fontFamily: "var(--font-mono)",
-          cursor: "pointer",
-        }}
+        className="w-auto shrink-0"
       >
         {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
-    </div>
+      </Select>
+      <ReadinessFilter value={readiness} onValueChange={onReadinessChange} />
+    </Toolbar>
   </>
 );

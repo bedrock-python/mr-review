@@ -21,10 +21,11 @@ export const SCOPE_OPTIONS: readonly Option<InboxScope>[] = [
   { label: "Authored", value: "authored" },
 ];
 
-/** Client-side: list endpoints have no draft filter. */
-export const READINESS_OPTIONS: readonly Option<Exclude<ReadinessFilter, "any">>[] = [
-  { label: "Draft", value: "draft" },
-  { label: "Ready", value: "ready" },
+/** Client-side, in the filter menu: list endpoints have no draft filter. */
+export const READINESS_OPTIONS: readonly Option<ReadinessFilter>[] = [
+  { label: "All merge requests", value: "any" },
+  { label: "Drafts only", value: "draft" },
+  { label: "Ready for review", value: "ready" },
 ];
 
 /** "Updated" is the server order, kept across pages; the others re-sort what is loaded. */
@@ -90,3 +91,12 @@ export const applyMRListView = <TItem>(
 /** True when client-side filtering may hide loaded items. */
 export const isClientFiltered = ({ readiness, titleFilter }: MRListViewOptions): boolean =>
   readiness !== "any" || (titleFilter?.trim() ?? "") !== "";
+
+export type PausedMessageParams = { isFiltered: boolean; isInbox: boolean; scope: InboxScope };
+
+/** Why auto-loading stopped: several pages in a row added nothing to the list. */
+export const getPausedMessage = ({ isFiltered, isInbox, scope }: PausedMessageParams): string => {
+  if (isFiltered) return "No matches in the pages loaded so far";
+  if (isInbox && scope === "all") return "No open merge requests in the last repositories checked";
+  return "Nothing new in the last pages loaded";
+};

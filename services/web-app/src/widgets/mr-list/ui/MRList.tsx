@@ -1,17 +1,22 @@
 import { useCallback, useState } from "react";
+import { FolderGit2 } from "lucide-react";
 import { useNav } from "@app/navigation";
-import { InfiniteVirtualList, ListMessage, ListStatusBar, Skeleton } from "@shared/ui";
+import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList } from "@shared/ui";
 import { getVcsErrorMessage, useDebouncedSearch, useStableCallback } from "@shared/lib";
+import { describeLoadError } from "../lib/describeLoadError";
 import {
   DEFAULT_READINESS,
   DEFAULT_SCOPE,
   DEFAULT_SORT,
   DEFAULT_STATE,
+  getPausedMessage,
   isClientFiltered,
 } from "../lib/mrListView";
 import { useMRListRows } from "../model/useMRListRows";
 import { InboxMRListItem } from "./InboxMRListItem";
+import { ListStatusLine } from "./ListStatusLine";
 import { MRListItem } from "./MRListItem";
+import { EmptyList, MRListSkeleton, RefreshErrorNote } from "./MRListStates";
 import { MRListToolbar } from "./MRListToolbar";
 import { TruncatedReposNote } from "./TruncatedReposNote";
 import type { InboxMR, InboxScope, MR, MRStateFilter } from "@entities/mr";
@@ -19,46 +24,16 @@ import type { ListPagination } from "@shared/ui";
 import type { MRSortKey, ReadinessFilter } from "../lib/mrListView";
 import type { MRListRow } from "../model/useMRListRows";
 
-const SKELETON_ROWS = 5;
-const ESTIMATED_REPO_ROW_PX = 86;
-const ESTIMATED_INBOX_ROW_PX = 106;
-
-const MRListSkeleton = (): React.ReactElement => (
-  <div role="status" aria-label="Loading merge requests" style={{ padding: "6px 0" }}>
-    {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-      <div
-        key={i}
-        style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}
-      >
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <Skeleton style={{ width: 36, height: 14, borderRadius: "var(--radius-pill)" }} />
-          <Skeleton
-            style={{
-              width: `${String(60 + (i % 3) * 20)}px`,
-              height: 14,
-              borderRadius: "var(--radius-1)",
-            }}
-          />
-        </div>
-        <Skeleton style={{ width: "85%", height: 13, borderRadius: "var(--radius-1)" }} />
-        <Skeleton style={{ width: "50%", height: 11, borderRadius: "var(--radius-1)" }} />
-      </div>
-    ))}
-  </div>
-);
-
-type PausedMessageParams = { isFiltered: boolean; isInbox: boolean; scope: InboxScope };
-
-/** Why auto-loading stopped: several pages in a row added nothing to the list. */
-const getPausedMessage = ({ isFiltered, isInbox, scope }: PausedMessageParams): string => {
-  if (isFiltered) return "No matches in the pages loaded so far";
-  if (isInbox && scope === "all") return "No open merge requests in the last repositories checked";
-  return "Nothing new in the last pages loaded";
-};
+/** Width of the list column; the navigator is the repositories pane plus this. */
+const MR_LIST_WIDTH_PX = 360;
+/**
+ * Both kinds of row are a title (one or two lines) over a meta line; rows are measured, this
+ * is the first guess: a one-line title is 56px, a wrapped one 74px.
+ */
+const ESTIMATED_ROW_PX = 60;
 
 const getRowKey = (row: MRListRow): string => row.key;
-const estimateRowSize = (row: MRListRow): number =>
-  row.kind === "inbox" ? ESTIMATED_INBOX_ROW_PX : ESTIMATED_REPO_ROW_PX;
+const estimateRowSize = (): number => ESTIMATED_ROW_PX;
 
 export const MRList = (): React.ReactElement => {
   const [state, setState] = useState<MRStateFilter>(DEFAULT_STATE);
@@ -88,6 +63,10 @@ export const MRList = (): React.ReactElement => {
   const handleOpenRepo = useStableCallback((repoPath: string): void => {
     if (selectedHostId) setRepo(selectedHostId, repoPath);
   });
+  const handleClearFilters = (): void => {
+    setReadiness(DEFAULT_READINESS);
+    search.setValue("");
+  };
 
   const renderRow = useCallback(
     (row: MRListRow): React.ReactNode =>
@@ -110,10 +89,13 @@ export const MRList = (): React.ReactElement => {
   const isScopeSelected = isInbox ? selectedHostId !== null : selectedRepoPath !== null;
   const viewOptions = { readiness, sort, titleFilter: isInbox ? search.debouncedValue : undefined };
   const isFiltered = isClientFiltered(viewOptions);
+  const isSearching = !isInbox && search.debouncedValue.trim() !== "";
   const listScope = isInbox ? `inbox:${scope}` : `repo:${selectedRepoPath ?? ""}:${state}`;
   const resetKey = [selectedHostId, listScope, search.debouncedValue, readiness, sort].join("\n");
   const isServerSearchBusy =
     !isInbox && search.debouncedValue !== "" && list.isFetching && !list.isFetchingNextPage;
+  const hasRefreshFailed =
+    list.isError && list.hasData && !list.isFetchNextPageError && !list.isFetching;
 
   const pagination: ListPagination = {
     pageCount: list.pageCount,
@@ -130,14 +112,17 @@ export const MRList = (): React.ReactElement => {
   const renderFooter = (): React.ReactNode => {
     if (list.isPending && list.isFetching) return <MRListSkeleton />;
     if (list.isError && !list.hasData) {
-      return (
-        <ListMessage isError actionLabel="Retry" onAction={list.refetch}>
-          {getVcsErrorMessage(list.error)} merge requests
-        </ListMessage>
-      );
+      const { title, message } = describeLoadError(list.error, "merge requests");
+      return <ErrorState size="sm" title={title} message={message} onRetry={list.refetch} />;
     }
     if (list.hasData && rows.length === 0 && !list.hasNextPage && !list.isPlaceholderData) {
-      return <ListMessage>No merge requests found</ListMessage>;
+      return (
+        <EmptyList
+          isFiltered={isFiltered || isSearching}
+          scope={isInbox ? scope : null}
+          onClearFilters={handleClearFilters}
+        />
+      );
     }
     return null;
   };
@@ -145,59 +130,63 @@ export const MRList = (): React.ReactElement => {
   return (
     <section
       aria-label="Merge Requests"
-      style={{
-        width: 360,
-        flexShrink: 0,
-        display: "flex",
-        flexDirection: "column",
-        borderRight: "1px solid var(--border)",
-        background: "var(--bg-0)",
-        height: "100%",
-        overflow: "hidden",
-      }}
+      className="border-border bg-bg-0 flex h-full shrink-0 flex-col overflow-hidden border-r"
+      style={{ width: MR_LIST_WIDTH_PX }}
     >
-      <MRListToolbar
-        isInbox={isInbox}
-        state={state}
-        onStateChange={setState}
-        scope={scope}
-        onScopeChange={setScope}
-        readiness={readiness}
-        onReadinessChange={setReadiness}
-        search={search.value}
-        onSearchChange={search.setValue}
-        isSearchBusy={search.isPending || isServerSearchBusy}
-        sort={sort}
-        onSortChange={setSort}
-      />
-
-      {isInbox && scope === "all" && truncatedRepos.length > 0 && (
-        <TruncatedReposNote repoPaths={truncatedRepos} onOpenRepo={handleOpenRepo} />
-      )}
-
       {isScopeSelected ? (
-        <InfiniteVirtualList
-          rows={rows}
-          getRowKey={getRowKey}
-          estimateRowSize={estimateRowSize}
-          shouldMeasureRows
-          renderRow={renderRow}
-          ariaLabel={isInbox ? "Inbox merge requests" : "Merge requests"}
-          resetKey={resetKey}
-          pagination={pagination}
-          isStale={list.isPlaceholderData}
-          footer={renderFooter()}
-        />
-      ) : (
-        <ListMessage>Select a repository to see merge requests</ListMessage>
-      )}
+        <>
+          <MRListToolbar
+            isInbox={isInbox}
+            state={state}
+            onStateChange={setState}
+            scope={scope}
+            onScopeChange={setScope}
+            readiness={readiness}
+            onReadinessChange={setReadiness}
+            search={search.value}
+            onSearchChange={search.setValue}
+            isSearchBusy={search.isPending || isServerSearchBusy}
+            sort={sort}
+            onSortChange={setSort}
+          />
 
-      {isScopeSelected && list.hasData && (
-        <ListStatusBar
-          loadedCount={loadedCount}
-          {...(isFiltered ? { shownCount: rows.length } : {})}
-          hasNextPage={list.hasNextPage}
-          isFetchingNextPage={list.isFetchingNextPage}
+          {isInbox && scope === "all" && truncatedRepos.length > 0 && (
+            <TruncatedReposNote repoPaths={truncatedRepos} onOpenRepo={handleOpenRepo} />
+          )}
+
+          {hasRefreshFailed && (
+            <RefreshErrorNote message={list.error?.message} onRetry={list.refetch} />
+          )}
+
+          <InfiniteVirtualList
+            rows={rows}
+            getRowKey={getRowKey}
+            estimateRowSize={estimateRowSize}
+            shouldMeasureRows
+            renderRow={renderRow}
+            ariaLabel={isInbox ? "Inbox merge requests" : "Merge requests"}
+            resetKey={resetKey}
+            pagination={pagination}
+            isStale={list.isPlaceholderData}
+            footer={renderFooter()}
+          />
+
+          {list.hasData && (
+            <ListStatusLine
+              loadedCount={loadedCount}
+              {...(isFiltered ? { shownCount: rows.length } : {})}
+              hasNextPage={list.hasNextPage}
+              isFetchingNextPage={list.isFetchingNextPage}
+            />
+          )}
+        </>
+      ) : (
+        <EmptyState
+          isFill
+          size="sm"
+          icon={<FolderGit2 size={ICON_SIZE.inline} />}
+          title="No repository selected"
+          description="Pick a repository, or the Inbox, to see its merge requests."
         />
       )}
     </section>
