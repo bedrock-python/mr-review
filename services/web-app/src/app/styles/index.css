@@ -77,58 +77,61 @@
       height: 0;
     }
   }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+}
+
+/* The app's own keyframes. Outside @theme on purpose: Tailwind drops theme keyframes that
+   no utility uses, and these are used from inline styles it cannot see. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  /* A text cursor: on, then off. Not `pulse`, which Tailwind's animate-pulse uses. */
-  @keyframes blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0;
-    }
+}
+/* A text cursor: on, then off. Not `pulse`, which Tailwind's animate-pulse uses. */
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
   }
-  @keyframes fadeSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  50% {
+    opacity: 0;
   }
-  @keyframes pulse-ring {
-    0% {
-      transform: scale(1);
-      opacity: 0.8;
-    }
-    70% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
+}
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
-  @keyframes pulse-ring-centered {
-    0% {
-      transform: translateY(-50%) scale(1);
-      opacity: 0.8;
-    }
-    70% {
-      transform: translateY(-50%) scale(1.5);
-      opacity: 0;
-    }
-    100% {
-      transform: translateY(-50%) scale(1.5);
-      opacity: 0;
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes pulse-ring-centered {
+  0% {
+    transform: translateY(-50%) scale(1);
+    opacity: 0.8;
+  }
+  70% {
+    transform: translateY(-50%) scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(-50%) scale(1.5);
+    opacity: 0;
   }
 }
 
