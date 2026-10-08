@@ -1,4 +1,4 @@
-"""Shared helper: merge pinned non-member favourites into a VCS listing."""
+"""Shared helper: merge pinned favourites into a paginated VCS listing."""
 
 from __future__ import annotations
 
@@ -10,6 +10,17 @@ from mr_review.core.mrs.entities import Repo
 from mr_review.core.vcs.protocols import VCSProvider
 
 logger = logging.getLogger(__name__)
+
+# Favourites are user-pinned and few, but each one missing from the listing costs a lookup.
+_FAVOURITE_FETCH_CONCURRENCY = 5
+
+
+def matches_query(repo: Repo, query: str | None) -> bool:
+    """Case-insensitive match of ``query`` against a repo's path or name; no query matches everything."""
+    if not query:
+        return True
+    needle = query.lower()
+    return needle in repo.path.lower() or needle in repo.name.lower()
 
 
 async def fetch_extra_favourites(
@@ -31,13 +42,32 @@ async def fetch_extra_favourites(
     if not missing:
         return []
 
-    fetched = await asyncio.gather(*[_safe_get_repo(provider, p) for p in missing])
-    extras = [r for r in fetched if r is not None]
+    semaphore = asyncio.Semaphore(_FAVOURITE_FETCH_CONCURRENCY)
 
-    if query:
-        needle = query.lower()
-        extras = [r for r in extras if needle in r.path.lower() or needle in r.name.lower()]
-    return extras
+    async def fetch(repo_path: str) -> Repo | None:
+        async with semaphore:
+            return await _safe_get_repo(provider, repo_path)
+
+    fetched = await asyncio.gather(*[fetch(p) for p in missing])
+    return [r for r in fetched if r is not None and matches_query(r, query)]
+
+
+def merge_favourites_into_page(
+    host: Host,
+    page: int,
+    listed: list[Repo],
+    extras: list[Repo],
+    query: str | None,
+) -> list[Repo]:
+    """Merge favourites into one page of a listing so each favourite shows up exactly once.
+
+    Page 1 gets ``extras`` (favourites missing from it) in front. A favourite the host
+    lists on a later page was already prepended to page 1, so later pages drop it.
+    """
+    if page == 1:
+        return [*extras, *listed]
+    favourites = set(host.favourite_repos)
+    return [r for r in listed if not (r.path in favourites and matches_query(r, query))]
 
 
 async def _safe_get_repo(provider: VCSProvider, repo_path: str) -> Repo | None:

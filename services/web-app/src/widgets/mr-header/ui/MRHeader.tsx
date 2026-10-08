@@ -1,183 +1,82 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
-import { useMR, useRepos, mrKeys } from "@entities/mr";
+import { useMR, useCachedRepo, getRepoNameFromPath } from "@entities/mr";
 import { useHosts } from "@entities/host";
 import { useReview } from "@entities/review";
+import { getVcsErrorMessage } from "@shared/lib";
+import { useSyncMR } from "../model/useSyncMR";
+import { MRHeaderActions, MRHeaderMeta } from "./MRHeaderParts";
+import { MRBreadcrumbs, MRHeaderError, MRHeaderFrame, MRHeaderSkeleton } from "./MRHeaderStates";
+import type { Host } from "@entities/host";
 
-const ExternalLinkIcon = (): React.ReactElement => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    <polyline points="15 3 21 3 21 9" />
-    <line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
-
-const SyncIcon = (): React.ReactElement => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <polyline points="1 4 1 10 7 10" />
-    <polyline points="23 20 23 14 17 14" />
-    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15" />
-  </svg>
-);
-
-const ArrowsIcon = (): React.ReactElement => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <polyline points="17 1 21 5 17 9" />
-    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-    <polyline points="7 23 3 19 7 15" />
-    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-  </svg>
-);
-
-const formatAge = (dateStr: string): string => {
-  const diffMs = Date.now() - new Date(dateStr).getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (diffHours < 1) return "just now";
-  if (diffHours < 24) return `${String(diffHours)}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${String(diffDays)}d ago`;
-  return `${String(Math.floor(diffDays / 30))}mo ago`;
+const buildMRUrl = (
+  webUrl: string,
+  host: Host | undefined,
+  repoPath: string,
+  mrIid: number
+): string => {
+  if (webUrl) return webUrl;
+  if (!host) return "";
+  const base = host.base_url.replace(/\/$/, "");
+  if (host.type === "github") return `${base}/${repoPath}/pull/${String(mrIid)}`;
+  return `${base}/${repoPath}/-/merge_requests/${String(mrIid)}`;
 };
-
-const HistoryIcon = (): React.ReactElement => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-const PanelsIcon = (): React.ReactElement => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="9" y1="3" x2="9" y2="21" />
-  </svg>
-);
 
 export const MRHeader = (): React.ReactElement | null => {
   const { navCollapsed, toggleNav, toggleIterationHistory } = useAppStore();
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId } = useNav();
-  const queryClient = useQueryClient();
   const { data: hosts } = useHosts();
-  const { data: repos } = useRepos(selectedHostId);
-  const { data: mr } = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
+  // Only reuses repo data the sidebar already loaded: fetching the repository
+  // list (potentially thousands of entries) just for a breadcrumb is wasteful.
+  const cachedRepo = useCachedRepo(selectedHostId, selectedRepoPath);
+  const mrQuery = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
   const { data: review } = useReview(activeReviewId);
+  const syncMR = useSyncMR();
 
-  if (!mr || !selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
+  if (!selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
   const host = hosts?.find((h) => h.id === selectedHostId);
-  const repo = repos?.find((r) => r.path === selectedRepoPath);
-  const hostName = host?.name ?? selectedHostId;
-  const repoName = repo?.name ?? selectedRepoPath;
+  const breadcrumbs = (
+    <MRBreadcrumbs
+      hostName={host?.name ?? selectedHostId}
+      repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
+      repoPath={selectedRepoPath}
+      mrIid={selectedMRIid}
+      isNavCollapsed={navCollapsed}
+      onShowNav={toggleNav}
+    />
+  );
 
-  const sha = (mr as typeof mr & { sha?: string }).sha;
-
-  const mrUrl =
-    mr.web_url ||
-    (() => {
-      if (!host) return "";
-      const base = host.base_url.replace(/\/$/, "");
-      if (host.type === "github")
-        return `${base}/${selectedRepoPath}/pull/${String(selectedMRIid)}`;
-      return `${base}/${selectedRepoPath}/-/merge_requests/${String(selectedMRIid)}`;
-    })();
+  const mr = mrQuery.data;
+  if (!mr) {
+    if (mrQuery.isError) {
+      return (
+        <MRHeaderError
+          breadcrumbs={breadcrumbs}
+          message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
+          isRetrying={mrQuery.isFetching}
+          onRetry={() => {
+            void mrQuery.refetch();
+          }}
+        />
+      );
+    }
+    return <MRHeaderSkeleton breadcrumbs={breadcrumbs} />;
+  }
 
   const handleSync = (): void => {
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: mrKeys.lists(selectedHostId, selectedRepoPath) }),
-      queryClient.invalidateQueries({
-        queryKey: mrKeys.detail(selectedHostId, selectedRepoPath, selectedMRIid),
-      }),
-    ]).then(() => {
-      toast.success("MR synced");
+    syncMR.mutate({
+      hostId: selectedHostId,
+      repoPath: selectedRepoPath,
+      mrIid: selectedMRIid,
+      reviewId: activeReviewId,
     });
   };
 
   return (
-    <div
-      style={{
-        borderBottom: "1px solid var(--border)",
-        background: "var(--bg-1)",
-        padding: "12px 20px 10px",
-        flexShrink: 0,
-      }}
-    >
-      {/* Breadcrumbs */}
-      <div
-        className="mono"
-        style={{
-          fontSize: 11,
-          color: "var(--fg-3)",
-          marginBottom: 6,
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        {navCollapsed && (
-          <button
-            type="button"
-            onClick={toggleNav}
-            title="Show navigator"
-            style={{
-              marginRight: 6,
-              padding: "2px 4px",
-              background: "transparent",
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              cursor: "pointer",
-              color: "var(--fg-3)",
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-          >
-            <PanelsIcon />
-          </button>
-        )}
-        <span>{hostName}</span>
-        <span>›</span>
-        <span>{repoName}</span>
-        <span>›</span>
-        <span style={{ color: "var(--fg-2)" }}>!{mr.iid}</span>
-      </div>
+    <MRHeaderFrame>
+      {breadcrumbs}
 
-      {/* Title + actions */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
         <h1
           style={{
@@ -192,119 +91,16 @@ export const MRHeader = (): React.ReactElement | null => {
         >
           {mr.title}
         </h1>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0, paddingTop: 4 }}>
-          {review && review.iterations.length > 0 && (
-            <button
-              type="button"
-              className="btn ghost"
-              style={{ padding: "5px 10px", gap: 6 }}
-              onClick={toggleIterationHistory}
-              title="View iteration history"
-            >
-              <HistoryIcon />
-              History
-              <span
-                style={{
-                  fontSize: 10,
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--fg-3)",
-                  background: "var(--bg-2)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 999,
-                  padding: "0 5px",
-                  lineHeight: "1.6",
-                }}
-              >
-                {review.iterations.length}
-              </span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn ghost"
-            style={{ padding: "5px 10px", gap: 6 }}
-            onClick={handleSync}
-          >
-            <SyncIcon />
-            Sync
-          </button>
-          {mrUrl ? (
-            <a
-              href={mrUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn ghost"
-              style={{ padding: "5px 10px", gap: 6, textDecoration: "none" }}
-            >
-              <ExternalLinkIcon />
-              Open
-            </a>
-          ) : (
-            <button
-              type="button"
-              className="btn ghost"
-              style={{ padding: "5px 10px", gap: 6 }}
-              disabled
-            >
-              <ExternalLinkIcon />
-              Open
-            </button>
-          )}
-        </div>
+        <MRHeaderActions
+          iterationCount={review?.iterations.length ?? 0}
+          onShowHistory={toggleIterationHistory}
+          isSyncing={syncMR.isPending}
+          onSync={handleSync}
+          mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+        />
       </div>
 
-      {/* Meta row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {/* Author */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              background: "var(--bg-3)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 10,
-              color: "var(--fg-2)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            {mr.author.charAt(0).toUpperCase()}
-          </div>
-          <span style={{ fontSize: 12, color: "var(--fg-1)" }}>{mr.author}</span>
-          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>{formatAge(mr.created_at)}</span>
-        </div>
-
-        <span style={{ color: "var(--border-strong)" }}>·</span>
-
-        {/* Branch chip */}
-        <span className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <ArrowsIcon />
-          <span className="mono" style={{ fontSize: 10 }}>
-            {mr.source_branch}
-          </span>
-          <span style={{ color: "var(--fg-3)" }}>→</span>
-          <span className="mono" style={{ fontSize: 10 }}>
-            {mr.target_branch}
-          </span>
-        </span>
-
-        {/* SHA */}
-        {sha && (
-          <span className="chip mono" style={{ fontSize: 10 }}>
-            {sha.slice(0, 8)}
-          </span>
-        )}
-
-        {/* Draft indicator */}
-        {mr.draft && (
-          <span className="chip" style={{ color: "var(--fg-3)", fontSize: 10 }}>
-            DRAFT
-          </span>
-        )}
-      </div>
-    </div>
+      <MRHeaderMeta mr={mr} />
+    </MRHeaderFrame>
   );
 };

@@ -1,14 +1,44 @@
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import logging
+from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
+from mr_review.infra.vcs._pagination import (
+    gitea_has_more,
+    json_list,
+    optional_int,
+    optional_str,
+)
+from mr_review.infra.vcs._tree import files_under
+
+# Gitea's own default and ceiling for tree pages; the cap keeps a giant monorepo from paging forever.
+_TREE_PAGE_SIZE = 1000
+GITEA_MAX_TREE_PAGES = 100
+
+logger = logging.getLogger(__name__)
+
+# The pulls API filters by open/closed only; merged vs. closed is told apart per item.
+_UPSTREAM_STATE: dict[MRStateFilter, str] = {
+    "opened": "open",
+    "merged": "closed",
+    "closed": "closed",
+    "all": "all",
+}
+
+_PERSONAL_SCOPE_PARAMS: dict[PersonalMRScope, str] = {
+    "authored": "created",
+    "assigned": "assigned",
+    "review_requested": "review_requested",
+}
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -30,12 +60,18 @@ class GiteaProvider:
             "Authorization": f"token {token}",
             "Content-Type": "application/json",
         }
+        # Resolved once per provider (the provider lives as long as the host's URL/token don't change).
+        self._user_id: int | None = None
+        self._user_lock = asyncio.Lock()
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+    async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}/api/v1{path}"
         response = await self._client.get(url, headers=self._headers, params=params)
         response.raise_for_status()
-        return response.json()
+        return response
+
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return (await self._get_response(path, params)).json()
 
     async def _post(self, path: str, json_body: dict[str, Any]) -> Any:
         url = f"{self._base_url}/api/v1{path}"
@@ -51,61 +87,100 @@ class GiteaProvider:
             "email": str(data.get("email", "") or ""),
         }
 
-    async def list_repos(self, query: str | None = None) -> list[Repo]:
-        repos: list[Repo] = []
-        page = 1
-        base_params: dict[str, Any] = {"limit": 50, "sort": "newest"}
+    async def list_repos(
+        self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
+    ) -> Page[Repo]:
+        # Without uid, /repos/search lists every repository the instance shows the token — on a
+        # public instance like Codeberg, all of it. uid keeps it to repos the user owns or contributes to.
+        params: dict[str, Any] = {
+            "uid": await self._current_user_id(),
+            "sort": "updated",
+            "order": "desc",
+            "limit": per_page,
+            "page": page,
+        }
         if query:
-            base_params["q"] = query
-        while page <= 100:
-            data: dict[str, Any] = await self._get(
-                "/repos/search",
-                params={**base_params, "page": page},
-            )
-            items: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
-            if not items:
-                break
-            repos.extend(
-                Repo(
-                    id=str(item["id"]),
-                    path=str(item["full_name"]),
-                    name=str(item["name"]),
-                    description=item.get("description") or None,
-                )
-                for item in items
-            )
-            if len(items) < 50:
-                break
-            page += 1
-        return repos
+            params["q"] = query
+        response = await self._get_response("/repos/search", params=params)
+        data: Any = response.json()
+        items: list[dict[str, Any]] = (data.get("data") or []) if isinstance(data, dict) else []
+        return Page(
+            items=[_item_to_repo(item) for item in items],
+            page=page,
+            per_page=per_page,
+            has_more=gitea_has_more(response, len(items), per_page),
+        )
+
+    async def _current_user_id(self) -> int:
+        if self._user_id is None:
+            async with self._user_lock:
+                if self._user_id is None:
+                    user: dict[str, Any] = await self._get("/user")
+                    self._user_id = int(user["id"])
+        return self._user_id
 
     async def get_repo(self, repo_path: str) -> Repo:
         owner, repo = _split_repo_path(repo_path)
         data: dict[str, Any] = await self._get(f"/repos/{owner}/{repo}")
-        return Repo(
-            id=str(data["id"]),
-            path=str(data["full_name"]),
-            name=str(data["name"]),
-            description=data.get("description") or None,
-        )
+        return _item_to_repo(data)
 
-    async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
+    async def list_mrs(
+        self,
+        repo_path: str,
+        state: MRStateFilter = "opened",
+        page: int = 1,
+        per_page: int = DEFAULT_MRS_PER_PAGE,
+        query: str | None = None,
+    ) -> Page[MR]:
+        """One upstream page of pull requests.
+
+        A search goes through Gitea's issue search (``/issues?type=pulls&q=``), which matches titles,
+        bodies and comments host-side and returns issue-shaped items (no branches, no stats). Neither
+        endpoint can tell merged from closed, so that split is made on the fetched page: such a page
+        can hold fewer than ``per_page`` items while ``has_more`` is true.
+        """
         owner, repo = _split_repo_path(repo_path)
-        gitea_state = "open" if state == "opened" else state
-        mrs: list[MR] = []
-        page = 1
-        while page <= 100:
-            data: list[dict[str, Any]] = await self._get(
-                f"/repos/{owner}/{repo}/pulls",
-                params={"state": gitea_state, "limit": 50, "page": page},
+        if query:
+            response = await self._get_response(
+                f"/repos/{owner}/{repo}/issues",
+                params={"type": "pulls", "q": query, "state": _UPSTREAM_STATE[state], "page": page, "limit": per_page},
             )
-            if not data:
-                break
-            mrs.extend(_pr_to_mr(item) for item in data)
-            if len(data) < 50:
-                break
-            page += 1
-        return mrs
+            raw = json_list(response)
+            mrs = [_issue_to_mr(item) for item in raw]
+        else:
+            response = await self._get_response(
+                f"/repos/{owner}/{repo}/pulls",
+                params={"state": _UPSTREAM_STATE[state], "sort": "recentupdate", "limit": per_page, "page": page},
+            )
+            raw = json_list(response)
+            mrs = [_pr_to_mr(item) for item in raw]
+        if state in ("merged", "closed"):
+            mrs = [mr for mr in mrs if mr.status == state]
+        return Page(items=mrs, page=page, per_page=per_page, has_more=gitea_has_more(response, len(raw), per_page))
+
+    async def list_my_mrs(
+        self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
+    ) -> Page[InboxMR]:
+        response = await self._get_response(
+            "/repos/issues/search",
+            params={
+                "type": "pulls",
+                "state": "open",
+                _PERSONAL_SCOPE_PARAMS[scope]: "true",
+                "limit": per_page,
+                "page": page,
+            },
+        )
+        raw = json_list(response)
+        return Page(
+            items=[
+                InboxMR(mr=_issue_to_mr(item), repo_path=str((item.get("repository") or {}).get("full_name", "")))
+                for item in raw
+            ],
+            page=page,
+            per_page=per_page,
+            has_more=gitea_has_more(response, len(raw), per_page),
+        )
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
         owner, repo = _split_repo_path(repo_path)
@@ -195,19 +270,28 @@ class GiteaProvider:
         return response.text
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        return files_under(await self.list_tree(repo_path, ref), dir_path)
+
+    async def list_tree(self, repo_path: str, ref: str = "HEAD") -> list[str]:
+        """Every file path at ``ref``. Gitea pages recursive trees and flags more pages with ``truncated``."""
         owner, repo = _split_repo_path(repo_path)
         url = f"{self._base_url}/api/v1/repos/{owner}/{repo}/git/trees/{ref}"
-        response = await self._client.get(url, headers=self._headers, params={"recursive": "true"})
-        if response.status_code == 404:
-            return []
-        response.raise_for_status()
-        data: dict[str, Any] = response.json()
-        prefix = dir_path.rstrip("/") + "/"
-        return [
-            item["path"]
-            for item in data.get("tree", [])
-            if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
-        ]
+        paths: list[str] = []
+        for page in range(1, GITEA_MAX_TREE_PAGES + 1):
+            response = await self._client.get(
+                url,
+                headers=self._headers,
+                params={"recursive": "true", "page": page, "per_page": _TREE_PAGE_SIZE},
+            )
+            if response.status_code == httpx.codes.NOT_FOUND:
+                return []
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+            paths.extend(str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob")
+            if not data.get("truncated"):
+                return paths
+        logger.warning("Gitea tree for %s@%s exceeds %d pages; listing the first ones", repo_path, ref, page)
+        return paths
 
     async def get_commits(
         self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
@@ -232,23 +316,25 @@ class GiteaProvider:
         return result
 
 
-def _pr_to_mr(item: dict[str, Any]) -> MR:
-    state = str(item.get("state", "closed"))
-    merged = item.get("merged", False)
+def _status(state: str, merged: object) -> Literal["opened", "merged", "closed"]:
     if merged:
-        status = "merged"
-    elif state == "open":
-        status = "opened"
-    else:
-        status = "closed"
+        return "merged"
+    return "opened" if state == "open" else "closed"
 
+
+def _item_to_repo(item: dict[str, Any]) -> Repo:
+    return Repo(
+        id=str(item["id"]),
+        path=str(item["full_name"]),
+        name=str(item["name"]),
+        description=item.get("description") or None,
+    )
+
+
+def _pr_to_mr(item: dict[str, Any]) -> MR:
+    """Map a pull request object. Older Gitea releases don't report diff stats at all."""
     head: dict[str, Any] = item.get("head", {})
     base: dict[str, Any] = item.get("base", {})
-
-    additions = int(item.get("additions", 0) or 0)
-    deletions = int(item.get("deletions", 0) or 0)
-    changed_files = int(item.get("changed_files", 0) or 0)
-
     return MR(
         iid=int(item["number"]),
         title=str(item["title"]),
@@ -256,13 +342,33 @@ def _pr_to_mr(item: dict[str, Any]) -> MR:
         author=str(item["user"]["login"]),
         source_branch=str(head.get("label", head.get("ref", ""))),
         target_branch=str(base.get("label", base.get("ref", ""))),
-        status=status,
+        status=_status(str(item.get("state", "closed")), item.get("merged", False)),
         draft=bool(item.get("draft", False)),
         pipeline=None,
-        additions=additions,
-        deletions=deletions,
-        file_count=changed_files,
+        additions=optional_int(item.get("additions")),
+        deletions=optional_int(item.get("deletions")),
+        file_count=optional_int(item.get("changed_files")),
         web_url=str(item.get("html_url", "")),
+        created_at=_parse_datetime(str(item["created_at"])),
+        updated_at=_parse_datetime(str(item["updated_at"])),
+        head_sha=optional_str(head.get("sha")),
+    )
+
+
+def _issue_to_mr(item: dict[str, Any]) -> MR:
+    """Map an issue-search hit for a pull request: no branch names and no diff stats in this view."""
+    pull: dict[str, Any] = item.get("pull_request") or {}
+    return MR(
+        iid=int(item["number"]),
+        title=str(item["title"]),
+        description=str(item.get("body") or ""),
+        author=str(item["user"]["login"]),
+        source_branch="",
+        target_branch="",
+        status=_status(str(item.get("state", "closed")), pull.get("merged", False)),
+        draft=bool(pull.get("draft", False)),
+        pipeline=None,
+        web_url=str(pull.get("html_url") or item.get("html_url", "")),
         created_at=_parse_datetime(str(item["created_at"])),
         updated_at=_parse_datetime(str(item["updated_at"])),
     )

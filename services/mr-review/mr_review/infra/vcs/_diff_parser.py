@@ -40,12 +40,21 @@ def apply_diff_line(
     return old_line + 1, new_line + 1
 
 
-def parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
-    """Parse a unified diff patch string into DiffHunk objects."""
+@dataclass(frozen=True)
+class ParsedPatch:
+    hunks: list[DiffHunk]
+    additions: int
+    deletions: int
+
+
+def parse_patch(patch: str) -> ParsedPatch:
+    """Parse a unified diff patch into hunks, counting added/removed lines in the same pass."""
     hunks: list[DiffHunk] = []
     current_hunk: DiffHunk | None = None
     old_line = 0
     new_line = 0
+    additions = 0
+    deletions = 0
 
     for raw_line in patch.splitlines():
         m = _HUNK_HEADER_RE.match(raw_line)
@@ -66,25 +75,35 @@ def parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
 
         if current_hunk is not None:
             old_line, new_line = apply_diff_line(current_hunk, raw_line, old_line, new_line)
+            line_type = current_hunk.lines[-1].type
+            additions += line_type == "added"
+            deletions += line_type == "removed"
 
     if current_hunk is not None:
         hunks.append(current_hunk)
 
-    return hunks
+    return ParsedPatch(hunks=hunks, additions=additions, deletions=deletions)
 
 
-def _build_diff_file(path: str, old_path: str | None, diff_lines: list[str]) -> DiffFile:
-    diff_text = "\n".join(diff_lines)
-    hunks = parse_patch_to_hunks(diff_text)
-    additions = sum(1 for ln in diff_lines if ln.startswith("+") and not ln.startswith("+++"))
-    deletions = sum(1 for ln in diff_lines if ln.startswith("-") and not ln.startswith("---"))
+def parse_patch_to_hunks(patch: str) -> list[DiffHunk]:
+    """Parse a unified diff patch string into DiffHunk objects."""
+    return parse_patch(patch).hunks
+
+
+def diff_file_from_patch(path: str, old_path: str | None, patch: str) -> DiffFile:
+    """Build a DiffFile from one file's unified diff text, counting changes while parsing."""
+    parsed = parse_patch(patch)
     return DiffFile(
         path=path,
         old_path=old_path if old_path and old_path != path else None,
-        additions=additions,
-        deletions=deletions,
-        hunks=hunks,
+        additions=parsed.additions,
+        deletions=parsed.deletions,
+        hunks=parsed.hunks,
     )
+
+
+def _build_diff_file(path: str, old_path: str | None, diff_lines: list[str]) -> DiffFile:
+    return diff_file_from_patch(path, old_path, "\n".join(diff_lines))
 
 
 @dataclass

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
-import { useMR, useDiff } from "@entities/mr";
+import { useMR, useDiff, getDiffStats, sumDiffStats } from "@entities/mr";
 import { useCreateReview, useReviews, reviewApi } from "@entities/review";
 import { Markdown } from "@shared/ui";
 import { DiffViewer } from "./DiffViewer";
 import { FileList } from "./FileList";
-import type { MR, PipelineStatus } from "@entities/mr";
+import type { MR, MRDiffStats, PipelineStatus } from "@entities/mr";
 import type { Review, ReviewStage, Iteration } from "@entities/review";
 
 const STAGE_LABEL: Record<ReviewStage, string> = {
@@ -232,11 +232,13 @@ const EnterIcon = (): React.ReactElement => (
 
 type SidebarProps = {
   mr: MR;
+  /** Totals to show; `null` hides the block (unknown until the diff loads). */
+  diffStats: MRDiffStats | null;
   onCompose: () => void;
   isCreating: boolean;
 };
 
-const Sidebar = ({ mr, onCompose, isCreating }: SidebarProps): React.ReactElement => {
+const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.ReactElement => {
   const pipelineColor = mr.pipeline ? PIPELINE_DOT[mr.pipeline] : "var(--fg-3)";
 
   return (
@@ -339,33 +341,43 @@ const Sidebar = ({ mr, onCompose, isCreating }: SidebarProps): React.ReactElemen
           </div>
         </section>
 
-        {/* Changes stats */}
-        <section style={{ padding: "12px 16px" }}>
-          <div
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: "var(--fg-3)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              marginBottom: 8,
-            }}
-          >
-            Changes
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <span
-              style={{ fontSize: 12, color: "oklch(72% 0.18 145)", fontFamily: "var(--font-mono)" }}
+        {/* Changes stats — omitted when the host did not report them */}
+        {diffStats && (
+          <section style={{ padding: "12px 16px" }}>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                color: "var(--fg-3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 8,
+              }}
             >
-              +{mr.additions}
-            </span>
-            <span
-              style={{ fontSize: 12, color: "oklch(68% 0.20 25)", fontFamily: "var(--font-mono)" }}
-            >
-              -{mr.deletions}
-            </span>
-          </div>
-        </section>
+              Changes
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "oklch(72% 0.18 145)",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                +{diffStats.additions}
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "oklch(68% 0.20 25)",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                -{diffStats.deletions}
+              </span>
+            </div>
+          </section>
+        )}
       </div>
 
       {/* CTA card */}
@@ -431,6 +443,8 @@ export const PickStage = (): React.ReactElement => {
   const isError = mrError || diffError;
 
   const activeFile = diff?.find((f) => f.path === selectedFilePath) ?? diff?.[0] ?? null;
+  // Some hosts (GitLab) never report MR-level stats; the loaded diff has them.
+  const diffStats = (mr ? getDiffStats(mr) : null) ?? (diff ? sumDiffStats(diff) : null);
 
   const mrReviews =
     allReviews?.filter(
@@ -563,7 +577,14 @@ export const PickStage = (): React.ReactElement => {
         </div>
 
         {/* Right: sidebar */}
-        {mr && <Sidebar mr={mr} onCompose={handleCompose} isCreating={createReview.isPending} />}
+        {mr && (
+          <Sidebar
+            mr={mr}
+            diffStats={diffStats}
+            onCompose={handleCompose}
+            isCreating={createReview.isPending}
+          />
+        )}
       </div>
 
       {showExisting && (

@@ -1,15 +1,31 @@
-import { useState } from "react";
-import { useMRs, useInboxMRs } from "@entities/mr";
-import type { MRStatus } from "@entities/mr";
+import { useCallback, useState } from "react";
 import { useNav } from "@app/navigation";
-import { Skeleton } from "@shared/ui";
-import { getVcsErrorMessage } from "@shared/lib";
-import { MRListItem } from "./MRListItem";
+import { InfiniteVirtualList, ListMessage, ListStatusBar, Skeleton } from "@shared/ui";
+import { getVcsErrorMessage, useDebouncedSearch, useStableCallback } from "@shared/lib";
+import {
+  DEFAULT_READINESS,
+  DEFAULT_SCOPE,
+  DEFAULT_SORT,
+  DEFAULT_STATE,
+  isClientFiltered,
+} from "../lib/mrListView";
+import { useMRListRows } from "../model/useMRListRows";
 import { InboxMRListItem } from "./InboxMRListItem";
+import { MRListItem } from "./MRListItem";
+import { MRListToolbar } from "./MRListToolbar";
+import { TruncatedReposNote } from "./TruncatedReposNote";
+import type { InboxMR, InboxScope, MR, MRStateFilter } from "@entities/mr";
+import type { ListPagination } from "@shared/ui";
+import type { MRSortKey, ReadinessFilter } from "../lib/mrListView";
+import type { MRListRow } from "../model/useMRListRows";
+
+const SKELETON_ROWS = 5;
+const ESTIMATED_REPO_ROW_PX = 86;
+const ESTIMATED_INBOX_ROW_PX = 106;
 
 const MRListSkeleton = (): React.ReactElement => (
-  <div style={{ padding: "6px 0" }}>
-    {Array.from({ length: 5 }, (_, i) => (
+  <div role="status" aria-label="Loading merge requests" style={{ padding: "6px 0" }}>
+    {Array.from({ length: SKELETON_ROWS }, (_, i) => (
       <div
         key={i}
         style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}
@@ -27,65 +43,100 @@ const MRListSkeleton = (): React.ReactElement => (
   </div>
 );
 
-type FilterChip = { label: string; value: string };
+type PausedMessageParams = { isFiltered: boolean; isInbox: boolean; scope: InboxScope };
 
-const FILTER_CHIPS: FilterChip[] = [
-  { label: "All", value: "all" },
-  { label: "Assigned", value: "assigned" },
-  { label: "Authored", value: "authored" },
-  { label: "Draft", value: "draft" },
-  { label: "Ready", value: "ready" },
-];
+/** Why auto-loading stopped: several pages in a row added nothing to the list. */
+const getPausedMessage = ({ isFiltered, isInbox, scope }: PausedMessageParams): string => {
+  if (isFiltered) return "No matches in the pages loaded so far";
+  if (isInbox && scope === "all") return "No open merge requests in the last repositories checked";
+  return "Nothing new in the last pages loaded";
+};
 
-const SORT_OPTIONS = [
-  { label: "Updated", value: "updated" },
-  { label: "Created", value: "created" },
-  { label: "Title", value: "title" },
-];
-
-const SearchIcon = (): React.ReactElement => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
+const getRowKey = (row: MRListRow): string => row.key;
+const estimateRowSize = (row: MRListRow): number =>
+  row.kind === "inbox" ? ESTIMATED_INBOX_ROW_PX : ESTIMATED_REPO_ROW_PX;
 
 export const MRList = (): React.ReactElement => {
-  const [filter, setFilter] = useState("all");
-  const [sort, setSort] = useState("updated");
-  const [search, setSearch] = useState("");
-  const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR } = useNav();
+  const [state, setState] = useState<MRStateFilter>(DEFAULT_STATE);
+  const [scope, setScope] = useState<InboxScope>(DEFAULT_SCOPE);
+  const [readiness, setReadiness] = useState<ReadinessFilter>(DEFAULT_READINESS);
+  const [sort, setSort] = useState<MRSortKey>(DEFAULT_SORT);
+  const search = useDebouncedSearch();
+  const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR, setRepo } = useNav();
 
-  const statusFilter: MRStatus = "opened";
-  const {
-    data: mrs,
-    isLoading: isMRsLoading,
-    isError: isMRsError,
-    error: mrsError,
-  } = useMRs(selectedHostId, selectedRepoPath, { status: statusFilter });
+  const { rows, loadedCount, truncatedRepos, list } = useMRListRows({
+    hostId: selectedHostId,
+    repoPath: selectedRepoPath,
+    isInbox,
+    state,
+    scope,
+    query: search.debouncedValue,
+    readiness,
+    sort,
+  });
 
-  const {
-    data: inboxMRs,
-    isLoading: isInboxLoading,
-    isError: isInboxError,
-    error: inboxError,
-  } = useInboxMRs(isInbox ? selectedHostId : null);
+  const handleSelectMR = useStableCallback((mr: MR): void => {
+    if (selectedHostId && selectedRepoPath) setMR(selectedHostId, selectedRepoPath, mr.iid);
+  });
+  const handleSelectInboxMR = useStableCallback((mr: InboxMR): void => {
+    if (selectedHostId) setMR(selectedHostId, mr.repo_path, mr.iid);
+  });
+  const handleOpenRepo = useStableCallback((repoPath: string): void => {
+    if (selectedHostId) setRepo(selectedHostId, repoPath);
+  });
 
-  const isLoading = isInbox ? isInboxLoading : isMRsLoading;
-  const isError = isInbox ? isInboxError : isMRsError;
-  const activeError = isInbox ? inboxError : mrsError;
+  const renderRow = useCallback(
+    (row: MRListRow): React.ReactNode =>
+      row.kind === "inbox" ? (
+        <InboxMRListItem
+          mr={row.mr}
+          isSelected={selectedMRIid === row.mr.iid && selectedRepoPath === row.mr.repo_path}
+          onSelect={handleSelectInboxMR}
+        />
+      ) : (
+        <MRListItem
+          mr={row.mr}
+          isSelected={selectedMRIid === row.mr.iid}
+          onSelect={handleSelectMR}
+        />
+      ),
+    [selectedMRIid, selectedRepoPath, handleSelectInboxMR, handleSelectMR]
+  );
 
-  const applyFilters = <T extends { title: string; draft: boolean }>(items: T[]): T[] =>
-    items.filter((mr) => {
-      if (search && !mr.title.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filter === "draft") return mr.draft;
-      if (filter === "ready") return !mr.draft;
-      return true;
-    });
+  const isScopeSelected = isInbox ? selectedHostId !== null : selectedRepoPath !== null;
+  const viewOptions = { readiness, sort, titleFilter: isInbox ? search.debouncedValue : undefined };
+  const isFiltered = isClientFiltered(viewOptions);
+  const listScope = isInbox ? `inbox:${scope}` : `repo:${selectedRepoPath ?? ""}:${state}`;
+  const resetKey = [selectedHostId, listScope, search.debouncedValue, readiness, sort].join("\n");
+  const isServerSearchBusy =
+    !isInbox && search.debouncedValue !== "" && list.isFetching && !list.isFetchingNextPage;
 
-  const filteredMRs = applyFilters(mrs ?? []);
-  const filteredInbox = applyFilters(inboxMRs ?? []);
-  const hasResults = isInbox ? filteredInbox.length > 0 : filteredMRs.length > 0;
+  const pagination: ListPagination = {
+    pageCount: list.pageCount,
+    loadedCount,
+    hasNextPage: list.hasNextPage,
+    isFetchingNextPage: list.isFetchingNextPage,
+    isFetchNextPageError: list.isFetchNextPageError,
+    isIdle: !list.isFetching && !list.isPlaceholderData,
+    fetchNextPage: list.fetchNextPage,
+    errorMessage: `${getVcsErrorMessage(list.error)} more merge requests`,
+    pausedMessage: getPausedMessage({ isFiltered, isInbox, scope }),
+  };
+
+  const renderFooter = (): React.ReactNode => {
+    if (list.isPending && list.isFetching) return <MRListSkeleton />;
+    if (list.isError && !list.hasData) {
+      return (
+        <ListMessage isError actionLabel="Retry" onAction={list.refetch}>
+          {getVcsErrorMessage(list.error)} merge requests
+        </ListMessage>
+      );
+    }
+    if (list.hasData && rows.length === 0 && !list.hasNextPage && !list.isPlaceholderData) {
+      return <ListMessage>No merge requests found</ListMessage>;
+    }
+    return null;
+  };
 
   return (
     <section
@@ -101,188 +152,50 @@ export const MRList = (): React.ReactElement => {
         overflow: "hidden",
       }}
     >
-      {/* Filter chips */}
-      <div
-        style={{
-          padding: "10px 12px 8px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 4,
-        }}
-      >
-        {FILTER_CHIPS.map((chip) => (
-          <button
-            key={chip.value}
-            type="button"
-            onClick={() => {
-              setFilter(chip.value);
-            }}
-            style={{
-              padding: "3px 10px",
-              borderRadius: 999,
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
-              border: `1px solid ${filter === chip.value ? "var(--accent)" : "var(--border)"}`,
-              background: filter === chip.value ? "var(--accent)" : "transparent",
-              color: filter === chip.value ? "var(--accent-ink)" : "var(--fg-1)",
-              cursor: "pointer",
-              transition: "all 0.08s",
-            }}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      <MRListToolbar
+        isInbox={isInbox}
+        state={state}
+        onStateChange={setState}
+        scope={scope}
+        onScopeChange={setScope}
+        readiness={readiness}
+        onReadinessChange={setReadiness}
+        search={search.value}
+        onSearchChange={search.setValue}
+        isSearchBusy={search.isPending || isServerSearchBusy}
+        sort={sort}
+        onSortChange={setSort}
+      />
 
-      {/* Search + Sort row */}
-      <div
-        style={{
-          padding: "8px 12px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "5px 8px",
-          }}
-        >
-          <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>
-            <SearchIcon />
-          </span>
-          <input
-            type="search"
-            placeholder="Search MRs…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-            }}
-            aria-label="Search merge requests"
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 12,
-              color: "var(--fg-0)",
-              minWidth: 0,
-            }}
-          />
-        </div>
-        <select
-          value={sort}
-          onChange={(e) => {
-            setSort(e.target.value);
-          }}
-          aria-label="Sort by"
-          style={{
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "5px 8px",
-            fontSize: 11,
-            color: "var(--fg-1)",
-            fontFamily: "var(--font-mono)",
-            cursor: "pointer",
-            outline: "none",
-          }}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {isInbox && scope === "all" && truncatedRepos.length > 0 && (
+        <TruncatedReposNote repoPaths={truncatedRepos} onOpenRepo={handleOpenRepo} />
+      )}
 
-      {/* List */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        {!isInbox && !selectedRepoPath && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: 80,
-              color: "var(--fg-3)",
-              fontSize: 12,
-              textAlign: "center",
-              padding: "0 20px",
-            }}
-          >
-            Select a repository to see merge requests
-          </div>
-        )}
+      {isScopeSelected ? (
+        <InfiniteVirtualList
+          rows={rows}
+          getRowKey={getRowKey}
+          estimateRowSize={estimateRowSize}
+          shouldMeasureRows
+          renderRow={renderRow}
+          ariaLabel={isInbox ? "Inbox merge requests" : "Merge requests"}
+          resetKey={resetKey}
+          pagination={pagination}
+          isStale={list.isPlaceholderData}
+          footer={renderFooter()}
+        />
+      ) : (
+        <ListMessage>Select a repository to see merge requests</ListMessage>
+      )}
 
-        {(isInbox || selectedRepoPath) && isLoading && <MRListSkeleton />}
-
-        {(isInbox || selectedRepoPath) && isError && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: 80,
-              color: "var(--fg-3)",
-              fontSize: 12,
-              textAlign: "center",
-              padding: "0 20px",
-            }}
-          >
-            {getVcsErrorMessage(activeError)} merge requests
-          </div>
-        )}
-
-        {(isInbox || selectedRepoPath) && !isLoading && !hasResults && !isError && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: 80,
-              color: "var(--fg-3)",
-              fontSize: 12,
-              textAlign: "center",
-              padding: "0 20px",
-            }}
-          >
-            No merge requests found
-          </div>
-        )}
-
-        {isInbox
-          ? filteredInbox.map((mr) => (
-              <InboxMRListItem
-                key={`${mr.repo_path}/${String(mr.iid)}`}
-                mr={mr}
-                isSelected={selectedMRIid === mr.iid && selectedRepoPath === mr.repo_path}
-                onClick={() => {
-                  if (selectedHostId) setMR(selectedHostId, mr.repo_path, mr.iid);
-                }}
-              />
-            ))
-          : filteredMRs.map((mr) => (
-              <MRListItem
-                key={mr.iid}
-                mr={mr}
-                isSelected={selectedMRIid === mr.iid}
-                onClick={() => {
-                  if (selectedHostId && selectedRepoPath)
-                    setMR(selectedHostId, selectedRepoPath, mr.iid);
-                }}
-              />
-            ))}
-      </div>
+      {isScopeSelected && list.hasData && (
+        <ListStatusBar
+          loadedCount={loadedCount}
+          {...(isFiltered ? { shownCount: rows.length } : {})}
+          hasNextPage={list.hasNextPage}
+          isFetchingNextPage={list.isFetchingNextPage}
+        />
+      )}
     </section>
   );
 };

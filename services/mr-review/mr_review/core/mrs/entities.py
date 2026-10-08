@@ -3,7 +3,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from mr_review.core.pagination import Page
+
+# State filter accepted by MR listings. "all" means every state.
+MRStateFilter = Literal["opened", "merged", "closed", "all"]
+
+# Personal MR listings a host can answer natively ("open MRs I opened / that are
+# assigned to me / where my review is requested").
+PersonalMRScope = Literal["authored", "assigned", "review_requested"]
+
+# Inbox scopes exposed by the API: the personal ones plus "all", which spans the
+# user's repositories.
+InboxScope = Literal["all", "authored", "assigned", "review_requested"]
 
 
 class Repo(BaseModel):
@@ -23,12 +36,31 @@ class MR(BaseModel):
     status: Literal["opened", "merged", "closed"]
     draft: bool
     pipeline: Literal["passed", "failed", "running", "none"] | None = None
-    additions: int
-    deletions: int
-    file_count: int
+    # None means the host did not report the figure in this view (list endpoints
+    # usually don't); the single-MR view fills them when the host provides them.
+    additions: int | None = None
+    deletions: int | None = None
+    file_count: int | None = None
     web_url: str = ""
     created_at: datetime
     updated_at: datetime
+    # Commit the source branch points at. Context files are read at this commit: it exists in the
+    # target repository even for fork MRs and after the source branch is deleted. Internal only.
+    head_sha: str | None = None
+
+
+class InboxMR(BaseModel):
+    """MR with the path of the repository it belongs to."""
+
+    mr: MR
+    repo_path: str
+
+
+class InboxMRPage(Page[InboxMR]):
+    """A page of the inbox. ``truncated_repos``: repositories (scope ``all``) that had more open MRs
+    than the page took from each; their MR list has the rest."""
+
+    truncated_repos: list[str] = Field(default_factory=list)
 
 
 class DiffLine(BaseModel):

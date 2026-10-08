@@ -22,6 +22,9 @@ const AddHostFormSchema = CreateHostSchema.extend({
 });
 type AddHostFormValues = z.infer<typeof AddHostFormSchema>;
 
+// The form has no timeout input; without a value the schema rejects every submit.
+const DEFAULT_HOST_TIMEOUT_S = 30;
+
 /* ── SVG icons ──────────────────────────────────────────────── */
 const GitLabIcon = (): React.ReactElement => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -192,7 +195,14 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
 
   const form = useForm<AddHostFormValues>({
     resolver: zodResolver(AddHostFormSchema),
-    defaultValues: { name: "", type: "gitlab", base_url: "", token: "", colorId: defaultColorId },
+    defaultValues: {
+      name: "",
+      type: "gitlab",
+      base_url: "",
+      token: "",
+      colorId: defaultColorId,
+      timeout: DEFAULT_HOST_TIMEOUT_S,
+    },
   });
 
   const handleSubmit = ({ colorId, ...data }: AddHostFormValues): void => {
@@ -206,6 +216,7 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
             base_url: "",
             token: "",
             colorId: defaultColorId,
+            timeout: DEFAULT_HOST_TIMEOUT_S,
           });
           onClose();
         },

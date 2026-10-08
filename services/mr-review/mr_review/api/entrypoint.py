@@ -1,6 +1,7 @@
 import json
 import os
-from contextlib import suppress
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 from dishka.integrations.fastapi import setup_dishka
@@ -18,6 +19,7 @@ from mr_review.api.routers.v1.hosts import router as hosts_v1_router
 from mr_review.api.routers.v1.repos import router as repos_v1_router
 from mr_review.api.routers.v1.reviews import router as reviews_v1_router
 from mr_review.api.routers.v1.system import router as system_v1_router
+from mr_review.api.vcs_errors import register_vcs_error_handlers
 from mr_review.common.constants import SENSITIVE_LOG_FIELDS, SERVICE_NAME
 from mr_review.common.logging import SensitiveDataFilter, configure_logging
 from mr_review.infra.di.containers.api import create_api_container
@@ -27,6 +29,13 @@ logger = structlog.get_logger(__name__)
 # Mutable container so main() can pre-load Settings for the factory
 # without a global assignment (avoids PLW0603).
 _settings_cache: list[Settings] = []
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    # Runs the APP-scope finalizers, e.g. closes the shared VCS HTTP client and its connection pool.
+    await app.state.dishka_container.close()
 
 
 def create_app() -> FastAPI:
@@ -46,7 +55,10 @@ def create_app() -> FastAPI:
         docs_url="/system/docs",
         redoc_url="/system/redoc",
         redirect_slashes=False,
+        lifespan=_lifespan,
     )
+
+    register_vcs_error_handlers(app)
 
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(

@@ -236,7 +236,7 @@ the compose file.
 | Type | API base derived from `base_url` | Token |
 |---|---|---|
 | `gitlab` | `<base_url>/api/v4` | Personal access token, `api` scope |
-| `github` | `https://github.com` or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic token, `repo` scope |
+| `github` | `github.com`, `www.github.com`, `api.github.com` (any path) or empty → `https://api.github.com`; anything else → `<base_url>/api/v3` | Classic token, `repo` scope |
 | `gitea`, `forgejo` | `<base_url>/api/v1` | Personal access token |
 | `bitbucket` | `base_url` is ignored — always `https://api.bitbucket.org/2.0` | `username:app_password` for Basic auth; a token with no colon is sent as Bearer |
 
@@ -278,11 +278,12 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/hosts/{id}/test` | GET | Verify the token against the host |
 | `/api/v1/hosts/{id}/repos/add-by-url` | POST | Resolve a URL or slug, verify it, pin it |
 | `/api/v1/hosts/{id}/favourite-repos/{repo_path}` | POST | Toggle a pin |
-| `/api/v1/hosts/{id}/repos` | GET | List repositories, optional `query` |
-| `/api/v1/hosts/{id}/repos/{repo_path}/mrs` | GET | Open merge requests |
+| `/api/v1/hosts/{id}/cache/invalidate` | POST | Forget cached VCS responses: the whole host, or with `repo_path` only that repository's MRs, diffs, files, directories and commits, plus the personal inbox scopes (`authored`, `assigned`, `review_requested`) that list its MRs. 204 |
+| `/api/v1/hosts/{id}/repos` | GET | One page of repositories, most recently active first — `q`, `page`, `per_page` (default 50) |
+| `/api/v1/hosts/{id}/repos/{repo_path}/mrs` | GET | One page of merge requests, most recently updated first — `state` (`opened` by default, `merged`, `closed`, `all`), `q` (title), `page`, `per_page` (default 30) |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}` | GET | One merge request |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}/diff` | GET | Its parsed diff |
-| `/api/v1/hosts/{id}/inbox` | GET | Open MRs across the first 20 repositories |
+| `/api/v1/hosts/{id}/inbox` | GET | One page of open MRs — `scope` (`all` by default, `authored`, `assigned`, `review_requested`), `page`, `per_page` (default 30) |
 | `/api/v1/reviews` | GET, POST | List, create from an MR |
 | `/api/v1/reviews/code` | POST | Create from a `base_ref`/`head_ref` diff |
 | `/api/v1/reviews/{id}` | GET, PATCH, DELETE | Read, edit brief and comments, delete |
@@ -295,6 +296,97 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments` | POST | Add a comment (`file`, `line`, `severity`, `body`); the server assigns the id and answers 201 with the review |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
 | `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file |
+
+### Pagination
+
+The three list routes above answer one page at a time, and every page costs a single request to
+the host (the `all` inbox scope costs one per repository in its batch, see below) — nothing is
+fetched ahead.
+
+```json
+{"items": [...], "page": 1, "per_page": 50, "has_more": true}
+```
+
+* `page` is 1-based; `per_page` is 1–100. Anything outside those bounds, an unknown `state` or an
+  unknown `scope` is a 422 before the host is called.
+* `has_more` is the host's own next-page signal — GitHub's `Link: rel="next"`, GitLab's
+  `X-Next-Page`, Gitea's `X-HasMore` or `Link`, Bitbucket's `next` — and only when a host sends
+  none of them, "the page came back full". Keep paging while it is `true`: a page can be shorter
+  than `per_page`, even empty, and still have more after it.
+* Hosts cap the page size on their side — Gitea at its `MAX_RESPONSE_ITEMS` (50 by default),
+  Bitbucket at 50 pull requests or 100 repositories — so a larger `per_page` gives shorter pages,
+  never skipped items.
+* In MR listings `additions`, `deletions` and `file_count` are `null` when the host does not
+  report them in that view (GitHub, GitLab and Bitbucket lists never do). The single-MR route fills
+  what the host provides — GitLab only ever reports `file_count`. GitLab's list items also leave
+  `pipeline` `null`.
+
+Repositories: pinned favourites the host's listing does not return are fetched and put in front of
+page 1 (filtered by `q` when one is given), and left out of later pages, so each appears once.
+On GitHub, `q` goes through repository search scoped to the token's user and the organisations
+listed by `/user/orgs` (`user:<login> org:<org> …`), not all of GitHub. A token that may not list
+organisations searches the user's own repositories only; repositories the user merely collaborates
+on in someone else's account are not searched. On Gitea and Forgejo the listing (and so the `all`
+inbox) covers the repositories the token's user owns or contributes to (`uid=<their id>`), not every
+repository the instance shows — which on Codeberg would be all of it.
+
+Merge requests per host:
+
+| Host | `opened` / `all` | `merged` / `closed` | `q` |
+|---|---|---|---|
+| GitLab | merge request listing | same, by state | host-side title search |
+| GitHub | pulls API | issue search (`is:merged`; `is:closed is:unmerged`) | issue search, `in:title` |
+| Gitea, Forgejo | pulls API | pulls API `closed`, split per item | issue search (`/issues?type=pulls&q=`): titles, bodies and comments, in Gitea's order |
+| Bitbucket | pull request listing | same (`closed` is `DECLINED` + `SUPERSEDED`) | host-side title search |
+
+GitHub's issue search returns no branch names, so those items have empty `source_branch` and
+`target_branch`, and it allows 30 requests a minute per user. Gitea's issue search has no branch
+names either. Gitea has no merged filter on any endpoint, so its merged/closed split is made on each
+fetched page — the one case where pages can come back short, or empty, while more remain.
+
+The inbox (all scopes list open MRs only, newest update first within a page):
+
+| Scope | GitLab | GitHub | Gitea, Forgejo | Bitbucket |
+|---|---|---|---|---|
+| `authored` | `scope=created_by_me` | `author:@me` | `created=true` | `/pullrequests/{user}` |
+| `assigned` | `scope=assigned_to_me` | `assignee:@me` | `assigned=true` | always empty — no assignees |
+| `review_requested` | `reviewer_username=<you>` | `review-requested:@me` | `review_requested=true` | always empty — no such listing |
+
+`authored`, `assigned` and `review_requested` are each one host request per page. GitHub and Gitea
+answer them from issue search, so those items have no branch names either. `all` walks the
+repositories the token sees, most recently active first: page N takes the N-th batch of 10
+repositories and the newest `min(per_page, 10)` open MRs of each (five repositories at a time), merged
+newest-first; `has_more` means more repositories remain. Pinned favourites join page 1. A
+repository whose MRs cannot be fetched is skipped with a warning rather than failing the page.
+The inbox envelope has one more key, `truncated_repos`: the repositories on that page that had more
+open MRs than it took — their own MR list has the rest. It is always `[]` for the personal scopes.
+Order is newest-first within a page only; a later page can hold a more recently updated MR.
+
+```json
+{"items": [...], "page": 1, "per_page": 30, "has_more": true, "truncated_repos": ["group/busy-repo"]}
+```
+
+### VCS connections and caching
+
+Every VCS call goes through one pooled HTTP client that lives as long as the process, with
+keep-alive connections reused across requests and hosts; `MR_REVIEW__VCS_TIMEOUT` is its timeout.
+Read-only responses are cached in memory per host: repository list pages for 15 minutes, everything
+else — repository searches, MR pages, single MRs, diffs, files — for 5 minutes, in bounded
+least-recently-used stores. Diffs, trees and file bodies are also capped by size, about 128 MB per
+host; a single response larger than that is served but not kept.
+
+Lists are sorted by activity, so a push moves an item from a later page to page 1, and pages fetched
+at different times can each miss it. A later page is therefore only cached together with the page 1
+it was fetched with — within 10 seconds of it, and only if none of page 1's items turn up on it again
+(which is what a move to the top looks like). Otherwise the cached page 1 is dropped, so the next
+load of the list starts from a fresh one.
+
+Concurrent identical requests share one call to the host, and errors are never cached. Editing or
+deleting a host drops its cache, and `POST /api/v1/hosts/{id}/cache/invalidate` drops it on demand
+— for one repository with `?repo_path=`, which is what to call after a push the cache has not seen
+yet. GitHub and Gitea can only list a directory by returning the repository's whole tree, so that
+tree is fetched once per repository and commit and every directory the context collectors ask for is
+answered from it. Gitea hands the tree out 1000 entries a page; up to 100 pages are read.
 
 ### What goes into the prompt
 
@@ -315,6 +407,10 @@ The `BriefConfig` fields, with the caps the collectors enforce:
 Context fetches run five at a time with a pause between batches, to stay under host rate
 limits. Every one of them is an API call against the VCS host, so the optional toggles cost
 wall-clock time before the model is called at all.
+
+For a merge request, files are read at its head commit, which the target repository has even
+when the MR comes from a fork or its source branch has been deleted. The branch name is used only
+when the host does not report the commit.
 
 ## Rules that break a deployment
 
@@ -485,17 +581,23 @@ base_url: http://host.docker.internal:11434/v1
 
 ## What failure looks like
 
-The API answers with a status and a `detail` string; the UI shows it as-is.
+The API answers with a status and a `detail` string; the UI shows it as-is. A failed call to a
+VCS host is translated the same way on every route — listings, diffs, context, prompt, and
+dispatch before its stream starts — so a host problem never surfaces as a bare 500.
 
 | Status | When |
 |---|---|
 | 400 | `Repo path must include at least 'owner/repo'`, or a host type given a nested path |
+| 400, 422 | `VCS rejected the request (<status>): <host's message>` — the host refused what was asked (a bad ref, an unsupported search); retrying will not help |
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
-| 403 | `Host token cannot access repository` — the token is valid but not entitled |
-| 404 | A host, review, iteration or comment id that does not exist, or a repository the host does not have |
+| 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
+| 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 409 | Posting a review whose source is a branch diff, or adding or deleting a comment on an iteration that was posted |
 | 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
-| 502 | `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
+| 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
+| 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
+| 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |
+| 504 | `VCS host timed out (<error>)` — the host took longer than `MR_REVIEW__VCS_TIMEOUT` |
 
 Two failures do not surface as a status code:
 

@@ -39,6 +39,16 @@ export const hostApi = {
     return HostSchema.parse(res.data);
   },
 
+  /**
+   * Drops the backend's cached upstream data for the host, or only for one
+   * repository when `repoPath` is given, so the next reads hit the VCS host.
+   */
+  invalidateCache: async (id: string, repoPath?: string): Promise<void> => {
+    await httpClient.post(`/api/v1/hosts/${id}/cache/invalidate`, null, {
+      params: repoPath ? { repo_path: repoPath } : undefined,
+    });
+  },
+
   addRepoByUrl: async (id: string, url: string): Promise<AddRepoByUrlResponse> => {
     const res = await httpClient.post<unknown>(`/api/v1/hosts/${id}/repos/add-by-url`, { url });
     return AddRepoByUrlResponseSchema.parse(res.data);

@@ -3,7 +3,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class PageResponse[T](BaseModel):
+    """Envelope shared by every paginated listing. ``page`` is 1-based.
+
+    ``has_more`` follows the host's own next-page signal, so a page can be short — even
+    empty — while more pages remain.
+    """
+
+    items: list[T]
+    page: int
+    per_page: int
+    has_more: bool
 
 
 class RepoResponse(BaseModel):
@@ -23,9 +36,10 @@ class MRResponse(BaseModel):
     status: Literal["opened", "merged", "closed"]
     draft: bool
     pipeline: Literal["passed", "failed", "running", "none"] | None = None
-    additions: int
-    deletions: int
-    file_count: int
+    # null: the host didn't report the figure in this view (e.g. GitHub PR lists).
+    additions: int | None = None
+    deletions: int | None = None
+    file_count: int | None = None
     web_url: str = ""
     created_at: datetime
     updated_at: datetime
@@ -42,9 +56,10 @@ class InboxMRResponse(BaseModel):
     status: Literal["opened", "merged", "closed"]
     draft: bool
     pipeline: Literal["passed", "failed", "running", "none"] | None = None
-    additions: int
-    deletions: int
-    file_count: int
+    # null: the host didn't report the figure in this view (e.g. GitHub PR lists).
+    additions: int | None = None
+    deletions: int | None = None
+    file_count: int | None = None
     web_url: str = ""
     created_at: datetime
     updated_at: datetime
@@ -71,3 +86,16 @@ class DiffFileResponse(BaseModel):
     additions: int
     deletions: int
     hunks: list[DiffHunkResponse]
+
+
+class RepoPageResponse(PageResponse[RepoResponse]):
+    pass
+
+
+class MRPageResponse(PageResponse[MRResponse]):
+    pass
+
+
+class InboxMRPageResponse(PageResponse[InboxMRResponse]):
+    # scope=all takes only the newest few open MRs of each repository; these had more.
+    truncated_repos: list[str] = Field(default_factory=list)

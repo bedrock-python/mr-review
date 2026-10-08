@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 
-from mr_review.core.mrs.entities import MR, DiffFile, Repo
+from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
+from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
+from mr_review.infra.vcs._pagination import has_next_link, json_list, optional_int, optional_str
+from mr_review.infra.vcs._tree import files_under
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -19,21 +24,43 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
-_GITHUB_COM = "https://github.com"
 _GITHUB_API = "https://api.github.com"
+_PUBLIC_GITHUB_HOSTS = frozenset({"github.com", "www.github.com", "api.github.com"})
+
+# Search qualifiers per MR state. The pulls API cannot tell merged from closed,
+# so those two states (and title searches) go through the issue search API.
+_SEARCH_STATE_QUALIFIERS: dict[MRStateFilter, tuple[str, ...]] = {
+    "opened": ("is:open",),
+    "merged": ("is:merged",),
+    "closed": ("is:closed", "is:unmerged"),
+    "all": (),
+}
+
+# Owners a repository search is scoped to: the user plus at most this many of their organisations.
+_MAX_SEARCH_ORGS = 100
+
+logger = logging.getLogger(__name__)
+
+_PERSONAL_SCOPE_QUALIFIERS: dict[PersonalMRScope, str] = {
+    "authored": "author:@me",
+    "assigned": "assignee:@me",
+    "review_requested": "review-requested:@me",
+}
 
 
 def _resolve_api_base_url(base_url: str) -> str:
     """Map a user-supplied GitHub URL to the correct REST API base URL.
 
-    GitHub.com: https://github.com → https://api.github.com
-    GitHub Enterprise: https://ghe.company.com → https://ghe.company.com/api/v3
-    Empty/unset: default to https://api.github.com
+    github.com, www.github.com, api.github.com (any scheme, path or trailing slash) or empty
+        → https://api.github.com
+    GitHub Enterprise: https://ghe.company.com → https://ghe.company.com/api/v3 (kept if already there)
     """
-    url = base_url.rstrip("/") if base_url else ""
+    url = base_url.strip().rstrip("/")
     if not url:
         return _GITHUB_API
-    if url.rstrip("/").lower() == _GITHUB_COM:
+    if "://" not in url:
+        url = f"https://{url}"
+    if (urlsplit(url).hostname or "").lower() in _PUBLIC_GITHUB_HOSTS:
         return _GITHUB_API
     # GitHub Enterprise Server exposes the API under /api/v3
     if not url.endswith("/api/v3"):
@@ -51,12 +78,19 @@ class GitHubProvider:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
+        # Search qualifiers for "the user's repositories", looked up once per provider (the provider
+        # is rebuilt when the host's token changes).
+        self._search_owners: str | None = None
+        self._search_owners_lock = asyncio.Lock()
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+    async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}{path}"
         response = await self._client.get(url, headers=self._headers, params=params)
         response.raise_for_status()
-        return response.json()
+        return response
+
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return (await self._get_response(path, params)).json()
 
     async def _post(self, path: str, json_body: dict[str, Any]) -> Any:
         url = f"{self._base_url}{path}"
@@ -72,85 +106,118 @@ class GitHubProvider:
             "email": str(data.get("email", "") or ""),
         }
 
-    async def list_repos(self, query: str | None = None) -> list[Repo]:
+    async def list_repos(
+        self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
+    ) -> Page[Repo]:
         if query:
-            return await self._search_repos(query)
-        repos: list[Repo] = []
-        page = 1
-        while True:
-            data: list[dict[str, Any]] = await self._get(
-                "/user/repos",
-                params={"per_page": 100, "page": page, "sort": "updated", "type": "all"},
-            )
-            if not data:
-                break
-            repos.extend(
-                Repo(
-                    id=str(item["id"]),
-                    path=str(item["full_name"]),
-                    name=str(item["name"]),
-                    description=item.get("description"),
-                )
-                for item in data
-            )
-            if len(data) < 100:
-                break
-            page += 1
-        return repos
-
-    async def _search_repos(self, query: str) -> list[Repo]:
-        repos: list[Repo] = []
-        page = 1
-        while True:
-            data: dict[str, Any] = await self._get(
+            search = f"{_search_terms(query)} {await self._owner_qualifiers()}"
+            response = await self._get_response(
                 "/search/repositories",
-                params={"q": query, "per_page": 100, "page": page, "sort": "updated"},
+                params={"q": search, "sort": "updated", "order": "desc", "per_page": per_page, "page": page},
             )
-            items: list[dict[str, Any]] = data.get("items", [])
-            if not items:
-                break
-            repos.extend(
-                Repo(
-                    id=str(item["id"]),
-                    path=str(item["full_name"]),
-                    name=str(item["name"]),
-                    description=item.get("description"),
-                )
-                for item in items
+            items: list[dict[str, Any]] = response.json().get("items", [])
+        else:
+            response = await self._get_response(
+                "/user/repos",
+                params={"type": "all", "sort": "updated", "direction": "desc", "per_page": per_page, "page": page},
             )
-            total_count: int = int(data.get("total_count", 0))
-            if len(repos) >= total_count or len(items) < 100:
-                break
-            page += 1
-        return repos
+            items = json_list(response)
+        return Page(
+            items=[_item_to_repo(item) for item in items],
+            page=page,
+            per_page=per_page,
+            has_more=has_next_link(response),
+        )
+
+    async def _owner_qualifiers(self) -> str:
+        """``user:<login> org:<org> ...`` for the token's user and the organisations they belong to.
+
+        Repository search otherwise covers all of GitHub. Repeated owner qualifiers are OR-ed by
+        GitHub's search (unlike explicit OR, they are not limited to five per query).
+        """
+        if self._search_owners is None:
+            async with self._search_owners_lock:
+                if self._search_owners is None:
+                    self._search_owners = await self._load_owner_qualifiers()
+        return self._search_owners
+
+    async def _load_owner_qualifiers(self) -> str:
+        user: dict[str, Any] = await self._get("/user")
+        qualifiers = [f"user:{user['login']}"]
+        try:
+            orgs: list[dict[str, Any]] = await self._get("/user/orgs", params={"per_page": _MAX_SEARCH_ORGS})
+        except httpx.HTTPStatusError:
+            # A token without read:org may not list organisations: search the user's own repositories.
+            logger.warning("Could not list the GitHub user's organisations; searching their own repositories only")
+            orgs = []
+        qualifiers.extend(f"org:{org['login']}" for org in orgs if org.get("login"))
+        return " ".join(qualifiers)
 
     async def get_repo(self, repo_path: str) -> Repo:
         owner, repo = _split_repo_path(repo_path)
         data: dict[str, Any] = await self._get(f"/repos/{owner}/{repo}")
-        return Repo(
-            id=str(data["id"]),
-            path=str(data["full_name"]),
-            name=str(data["name"]),
-            description=data.get("description"),
+        return _item_to_repo(data)
+
+    async def list_mrs(
+        self,
+        repo_path: str,
+        state: MRStateFilter = "opened",
+        page: int = 1,
+        per_page: int = DEFAULT_MRS_PER_PAGE,
+        query: str | None = None,
+    ) -> Page[MR]:
+        owner, repo = _split_repo_path(repo_path)
+        if not query and state in ("opened", "all"):
+            response = await self._get_response(
+                f"/repos/{owner}/{repo}/pulls",
+                params={
+                    "state": "open" if state == "opened" else "all",
+                    "sort": "updated",
+                    "direction": "desc",
+                    "per_page": per_page,
+                    "page": page,
+                },
+            )
+            return Page(
+                items=[_pr_to_mr(item) for item in json_list(response)],
+                page=page,
+                per_page=per_page,
+                has_more=has_next_link(response),
+            )
+
+        qualifiers = [f"repo:{owner}/{repo}", "is:pr", *_SEARCH_STATE_QUALIFIERS[state]]
+        if query:
+            qualifiers.extend([_search_terms(query), "in:title"])
+        items, has_more = await self._search_issues(" ".join(qualifiers), page, per_page)
+        return Page(
+            items=[_search_item_to_mr(item) for item in items],
+            page=page,
+            per_page=per_page,
+            has_more=has_more,
         )
 
-    async def list_mrs(self, repo_path: str, state: str = "opened") -> list[MR]:
-        owner, repo = _split_repo_path(repo_path)
-        gh_state = "open" if state == "opened" else state
-        mrs: list[MR] = []
-        page = 1
-        while True:
-            data: list[dict[str, Any]] = await self._get(
-                f"/repos/{owner}/{repo}/pulls",
-                params={"state": gh_state, "per_page": 100, "page": page},
-            )
-            if not data:
-                break
-            mrs.extend(_pr_to_mr(item) for item in data)
-            if len(data) < 100:
-                break
-            page += 1
-        return mrs
+    async def list_my_mrs(
+        self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
+    ) -> Page[InboxMR]:
+        search = f"is:pr is:open archived:false {_PERSONAL_SCOPE_QUALIFIERS[scope]}"
+        items, has_more = await self._search_issues(search, page, per_page)
+        return Page(
+            items=[
+                InboxMR(mr=_search_item_to_mr(item), repo_path=_repo_path_from_api_url(str(item["repository_url"])))
+                for item in items
+            ],
+            page=page,
+            per_page=per_page,
+            has_more=has_more,
+        )
+
+    async def _search_issues(self, search: str, page: int, per_page: int) -> tuple[list[dict[str, Any]], bool]:
+        response = await self._get_response(
+            "/search/issues",
+            params={"q": search, "sort": "updated", "order": "desc", "per_page": per_page, "page": page},
+        )
+        items: list[dict[str, Any]] = response.json().get("items", [])
+        return items, has_next_link(response)
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
         owner, repo = _split_repo_path(repo_path)
@@ -274,6 +341,10 @@ class GitHubProvider:
         return str(content)
 
     async def list_directory(self, repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        return files_under(await self.list_tree(repo_path, ref), dir_path)
+
+    async def list_tree(self, repo_path: str, ref: str = "HEAD") -> list[str]:
+        """Every file path at ``ref``: one recursive git-tree request (GitHub has no per-directory listing)."""
         owner, repo = _split_repo_path(repo_path)
         url = f"{self._base_url}/repos/{owner}/{repo}/git/trees/{ref}"
         response = await self._client.get(url, headers=self._headers, params={"recursive": "1"})
@@ -285,12 +356,7 @@ class GitHubProvider:
             logging.getLogger(__name__).warning(
                 "GitHub git tree for %s@%s is truncated; some files may be missing", repo_path, ref
             )
-        prefix = dir_path.rstrip("/") + "/"
-        return [
-            item["path"]
-            for item in data.get("tree", [])
-            if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
-        ]
+        return [str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob"]
 
     async def get_commits(
         self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10
@@ -315,33 +381,67 @@ class GitHubProvider:
         return result
 
 
-def _pr_to_mr(item: dict[str, Any]) -> MR:
-    gh_state = str(item.get("state", "closed"))
-    merged_at = item.get("merged_at")
+def _item_to_repo(item: dict[str, Any]) -> Repo:
+    return Repo(
+        id=str(item["id"]),
+        path=str(item["full_name"]),
+        name=str(item["name"]),
+        description=item.get("description"),
+    )
+
+
+def _status(gh_state: str, merged_at: object) -> Literal["opened", "merged", "closed"]:
     if merged_at:
-        status = "merged"
-    elif gh_state == "open":
-        status = "opened"
-    else:
-        status = "closed"
+        return "merged"
+    return "opened" if gh_state == "open" else "closed"
 
-    title = str(item["title"])
-    is_draft = bool(item.get("draft", False))
 
+def _pr_to_mr(item: dict[str, Any]) -> MR:
+    """Map a pull request object (pulls API). Stats are only present on the single-PR endpoint."""
     return MR(
         iid=int(item["number"]),
-        title=title,
+        title=str(item["title"]),
         description=str(item.get("body") or ""),
         author=str(item["user"]["login"]),
         source_branch=str(item["head"]["ref"]),
         target_branch=str(item["base"]["ref"]),
-        status=status,
-        draft=is_draft,
+        status=_status(str(item.get("state", "closed")), item.get("merged_at")),
+        draft=bool(item.get("draft", False)),
         pipeline=None,
-        additions=int(item.get("additions", 0)),
-        deletions=int(item.get("deletions", 0)),
-        file_count=int(item.get("changed_files", 0)),
+        additions=optional_int(item.get("additions")),
+        deletions=optional_int(item.get("deletions")),
+        file_count=optional_int(item.get("changed_files")),
+        web_url=str(item.get("html_url", "")),
+        created_at=_parse_datetime(str(item["created_at"])),
+        updated_at=_parse_datetime(str(item["updated_at"])),
+        head_sha=optional_str(item["head"].get("sha")),
+    )
+
+
+def _search_item_to_mr(item: dict[str, Any]) -> MR:
+    """Map an issue-search hit. Search results carry no branch names and no diff stats."""
+    pull: dict[str, Any] = item.get("pull_request") or {}
+    return MR(
+        iid=int(item["number"]),
+        title=str(item["title"]),
+        description=str(item.get("body") or ""),
+        author=str(item["user"]["login"]),
+        source_branch="",
+        target_branch="",
+        status=_status(str(item.get("state", "closed")), pull.get("merged_at")),
+        draft=bool(item.get("draft", False)),
+        pipeline=None,
         web_url=str(item.get("html_url", "")),
         created_at=_parse_datetime(str(item["created_at"])),
         updated_at=_parse_datetime(str(item["updated_at"])),
     )
+
+
+def _search_terms(query: str) -> str:
+    """User text for a search query; quotes are dropped so they cannot unbalance the query."""
+    return " ".join(query.replace('"', " ").split())
+
+
+def _repo_path_from_api_url(repository_url: str) -> str:
+    """``https://api.github.com/repos/owner/repo`` (or the GHE equivalent) -> ``owner/repo``."""
+    return "/".join(repository_url.rstrip("/").split("/")[-2:])
