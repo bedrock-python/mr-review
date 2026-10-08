@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -53,6 +54,9 @@ class GiteaProvider:
             "Authorization": f"token {token}",
             "Content-Type": "application/json",
         }
+        # Resolved once per provider (the provider lives as long as the host's URL/token don't change).
+        self._user_id: int | None = None
+        self._user_lock = asyncio.Lock()
 
     async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}/api/v1{path}"
@@ -80,7 +84,15 @@ class GiteaProvider:
     async def list_repos(
         self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
     ) -> Page[Repo]:
-        params: dict[str, Any] = {"sort": "updated", "order": "desc", "limit": per_page, "page": page}
+        # Without uid, /repos/search lists every repository the instance shows the token — on a
+        # public instance like Codeberg, all of it. uid keeps it to repos the user owns or contributes to.
+        params: dict[str, Any] = {
+            "uid": await self._current_user_id(),
+            "sort": "updated",
+            "order": "desc",
+            "limit": per_page,
+            "page": page,
+        }
         if query:
             params["q"] = query
         response = await self._get_response("/repos/search", params=params)
@@ -92,6 +104,14 @@ class GiteaProvider:
             per_page=per_page,
             has_more=gitea_has_more(response, len(items), per_page),
         )
+
+    async def _current_user_id(self) -> int:
+        if self._user_id is None:
+            async with self._user_lock:
+                if self._user_id is None:
+                    user: dict[str, Any] = await self._get("/user")
+                    self._user_id = int(user["id"])
+        return self._user_id
 
     async def get_repo(self, repo_path: str) -> Repo:
         owner, repo = _split_repo_path(repo_path)

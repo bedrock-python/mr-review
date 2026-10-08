@@ -59,10 +59,11 @@ async def test__list_repos__sorted_by_update_and_reads_link_header() -> None:
     repos = [{"id": 1, "full_name": "acme/api", "name": "api", "description": ""}]
     transport = RoutedTransport(
         {
+            f"{_API}/user": json_response({"id": 42, "login": "alice"}),
             f"{_API}/repos/search": json_response(
                 {"ok": True, "data": repos},
                 headers={"Link": '<https://gitea.example.com/api/v1/repos/search?page=3>; rel="next"'},
-            )
+            ),
         }
     )
 
@@ -71,11 +72,35 @@ async def test__list_repos__sorted_by_update_and_reads_link_header() -> None:
     assert [r.path for r in page.items] == ["acme/api"]
     assert page.has_more is True
     params = transport.last_params()
-    assert dict(params) == {"sort": "updated", "order": "desc", "limit": "1", "page": "2", "q": "api"}
+    assert dict(params) == {"uid": "42", "sort": "updated", "order": "desc", "limit": "1", "page": "2", "q": "api"}
+
+
+async def test__list_repos__only_the_users_own_and_contributed_repos__user_resolved_once() -> None:
+    """Without uid, /repos/search lists every repository visible on the instance (all of Codeberg)."""
+    transport = RoutedTransport(
+        {
+            f"{_API}/user": json_response({"id": 7, "login": "bob"}),
+            f"{_API}/repos/search": json_response({"ok": True, "data": []}),
+        }
+    )
+    provider = _provider(transport)
+
+    await provider.list_repos()
+    await provider.list_repos(page=2)
+
+    searches = [r for r in transport.requests if r.url.path.endswith("/repos/search")]
+    assert [r.url.params["uid"] for r in searches] == ["7", "7"]
+    assert all("exclusive" not in r.url.params for r in searches)
+    assert transport.paths().count(f"{_API}/user") == 1
 
 
 async def test__list_repos__x_hasmore_header__wins() -> None:
-    transport = RoutedTransport({f"{_API}/repos/search": json_response({"data": []}, headers={"X-HasMore": "true"})})
+    transport = RoutedTransport(
+        {
+            f"{_API}/user": json_response({"id": 1}),
+            f"{_API}/repos/search": json_response({"data": []}, headers={"X-HasMore": "true"}),
+        }
+    )
 
     page = await _provider(transport).list_repos()
 

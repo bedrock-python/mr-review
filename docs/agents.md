@@ -326,7 +326,9 @@ page 1 (filtered by `q` when one is given), and left out of later pages, so each
 On GitHub, `q` goes through repository search scoped to the token's user and the organisations
 listed by `/user/orgs` (`user:<login> org:<org> …`), not all of GitHub. A token that may not list
 organisations searches the user's own repositories only; repositories the user merely collaborates
-on in someone else's account are not searched.
+on in someone else's account are not searched. On Gitea and Forgejo the listing (and so the `all`
+inbox) covers the repositories the token's user owns or contributes to (`uid=<their id>`), not every
+repository the instance shows — which on Codeberg would be all of it.
 
 Merge requests per host:
 
