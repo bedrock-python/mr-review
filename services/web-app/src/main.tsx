@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "@app";
 import { env } from "@shared/config/env";
 import { installStaleChunkReload } from "@shared/lib";
+import "@app/styles/fonts";
 import "@app/styles/index.css";
 
 // A tab opened before an upgrade asks for chunks the new build no longer has.

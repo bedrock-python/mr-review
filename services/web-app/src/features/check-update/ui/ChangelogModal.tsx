@@ -101,7 +101,7 @@ export const ChangelogModal = ({
               }}
             >
               <Dialog.Title
-                style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-0)", margin: 0 }}
+                style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-0)", margin: 0 }}
               >
                 What&apos;s new in v{component.latest}
               </Dialog.Title>

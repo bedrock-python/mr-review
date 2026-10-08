@@ -17,9 +17,9 @@ def build_ui_security_headers(api_base_url: str) -> dict[str, str]:
     """The headers the web-app nginx sends with the UI, for the all-in-one image to send too.
 
     CSP sources: ``'unsafe-inline'`` scripts for the theme bootstrap in index.html,
-    ``'unsafe-inline'`` styles for React ``style`` attributes, Google Fonts for the web fonts,
-    api.github.com for the update check, and the API's origin when ``api_base_url`` puts it
-    on another one.
+    ``'unsafe-inline'`` styles for React ``style`` attributes, api.github.com for the update
+    check, and the API's origin when ``api_base_url`` puts it on another one. The web fonts
+    are bundled with the UI, so fonts and styles come from ``'self'`` only.
     """
     connect_src = ["'self'", "https://api.github.com"]
     parts = urlsplit(api_base_url.strip())
@@ -29,9 +29,9 @@ def build_ui_security_headers(api_base_url: str) -> dict[str, str]:
         [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline'",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: https:",
-            "font-src 'self' data: https://fonts.gstatic.com",
+            "font-src 'self' data:",
             f"connect-src {' '.join(connect_src)}",
             "object-src 'none'",
             "base-uri 'self'",

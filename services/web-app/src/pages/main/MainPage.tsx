@@ -27,7 +27,7 @@ const EmptyState = (): React.ReactElement => (
       className="mono"
       style={{
         fontSize: 48,
-        fontWeight: 700,
+        fontWeight: 600,
         opacity: 0.1,
         userSelect: "none",
         letterSpacing: "0.05em",

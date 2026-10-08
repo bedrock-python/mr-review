@@ -57,7 +57,7 @@ export const Stat = ({ label, value }: { label: string; value: number }): React.
       style={{
         fontFamily: "var(--font-mono)",
         fontSize: 22,
-        fontWeight: 700,
+        fontWeight: 600,
         color: "var(--fg-0)",
       }}
     >

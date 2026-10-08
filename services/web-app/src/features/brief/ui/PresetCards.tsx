@@ -37,7 +37,7 @@ const PresetCard = ({
       className="mono"
       style={{
         fontSize: 10,
-        fontWeight: 700,
+        fontWeight: 600,
         letterSpacing: "0.08em",
         color: isSelected ? "var(--accent)" : "var(--fg-2)",
       }}

@@ -13,13 +13,13 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children: c }) => (
-            <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-0)", margin: "0 0 10px" }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-0)", margin: "0 0 10px" }}>
               {c}
             </h1>
           ),
           h2: ({ children: c }) => (
             <h2
-              style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-0)", margin: "12px 0 8px" }}
+              style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-0)", margin: "12px 0 8px" }}
             >
               {c}
             </h2>
@@ -37,7 +37,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
             </p>
           ),
           strong: ({ children: c }) => (
-            <strong style={{ fontWeight: 700, color: "var(--fg-0)" }}>{c}</strong>
+            <strong style={{ fontWeight: 600, color: "var(--fg-0)" }}>{c}</strong>
           ),
           em: ({ children: c }) => (
             <em style={{ fontStyle: "italic", color: "var(--fg-1)" }}>{c}</em>

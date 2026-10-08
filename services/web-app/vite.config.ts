@@ -93,6 +93,10 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "ES2022",
       sourcemap: true,
+      // A font inlined as base64 would be in the CSS for every script, used or not; as a file
+      // it is fetched only when its unicode-range is on screen.
+      assetsInlineLimit: (filePath: string): boolean | undefined =>
+        /\.woff2?$/.test(filePath) ? false : undefined,
       rollupOptions: {
         output: {
           // Only the libraries every page runs at start-up get a chunk of their own, so

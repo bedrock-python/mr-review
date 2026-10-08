@@ -469,7 +469,7 @@ const ManualDispatch = ({
             alignItems: "center",
             justifyContent: "center",
             fontSize: 10,
-            fontWeight: 700,
+            fontWeight: 600,
           }}
         >
           2
@@ -494,7 +494,7 @@ const ManualDispatch = ({
               alignItems: "center",
               justifyContent: "center",
               fontSize: 10,
-              fontWeight: 700,
+              fontWeight: 600,
             }}
           >
             3

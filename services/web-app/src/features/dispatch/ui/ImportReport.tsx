@@ -87,7 +87,7 @@ export const ImportReport = ({
           background: `color-mix(in oklch, ${color} 8%, var(--bg-2))`,
         }}
       >
-        <span style={{ fontSize: 16, lineHeight: "20px", color, fontWeight: 700 }}>
+        <span style={{ fontSize: 16, lineHeight: "20px", color, fontWeight: 600 }}>
           {TONE_ICON[tone]}
         </span>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>

@@ -89,6 +89,9 @@ async def test__ui_response__spa_mounted__carries_the_security_headers(spa_clien
     assert "default-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
     assert "connect-src 'self' https://api.github.com;" in csp
+    # The web fonts ship with the UI: no third-party style or font host is allowed.
+    assert "style-src 'self' 'unsafe-inline';" in csp
+    assert "font-src 'self' data:;" in csp
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
