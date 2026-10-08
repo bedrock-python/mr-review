@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useNav } from "@app/navigation";
 import { useReview } from "@entities/review";
 import { cn } from "@shared/lib";
-import { Tooltip } from "@shared/ui";
+import { Toolbar, Tooltip } from "@shared/ui";
 import type { ReviewStage } from "@entities/review";
 import {
   STAGES,
@@ -91,11 +91,13 @@ export const StageBar = (): React.ReactElement => {
   };
 
   return (
-    <div
+    // A Toolbar row (40px, like the list toolbars), holding tabs rather than tools.
+    <Toolbar
+      size="sm"
       role="tablist"
       aria-label="Review pipeline stages"
       aria-busy={isPending}
-      className="border-border bg-bg-1 flex h-10 shrink-0 items-center overflow-x-auto border-b px-(--space-4)"
+      className="gap-0 overflow-x-auto"
     >
       {STAGES.map((stage, index) => {
         const isActive = activeStage === stage.id;
@@ -136,7 +138,7 @@ export const StageBar = (): React.ReactElement => {
                   void goToStage(stage.id);
                 }}
                 className={cn(
-                  "flex h-8 items-center gap-(--space-2) rounded-(--radius-2) pr-(--space-2) pl-(--space-1)",
+                  "flex h-(--control-md) items-center gap-(--space-2) rounded-(--radius-2) pr-(--space-2) pl-(--space-1)",
                   "transition-colors duration-(--dur-fast)",
                   locked && "cursor-not-allowed",
                   isActive && "cursor-default",
@@ -160,6 +162,6 @@ export const StageBar = (): React.ReactElement => {
           </div>
         );
       })}
-    </div>
+    </Toolbar>
   );
 };

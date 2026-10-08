@@ -34,7 +34,7 @@ export const VersionBadge = (): React.ReactElement => {
             </>
           )}
           {versions.isAnyUpdateAvailable && (
-            <span aria-hidden="true" className="bg-accent size-1.5 shrink-0 rounded-full" />
+            <span aria-hidden="true" className="bg-accent size-[6px] shrink-0 rounded-full" />
           )}
         </button>
       </Tooltip>

@@ -83,7 +83,7 @@ const PipelineDot = ({ status }: { status: MR["pipeline"] }): React.ReactElement
       role="img"
       aria-label={look.label}
       title={look.label}
-      className="size-1.5 shrink-0 rounded-full"
+      className="size-[6px] shrink-0 rounded-full"
       style={{ background: look.color }}
     />
   );

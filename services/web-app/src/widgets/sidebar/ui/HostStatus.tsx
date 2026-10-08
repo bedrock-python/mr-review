@@ -26,7 +26,7 @@ export const HostStatus = ({ connection, errorMessage }: HostStatusProps): React
     >
       <span
         aria-hidden="true"
-        className="size-1.5 shrink-0 rounded-full"
+        className="size-[6px] shrink-0 rounded-full"
         style={{ background: look.dot }}
       />
       <span className="truncate">{look.label}</span>
