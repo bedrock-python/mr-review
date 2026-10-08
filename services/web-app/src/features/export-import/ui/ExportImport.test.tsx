@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@shared/api";
 import type * as ExportImportApi from "@shared/api/export-import.api";
 import type { ImportPreview, ImportResult } from "@shared/api/export-import.api";
-import { ExportImportSection } from "./ExportImportSection";
+import { ExportPanel } from "./ExportPanel";
+import { ImportPanel } from "./ImportPanel";
 
 const api = vi.hoisted(() => ({
   exportData: vi.fn(),
@@ -71,7 +72,8 @@ const renderSection = (): ReturnType<typeof userEvent.setup> => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <ExportImportSection />
+      <ExportPanel />
+      <ImportPanel />
     </QueryClientProvider>
   );
   return userEvent.setup();
@@ -244,6 +246,10 @@ describe("import", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Import file summary")).not.toBeInTheDocument();
     });
+    // The buttons that had the focus are gone with the file; it lands on "Choose file…".
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Choose file…" })).toHaveFocus();
+    });
   });
 
   it("imports nothing when the confirmation is cancelled", async () => {
@@ -257,5 +263,11 @@ describe("import", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(api.importData).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Import file summary")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Import file summary")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Choose file…" })).toHaveFocus();
+    });
   });
 });

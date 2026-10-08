@@ -20,8 +20,18 @@ const providerHooks = vi.hoisted(() => ({
   providers: [] as AIProvider[],
   create: vi.fn(),
   update: vi.fn(),
+  remove: vi.fn(),
   previewModels: vi.fn(),
 }));
+
+const theme = vi.hoisted(() => ({ setTheme: vi.fn() }));
+
+const hostHooks = vi.hoisted(() => ({
+  list: { data: [] as unknown[] | undefined, error: null as Error | null },
+  refetch: vi.fn(),
+}));
+
+const systemInfo = vi.hoisted(() => ({ getInfo: vi.fn() }));
 
 vi.mock("@entities/ai-provider", async (importOriginal) => {
   const actual = await importOriginal<typeof AIProviderEntity>();
@@ -31,7 +41,7 @@ vi.mock("@entities/ai-provider", async (importOriginal) => {
     useAIProviders: () => ({ data: providerHooks.providers, isLoading: false }),
     useCreateAIProvider: () => ({ mutate: providerHooks.create, isPending: false }),
     useUpdateAIProvider: () => ({ mutate: providerHooks.update, isPending: false }),
-    useDeleteAIProvider: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteAIProvider: () => ({ mutate: providerHooks.remove, isPending: false }),
   };
 });
 
@@ -43,20 +53,25 @@ vi.mock("@entities/host", async (importOriginal) => {
   });
   return {
     ...actual,
-    useHosts: () => ({ data: [], isLoading: false }),
+    useHosts: () => ({ ...hostHooks.list, isLoading: false, refetch: hostHooks.refetch }),
     useCreateHost: mutation,
     useUpdateHost: mutation,
     useDeleteHost: mutation,
   };
 });
 
-vi.mock("@features/export-import", () => ({ ExportImportSection: () => null }));
+vi.mock("@features/export-import", () => ({ ExportPanel: () => null, ImportPanel: () => null }));
 
-vi.mock("next-themes", () => ({ useTheme: () => ({ theme: "system", setTheme: vi.fn() }) }));
+// The presets list has its own tests; here it would only add network calls and states.
+vi.mock("@features/manage-review-presets", () => ({ ReviewPresetsManager: () => null }));
+
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ theme: "system", setTheme: theme.setTheme }),
+}));
 
 vi.mock("@shared/api", async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApi>();
-  return { ...actual, systemApi: { getInfo: () => new Promise(() => undefined) } };
+  return { ...actual, systemApi: { getInfo: systemInfo.getInfo } };
 });
 
 const PROVIDER: AIProvider = {
@@ -94,11 +109,15 @@ const configuredModels = (): string[] =>
     .getAllByRole("listitem")
     .map((item) => item.querySelector(".mono")?.textContent ?? "");
 
+const resetMocks = (): void => {
+  vi.clearAllMocks();
+  providerHooks.providers = [PROVIDER];
+  hostHooks.list = { data: [], error: null };
+  systemInfo.getInfo.mockReturnValue(new Promise(() => undefined));
+};
+
 describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    providerHooks.providers = [PROVIDER];
-  });
+  beforeEach(resetMocks);
 
   it("fetches models with the key and base URL being edited, not the saved ones", async () => {
     providerHooks.previewModels.mockResolvedValue(["claude-sonnet-5-5"]);
@@ -142,7 +161,7 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     expect(configuredModels()).toEqual(["claude-opus-5-5", "claude-haiku-4-5"]);
     expect(within(offered).getByText("2 more offered by the API")).toBeInTheDocument();
     await user.click(within(offered).getByRole("button", { name: "Add claude-sonnet-5-5" }));
-    await user.click(screen.getByRole("button", { name: "Make claude-sonnet-5-5 the default" }));
+    await user.click(screen.getByRole("button", { name: "Make default: claude-sonnet-5-5" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(providerHooks.update).toHaveBeenCalledWith(
@@ -176,10 +195,10 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
     const fetchButton = screen.getByRole("button", { name: "Fetch models from API" });
     expect(fetchButton).toBeDisabled();
-    await fill(user, screen.getByPlaceholderText("My Claude"), "Gateway Claude");
+    await fill(user, screen.getByPlaceholderText("e.g. My Claude"), "Gateway Claude");
     await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
     await fill(
       user,
@@ -190,7 +209,7 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     await user.click(await screen.findByRole("button", { name: "Add claude-opus-5-5" }));
     await fill(user, screen.getByRole("textbox", { name: "New model ID" }), "claude-haiku-4-5");
     await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
 
     expect(providerHooks.previewModels).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -254,7 +273,7 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
     const typeSelect = screen.getByDisplayValue("Claude");
     await user.selectOptions(typeSelect, "openai_compat");
     await fill(
@@ -263,9 +282,9 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
       "http://localhost:11434/v1"
     );
     await user.selectOptions(typeSelect, "claude");
-    await fill(user, screen.getByPlaceholderText("My Claude"), "Claude");
+    await fill(user, screen.getByPlaceholderText("e.g. My Claude"), "Claude");
     await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
 
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     await waitFor(() => {
@@ -274,5 +293,106 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
         expect.anything()
       );
     });
+  });
+});
+
+describe("SettingsPage — rows and appearance", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
+  beforeEach(resetMocks);
+
+  it("removes a provider only once the confirmation dialog says so", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Remove Team Claude" }));
+    const dialog = screen.getByRole("dialog", { name: "Remove Team Claude?" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(providerHooks.remove).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Remove Team Claude" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove provider" })
+    );
+    expect(providerHooks.remove).toHaveBeenCalledWith(PROVIDER.id, expect.anything());
+  });
+
+  it("closes the confirmation once removed and does not send a second delete", async () => {
+    // The server has deleted it; the list still shows it until its refetch lands.
+    providerHooks.remove.mockImplementation((_id: string, options: { onSuccess: () => void }) => {
+      options.onSuccess();
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Remove Team Claude" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove provider" })
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Team Claude" })).toBeDisabled();
+    expect(providerHooks.remove).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Add provider" })).toHaveFocus();
+    });
+  });
+
+  it("gives the focus back to the control that opened a form", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Edit Team Claude" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Edit Team Claude" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Add host" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Add host" })).toHaveFocus();
+  });
+
+  it("keeps the focus in the model list when a row moves or goes", async () => {
+    providerHooks.providers = [
+      { ...PROVIDER, models: ["claude-opus-5-5", "claude-haiku-4-5", "claude-sonnet-5-5"] },
+    ];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Edit Team Claude" }));
+
+    await user.click(screen.getByRole("button", { name: "Make default: claude-haiku-4-5" }));
+    expect(screen.getByRole("button", { name: "Remove claude-haiku-4-5" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Remove claude-haiku-4-5" }));
+    expect(screen.getByRole("button", { name: "Remove claude-opus-5-5" })).toHaveFocus();
+  });
+
+  it("says the hosts failed to load, with Retry, instead of listing none", async () => {
+    hostHooks.list = { data: undefined, error: new Error("Network Error") };
+    const user = userEvent.setup();
+    renderPage();
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Could not load hosts");
+    expect(alert).toHaveTextContent("Network Error");
+    expect(screen.queryByText("No hosts yet")).not.toBeInTheDocument();
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(hostHooks.refetch).toHaveBeenCalled();
+  });
+
+  it("says when the data folder cannot be read", async () => {
+    systemInfo.getInfo.mockRejectedValue(new Error("Service unavailable"));
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not read the data folder");
+  });
+
+  it("offers the themes as one choice and switches on selection", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const themes = screen.getByRole("radiogroup", { name: "Appearance" });
+    expect(within(themes).getAllByRole("radio")).toHaveLength(3);
+    await user.click(within(themes).getByRole("radio", { name: /Paper/ }));
+
+    expect(theme.setTheme).toHaveBeenCalledWith("paper");
   });
 });

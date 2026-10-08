@@ -4,7 +4,8 @@
 /* ─────────────────────────────────────────────────────────────
    Mr. Reviewer — design tokens
    Three themes: ink (dark) · paper (light) · phosphor (terminal green)
-   :root is ink; paper and phosphor override on <html data-theme>.
+   :root is ink; paper and phosphor override on <html data-theme>. Any element with
+   data-theme renders in that theme, ink included.
 
    Text contrast (WCAG AA, checked for all three themes):
    - fg-0 / fg-1 / fg-2 are text colours, ≥ 4.5:1 on bg-0…bg-3.
@@ -136,7 +137,9 @@
 }
 
 /* ── INK (dark) — default ──────────────────────────────────── */
-:root {
+/* Also on [data-theme="ink"], so a subtree can be ink inside another theme (theme previews) */
+:root,
+[data-theme="ink"] {
   /* Native controls, scrollbars and select menus follow the theme */
   color-scheme: dark;
   --bg-0: #0c0d10;

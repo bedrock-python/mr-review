@@ -8,7 +8,7 @@ side by side.
 
 ## Add a host
 
-1. Open **Settings → Hosts** and click **Add host**
+1. Open **Settings → Git hosts** and click **Add host**
 2. Fill in the form:
 
 | Field | Description |
