@@ -304,3 +304,20 @@ async def test__vcs_cache__invalidate__repo_keeps_the_provider_whole_host_drops_
         assert registry.get(host) is not provider
 
         registry.invalidate(make_host().id)  # unknown host: nothing to do
+
+
+async def test__cached_provider__invalidate_repo__also_drops_personal_inbox_pages() -> None:
+    """Sync in a repository must refresh "authored / assigned / review requested": their MRs may be its MRs."""
+    inner = AsyncMock()
+    inner.list_my_mrs.return_value = Page(items=[], page=1, per_page=30, has_more=False)
+    inner.list_repos.return_value = Page(items=[], page=1, per_page=50, has_more=False)
+    provider = CachedVCSProvider(inner)
+    await provider.list_my_mrs("review_requested")
+    await provider.list_repos()
+
+    provider.invalidate("g/a")
+    await provider.list_my_mrs("review_requested")
+    await provider.list_repos()
+
+    assert inner.list_my_mrs.await_count == 2
+    assert inner.list_repos.await_count == 1

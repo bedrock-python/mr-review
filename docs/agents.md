@@ -278,7 +278,7 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/hosts/{id}/test` | GET | Verify the token against the host |
 | `/api/v1/hosts/{id}/repos/add-by-url` | POST | Resolve a URL or slug, verify it, pin it |
 | `/api/v1/hosts/{id}/favourite-repos/{repo_path}` | POST | Toggle a pin |
-| `/api/v1/hosts/{id}/cache/invalidate` | POST | Forget cached VCS responses: the whole host, or with `repo_path` only that repository's MRs, diffs, files, directories and commits. 204 |
+| `/api/v1/hosts/{id}/cache/invalidate` | POST | Forget cached VCS responses: the whole host, or with `repo_path` only that repository's MRs, diffs, files, directories and commits, plus the personal inbox scopes (`authored`, `assigned`, `review_requested`) that list its MRs. 204 |
 | `/api/v1/hosts/{id}/repos` | GET | One page of repositories, most recently active first — `q`, `page`, `per_page` (default 50) |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs` | GET | One page of merge requests, most recently updated first — `state` (`opened` by default, `merged`, `closed`, `all`), `q` (title), `page`, `per_page` (default 30) |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}` | GET | One merge request |

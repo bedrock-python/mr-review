@@ -174,9 +174,19 @@ _REPO_SCOPED_KINDS = frozenset(
 )
 
 
-def _belongs_to_repo(repo_path: str) -> Callable[[Hashable], bool]:
+# Host-wide MR listings that can contain any repository's MRs (the personal inbox scopes).
+_CROSS_REPO_MR_KINDS = frozenset({"my_mrs"})
+
+
+def _affected_by_repo(repo_path: str) -> Callable[[Hashable], bool]:
+    """Keys holding data of ``repo_path``: its own entries, plus the listings that mix in its MRs."""
+
     def predicate(key: Hashable) -> bool:
-        return isinstance(key, tuple) and len(key) > 1 and key[0] in _REPO_SCOPED_KINDS and key[1] == repo_path
+        if not isinstance(key, tuple) or not key:
+            return False
+        if key[0] in _CROSS_REPO_MR_KINDS:
+            return True
+        return len(key) > 1 and key[0] in _REPO_SCOPED_KINDS and key[1] == repo_path
 
     return predicate
 
@@ -218,8 +228,11 @@ class CachedVCSProvider:
         self._generations = itertools.count(1)
 
     def invalidate(self, repo_path: str | None = None) -> None:
-        """Forget cached responses: one repository's (MRs, diffs, files, ...) or, without a path, all."""
-        predicate = _belongs_to_repo(repo_path) if repo_path is not None else None
+        """Forget cached responses: one repository's (MRs, diffs, files, ...) or, without a path, all.
+
+        A repository's MRs also appear in the personal inbox listings, so those go with it.
+        """
+        predicate = _affected_by_repo(repo_path) if repo_path is not None else None
         for store in (self._repos, self._meta, self._content):
             store.invalidate(predicate)
 
