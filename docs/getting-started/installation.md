@@ -108,6 +108,19 @@ Or a single address, such as the machine's LAN IP, to publish on that interface 
 Inside the container the server always listens on `0.0.0.0`; only the published port
 decides who can reach it.
 
+The API also answers only the host names it knows — `localhost`, `127.0.0.1`, `::1` and
+the compose service name `api` — and refuses any other with `400 Invalid host header`,
+naming it. So publishing the port is not enough: add the address or name the other machines
+use to `MR_REVIEW__ALLOWED_HOSTS` on the API container (all-in-one: the only container),
+for example:
+
+```yaml
+environment:
+  MR_REVIEW__ALLOWED_HOSTS: "localhost,192.168.1.10"
+```
+
+See [Host names](configuration.md#host-names) for proxies and wildcards.
+
 ## Updating
 
 ```bash
