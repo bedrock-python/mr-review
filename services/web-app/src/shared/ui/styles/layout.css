@@ -130,9 +130,9 @@
     display: flex;
     width: 100%;
   }
+  /* Equal parts where the labels fit; a longer label keeps its width rather than spill */
   .ui-segmented--full > .ui-segmented__item {
     flex: 1;
-    min-width: 0;
   }
   .ui-segmented--sm {
     height: var(--control-sm);
