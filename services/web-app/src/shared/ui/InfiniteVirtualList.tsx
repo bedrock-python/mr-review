@@ -146,7 +146,9 @@ export const InfiniteVirtualList = <TRow,>({
     loadMore: fetchNextPage,
   });
 
-  const isPausedWithMore = isAutoLoadPaused && hasNextPage;
+  // The same condition as the "Load more" row below: not while a page loads or has failed.
+  const isPausedWithMore =
+    isAutoLoadPaused && hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
   useEffect(() => {
     onAutoLoadPausedChange?.(isPausedWithMore);
   }, [isPausedWithMore, onAutoLoadPausedChange]);

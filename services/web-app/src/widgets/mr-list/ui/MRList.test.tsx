@@ -357,6 +357,31 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     });
   });
 
+  it("stops pointing at Load more once the next page has failed", async () => {
+    server.use(
+      http.get("*/api/v1/hosts/:hostId/inbox", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page"));
+        if (page > MAX_BARREN_AUTO_PAGES) {
+          return HttpResponse.json({ detail: "GitLab answered 502" }, { status: 502 });
+        }
+        return HttpResponse.json({
+          items: [],
+          page,
+          per_page: 30,
+          has_more: true,
+          truncated_repos: [],
+        });
+      })
+    );
+    renderWithQueryClient(<MRList />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    await screen.findByRole("button", { name: "Retry" });
+
+    // The tail row now offers Retry, not Load more: the status line follows it.
+    await waitForStatus("Showing 0 · more below");
+  });
+
   it("shows MRs newest first across pages and names the repositories cut short", async () => {
     const inboxMR = (repoPath: string, iid: number, title: string, updatedAt: string) => ({
       ...getMockMRs(MOCK_BUSY_REPO)[0],
