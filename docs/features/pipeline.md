@@ -24,15 +24,34 @@ Before dispatching to the AI, tune the review brief:
 
 ## DISPATCH — run the review
 
-Click **Run review**. The request streams back via SSE — each comment appears as soon as the AI
+Pick a provider and a model — one from the provider's list, or any model id typed into the
+model field (Enter takes it). The generation settings below show only what that model
+accepts:
+
+- **Reasoning** — an effort level (`low` … `max`) on models that reason by effort, with
+  **Default** keeping the model's own; a thinking budget on older Claude models; an On/Off
+  switch where reasoning is optional; nothing on models that do not reason.
+- **Temperature** — unset means the model's default. It is hidden for models that reject it
+  and greyed out while reasoning is on, because thinking models do not take one.
+- **Advanced** — the output limit (empty uses a default sized for the model and the reasoning
+  depth), **Structured output**, and a system prompt that replaces the built-in one.
+
+The model and settings are remembered per provider, so switching providers brings back what
+you last used with each. See [AI providers](ai-providers.md#dispatch-settings) for what each
+model accepts and how the settings are fitted to it.
+
+Click **Generate**. The request streams back via SSE — each comment appears as soon as the AI
 finishes writing it, while the rest of the answer is still arriving.
 
-The AI produces structured comments, each anchored to a specific file and line. Models do not
-always answer in exactly the requested format, so the answer is read leniently: reasoning
-blocks are skipped, JSON is found inside markdown fences or prose, wrapper objects and one
-comment per line are understood, common formatting slips are repaired, and alternative field
-names and severity words are mapped. Comments split over several code blocks are merged,
-and an example the model quotes in prose never outweighs its actual answer.
+The AI produces structured comments, each anchored to a specific file and line. With
+structured output on, the model can only answer in the review's JSON shape. Without it, models
+do not always answer in exactly the requested format, so the answer is read leniently:
+reasoning blocks are skipped, JSON is found inside markdown fences or prose, wrapper objects
+and one comment per line are understood, common formatting slips are repaired, and alternative
+field names and severity words are mapped. Comments split over several code blocks are merged,
+and an example the model quotes in prose never outweighs its actual answer. An answer counts as
+cut off when the provider reports it stopped at its output limit, as well as when it stops
+mid-JSON.
 
 Running a review again replaces the iteration's comments only with a complete, readable
 answer. If the new answer can't be read, is empty, or was cut off at the model's output
