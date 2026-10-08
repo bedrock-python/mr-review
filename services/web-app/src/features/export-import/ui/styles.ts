@@ -22,10 +22,6 @@ export const buttonRowStyle: CSSProperties = {
 };
 
 /** A fieldset of check boxes under an eyebrow legend, spaced like a RadioGroup. */
-export const fieldsetStyle: CSSProperties = { minWidth: 0, margin: 0, padding: 0, border: 0 };
-
-export const legendStyle: CSSProperties = { padding: 0, marginBottom: "var(--space-2)" };
-
 /** Two fields side by side: a passphrase and its repetition. */
 export const twoColumnsStyle: CSSProperties = {
   display: "grid",

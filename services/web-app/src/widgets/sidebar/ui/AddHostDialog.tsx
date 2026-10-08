@@ -66,7 +66,6 @@ export type AddHostDialogProps = {
 export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.ReactElement => {
   const createHost = useCreateHost();
   const formId = useId();
-  const colorLabelId = useId();
   const form = useForm<AddHostFormValues>({
     resolver: zodResolver(AddHostFormSchema),
     defaultValues: EMPTY_FORM,
@@ -158,14 +157,7 @@ export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.Re
               max={TIMEOUT_LIMITS.max}
             />
           </Field>
-          <div
-            role="group"
-            aria-labelledby={colorLabelId}
-            className="flex flex-col gap-(--space-2)"
-          >
-            <span id={colorLabelId} className="ui-eyebrow">
-              Colour
-            </span>
+          <Field label="Colour" isGroup>
             <Controller
               name="colorId"
               control={form.control}
@@ -173,7 +165,7 @@ export const AddHostDialog = ({ isOpen, onClose }: AddHostDialogProps): React.Re
                 <ColorPicker value={field.value as HostColorId} onChange={field.onChange} />
               )}
             />
-          </div>
+          </Field>
         </div>
       </form>
     </Dialog>

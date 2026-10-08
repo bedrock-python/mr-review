@@ -2,9 +2,8 @@ import { ExternalLink } from "lucide-react";
 
 import { ColorPicker } from "@entities/host";
 import type { HostColorId } from "@entities/host";
-import { ICON_SIZE } from "@shared/ui";
+import { Field, ICON_SIZE } from "@shared/ui";
 
-import { FieldGroup } from "../FieldGroup";
 import { controlHeightStyle } from "../styles";
 
 import type { TokenLink } from "../../lib/tokenLink";
@@ -40,9 +39,9 @@ type ColourFieldProps = {
 
 /** The host's identity colour, used for its icon here and in the hosts rail. */
 export const ColourField = ({ value, onChange }: ColourFieldProps): React.ReactElement => (
-  <FieldGroup label="Colour">
+  <Field label="Colour" isGroup>
     <div style={controlHeightStyle}>
       <ColorPicker value={value} onChange={onChange} />
     </div>
-  </FieldGroup>
+  </Field>
 );

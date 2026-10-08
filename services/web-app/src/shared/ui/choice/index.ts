@@ -1,5 +1,7 @@
 export { Checkbox } from "./Checkbox";
 export type { CheckboxProps } from "./Checkbox";
+export { CheckboxGroup } from "./CheckboxGroup";
+export type { CheckboxGroupProps } from "./CheckboxGroup";
 export { Radio } from "./Radio";
 export type { RadioProps } from "./Radio";
 export { RadioGroup } from "./RadioGroup";

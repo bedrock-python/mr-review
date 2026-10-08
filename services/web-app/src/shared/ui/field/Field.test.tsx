@@ -8,7 +8,40 @@ import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
 import { Slider } from "./Slider";
+import { Checkbox, CheckboxGroup } from "../choice";
 import { Textarea } from "./Textarea";
+
+describe("Field as a group", () => {
+  it("names several controls as a group, described by its hint", () => {
+    render(
+      <Field label="Colour" hint="Used for the host's icon." isGroup>
+        <button type="button" aria-label="Red" />
+        <button type="button" aria-label="Blue" />
+      </Field>
+    );
+
+    const group = screen.getByRole("group", { name: "Colour" });
+    expect(group).toHaveAccessibleDescription("Used for the host's icon.");
+    expect(group.querySelector("label")).toBeNull();
+    expect(screen.getByRole("button", { name: "Red" })).not.toHaveAttribute("id");
+  });
+});
+
+describe("CheckboxGroup", () => {
+  it("is a fieldset named by its legend", () => {
+    render(
+      <CheckboxGroup legend="Include" orientation="horizontal">
+        <Checkbox label="Hosts" defaultChecked />
+        <Checkbox label="Reviews" />
+      </CheckboxGroup>
+    );
+
+    const group = screen.getByRole("group", { name: "Include" });
+    expect(group.tagName).toBe("FIELDSET");
+    expect(group).toHaveClass("ui-radio-group--row");
+    expect(screen.getByRole("checkbox", { name: "Hosts" })).toBeChecked();
+  });
+});
 
 describe("Slider", () => {
   it("is a range named by its Field, drawn neutral while unset", () => {

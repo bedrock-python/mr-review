@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { Checkbox, Radio, RadioGroup, Switch } from "../choice";
+import { Checkbox, CheckboxGroup, Radio, RadioGroup, Switch } from "../choice";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
@@ -89,6 +89,22 @@ const ChoicesDemo = (): React.ReactElement => {
       </RadioGroup>
     </div>
   );
+};
+
+/** Field as a group (swatches, a checkbox under a label) and a CheckboxGroup. */
+export const Groups: StoryObj = {
+  render: () => (
+    <div style={{ display: "grid", gap: 20, maxWidth: 420 }}>
+      <Field label="SSL verify" isGroup hint="Turn off only for a self-signed endpoint.">
+        <Checkbox label="Verify TLS certificate" defaultChecked />
+      </Field>
+      <CheckboxGroup legend="Include" orientation="horizontal">
+        <Checkbox label="Hosts" defaultChecked />
+        <Checkbox label="AI providers" defaultChecked />
+        <Checkbox label="Reviews" />
+      </CheckboxGroup>
+    </div>
+  ),
 };
 
 export const Sliders: StoryObj = {

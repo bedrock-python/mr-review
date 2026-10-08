@@ -19,8 +19,14 @@ export type {
   SliderProps,
   FieldControlProps,
 } from "./field";
-export { Checkbox, Radio, RadioGroup, Switch } from "./choice";
-export type { CheckboxProps, RadioProps, RadioGroupProps, SwitchProps } from "./choice";
+export { Checkbox, CheckboxGroup, Radio, RadioGroup, Switch } from "./choice";
+export type {
+  CheckboxProps,
+  CheckboxGroupProps,
+  RadioProps,
+  RadioGroupProps,
+  SwitchProps,
+} from "./choice";
 export { Badge, StatusBadge, CountBadge, Chip, Tag, toneAttribute } from "./badge";
 export { Meter } from "./meter";
 export type { MeterProps } from "./meter";
