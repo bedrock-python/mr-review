@@ -35,8 +35,9 @@ export const useAIProviders = (): ReturnType<
     queryKey: aiProviderKeys.lists(),
     queryFn: aiProviderApi.list,
     staleTime: 15 * 60 * 1000,
-    // Settings' list and the Dispatch stage show the error in place; no global toast.
-    meta: { silent: true },
+    // With nothing loaded, Settings' list and the Dispatch stage say it failed; a failed
+    // refetch over a cached list still toasts, since those screens just keep showing it.
+    meta: { silent: "when-empty" },
   });
 };
 

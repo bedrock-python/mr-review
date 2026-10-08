@@ -32,14 +32,22 @@ export const shouldPersistQuery = (query: Pick<Query, "queryKey" | "state">): bo
 };
 
 /**
- * Whether a failed query gets the global error toast. A query that shows its own error
- * state where its data would be — the repository and merge request lists, the merge request
- * header, the hosts and AI providers — opts out with `meta: { silent: true }`, or with
- * `silentStatuses` for the statuses it handles itself (a 404 the page turns into a
- * redirect). A toast on top would say the same thing twice.
+ * Whether a failed query gets the global error toast. A query whose screen shows the failure
+ * in place opts out, so the two do not say the same thing twice:
+ * - `meta: { silent: true }`: every failure is shown in place, a failed refresh over loaded
+ *   data included (the repository and merge request lists, the merge request header);
+ * - `meta: { silent: "when-empty" }`: only a failure with nothing loaded is (the hosts and AI
+ *   providers: an empty list says so; with data cached — a refetch after an edit, a page
+ *   opened from the persisted cache — the screens just show the old list, so it still toasts);
+ * - `silentStatuses`: the statuses it handles itself (a 404 the page turns into a redirect).
  */
-export const shouldToastQueryError = (error: unknown, meta: QueryMeta | undefined): boolean => {
+export const shouldToastQueryError = (
+  error: unknown,
+  meta: QueryMeta | undefined,
+  hasData = false
+): boolean => {
   if (meta?.silent === true) return false;
+  if (meta?.silent === "when-empty" && !hasData) return false;
   const silentStatuses = meta?.silentStatuses;
   if (error instanceof ApiError && Array.isArray(silentStatuses)) {
     return !silentStatuses.includes(error.status);
@@ -51,7 +59,7 @@ export const createAppQueryClient = (): QueryClient =>
   new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
-        if (!shouldToastQueryError(error, query.meta)) return;
+        if (!shouldToastQueryError(error, query.meta, query.state.data !== undefined)) return;
         toast.error(error instanceof Error ? error.message : "Unknown error");
       },
     }),

@@ -15,8 +15,9 @@ export const useHosts = (): ReturnType<
     queryKey: hostKeys.lists(),
     queryFn: hostApi.list,
     staleTime: 15 * 60 * 1000,
-    // Settings' list and the workspace show the error in place; no global toast.
-    meta: { silent: true },
+    // With nothing loaded, Settings' list and the workspace say it failed; a failed refetch
+    // over a cached list still toasts, since those screens just keep showing it.
+    meta: { silent: "when-empty" },
   });
 };
 

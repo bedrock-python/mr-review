@@ -1,5 +1,6 @@
 import { waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { ApiError } from "@shared/api";
 import {
   QUERY_CACHE_STORAGE_KEY,
@@ -42,6 +43,8 @@ const readPersisted = (storage: Storage): PersistedCache | null => {
 };
 
 const PERSIST_WAIT = { timeout: 3000 };
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 describe("setupQueryPersistence", () => {
   it("writes hosts, providers and the update check, and nothing with code or reviews", async () => {
@@ -116,10 +119,37 @@ describe("shouldToastQueryError", () => {
     expect(shouldToastQueryError(new Error("boom"), { silent: true })).toBe(false);
   });
 
+  it("for a query silent only when empty, stays quiet until data is loaded", () => {
+    const meta = { silent: "when-empty" };
+
+    expect(shouldToastQueryError(new Error("boom"), meta, false)).toBe(false);
+    expect(shouldToastQueryError(new Error("boom"), meta, true)).toBe(true);
+    expect(shouldToastQueryError(new Error("boom"), { silent: true }, true)).toBe(false);
+  });
+
   it("stays quiet only for the statuses a query handles itself", () => {
     const meta = { silentStatuses: [404] };
 
     expect(shouldToastQueryError(new ApiError("gone", 404), meta)).toBe(false);
     expect(shouldToastQueryError(new ApiError("broken", 500), meta)).toBe(true);
+  });
+});
+
+describe("the global error toast", () => {
+  it("skips a 'when-empty' query with nothing loaded, and toasts its failed refetch", async () => {
+    const client = createAppQueryClient();
+    const options = {
+      queryKey: ["hosts", "list"],
+      queryFn: (): Promise<string[]> => Promise.reject(new Error("Backend unavailable")),
+      meta: { silent: "when-empty" },
+      retry: false,
+    };
+
+    await client.fetchQuery(options).catch(() => undefined);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    client.setQueryData(["hosts", "list"], ["h1"]);
+    await client.fetchQuery({ ...options, staleTime: 0 }).catch(() => undefined);
+    expect(toast.error).toHaveBeenCalledWith("Backend unavailable");
   });
 });
