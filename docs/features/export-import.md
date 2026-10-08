@@ -46,8 +46,8 @@ never removed.
 | **Replace existing** (`replace`) | Overwritten with the file's version, discarding local changes |
 
 Under every strategy a record keeps its creation date, and a host or provider keeps its
-local token or API key when the file carries none. A record that would come out unchanged
-is reported as unchanged.
+local token or API key when the file carries none — an empty one counts as none, and
+export never writes one. A record that would come out unchanged is reported as unchanged.
 
 An encrypted file is decrypted completely before anything is written: a wrong passphrase
 or a damaged secret rejects the whole import and leaves the data directory untouched.
