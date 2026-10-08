@@ -1,149 +1,185 @@
-import type { Comment, CommentPost } from "@entities/review";
+import { Braces, Download, FileCode, ListTree, MessageSquare } from "lucide-react";
+import { Button, CountBadge, EmptyState, ICON_SIZE, SectionHeader } from "@shared/ui";
+import { groupByFile } from "../lib/groupByFile";
+import { PostCommentRow } from "./PostCommentRow";
+import { TRUNCATE } from "./postStyles";
+import type { FileGroup } from "../lib/groupByFile";
+import type { Comment } from "@entities/review";
 
-export type PostPreviewMode = "json" | "dryrun" | "status";
+export type PostPreviewMode = "dryrun" | "status";
 
-const OUTCOME_TEXT: Record<CommentPost["outcome"], string> = {
-  inline: "posted inline",
-  general_note: "posted as general note",
-  failed: "failed",
+const HEADER: Record<PostPreviewMode | "json", { title: string; description: string }> = {
+  dryrun: {
+    title: "Dry run",
+    description: "What goes to the MR, file by file. Nothing is sent until you post.",
+  },
+  json: { title: "JSON", description: "The payload that Save as JSON downloads." },
+  status: { title: "On the MR", description: "What became of each comment." },
 };
 
-const PostStatus = ({ post }: { post: CommentPost | null | undefined }): React.ReactElement => {
-  if (post === null || post === undefined) {
-    return <span style={{ fontSize: 10, color: "var(--fg-2)", marginLeft: "auto" }}>not sent</span>;
-  }
-  const color = post.outcome === "failed" ? "var(--c-critical)" : "var(--c-add)";
+const GROUP_HEADER: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--space-2)",
+  padding: "var(--space-2) var(--space-4)",
+  background: "var(--bg-1)",
+  borderTop: "1px solid var(--border)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-meta)",
+  color: "var(--fg-1)",
+};
+
+const Group = ({
+  group,
+  isStatusShown,
+  isCompleted,
+}: {
+  group: FileGroup;
+  isStatusShown: boolean;
+  isCompleted: boolean;
+}): React.ReactElement => {
+  const name = group.file ?? "General notes";
+  const Icon = group.file === null ? MessageSquare : FileCode;
+  const count = group.comments.length;
   return (
-    <span style={{ fontSize: 10, color, marginLeft: "auto", whiteSpace: "nowrap" }}>
-      {post.url !== null ? (
-        <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color }}>
-          {OUTCOME_TEXT[post.outcome]} ↗
-        </a>
-      ) : (
-        OUTCOME_TEXT[post.outcome]
-      )}
-    </span>
+    <section aria-label={name}>
+      <div style={GROUP_HEADER}>
+        <Icon
+          size={ICON_SIZE.inline}
+          aria-hidden="true"
+          style={{ flexShrink: 0, color: "var(--fg-3)" }}
+        />
+        <span style={{ ...TRUNCATE, flex: 1 }} title={name}>
+          {name}
+        </span>
+        <CountBadge
+          count={count}
+          label={`${String(count)} ${count === 1 ? "comment" : "comments"}`}
+        />
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        {group.comments.map((comment) => (
+          <PostCommentRow
+            key={comment.id}
+            comment={comment}
+            isStatusShown={isStatusShown}
+            isCompleted={isCompleted}
+          />
+        ))}
+      </ul>
+    </section>
   );
 };
 
-const CommentCard = ({
-  comment,
-  index,
-  isStatusShown,
-}: {
-  comment: Comment;
-  index: number;
-  isStatusShown: boolean;
-}): React.ReactElement => (
-  <div
-    style={{
-      margin: "0 12px 8px",
-      padding: "10px 12px",
-      background: "var(--bg-0)",
-      border: "1px solid var(--border)",
-      borderRadius: "var(--radius-3)",
-      fontSize: 12,
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-2)" }}>
-        #{index + 1}
-      </span>
-      <span className={`sev ${comment.severity}`}>
-        <span className="dot" />
-        {comment.severity}
-      </span>
-      {comment.file !== null ? (
-        <span
-          className="mono"
-          style={{
-            fontSize: 10,
-            color: "var(--fg-2)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {comment.file}
-          {comment.line !== null ? `:${String(comment.line)}` : ""}
-        </span>
-      ) : (
-        <span style={{ fontSize: 10, color: "var(--fg-2)" }}>general note</span>
-      )}
-      {isStatusShown && <PostStatus post={comment.post} />}
-    </div>
-    <div style={{ color: "var(--fg-1)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-      {comment.body}
-    </div>
-  </div>
-);
-
-const HEADER_TEXT: Record<PostPreviewMode, string> = {
-  json: "review.json",
-  dryrun: "dry-run · no changes will be made",
-  status: "on the MR",
+export type PostPreviewProps = {
+  mode: PostPreviewMode;
+  comments: Comment[];
+  json: string;
+  isJsonShown: boolean;
+  onToggleJson: () => void;
+  onSaveAsJson: () => void;
+  /** The iteration is done: a comment without a record was posted, not skipped. */
+  isCompleted: boolean;
 };
 
-/** The right-hand column: the payload as JSON, a dry run, or each comment with what became of it. */
+/** The right-hand column: the dry run file by file, the raw JSON, or what became of each comment. */
 export const PostPreview = ({
   mode,
   comments,
   json,
-}: {
-  mode: PostPreviewMode;
-  comments: Comment[];
-  json: string;
-}): React.ReactElement => (
-  <div
-    style={{ display: "flex", flexDirection: "column", background: "var(--bg-1)", minHeight: 0 }}
-  >
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "14px 18px",
-        borderBottom: "1px solid var(--border)",
-        flexShrink: 0,
-      }}
-    >
-      <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)" }}>
-        {HEADER_TEXT[mode]}
-      </span>
-      <span className="chip" style={{ fontSize: 10 }}>
-        {comments.length} {comments.length === 1 ? "comment" : "comments"}
-      </span>
-    </div>
+  isJsonShown,
+  onToggleJson,
+  onSaveAsJson,
+  isCompleted,
+}: PostPreviewProps): React.ReactElement => {
+  const isJson = mode === "dryrun" && isJsonShown;
+  const header = HEADER[isJson ? "json" : mode];
+  const count = comments.length;
 
-    {mode === "json" ? (
-      <pre
-        style={{
-          flex: 1,
-          margin: 0,
-          padding: "14px 18px",
-          overflow: "auto",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: "var(--fg-1)",
-          whiteSpace: "pre",
-          background: "var(--bg-0)",
-        }}
-      >
-        {json}
-      </pre>
-    ) : (
-      <div style={{ flex: 1, overflow: "auto", padding: "12px 0" }}>
-        {comments.length === 0 ? (
-          <div style={{ padding: "20px 18px", fontSize: 12.5, color: "var(--fg-2)" }}>
-            No comments to preview.
-          </div>
-        ) : (
-          comments.map((c, i) => (
-            <CommentCard key={c.id} comment={c} index={i} isStatusShown={mode === "status"} />
-          ))
-        )}
-      </div>
-    )}
-  </div>
-);
+  return (
+    <section
+      aria-label="Preview"
+      style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
+    >
+      <SectionHeader
+        as="h2"
+        title={header.title}
+        count={count}
+        countLabel={`${String(count)} ${count === 1 ? "comment" : "comments"}`}
+        description={header.description}
+        style={{ flexShrink: 0, padding: "var(--space-4) var(--space-4) var(--space-3)" }}
+        {...(mode === "dryrun"
+          ? {
+              actions: (
+                <>
+                  <Button
+                    size="sm"
+                    icon={
+                      isJsonShown ? (
+                        <ListTree size={ICON_SIZE.inline} aria-hidden="true" />
+                      ) : (
+                        <Braces size={ICON_SIZE.inline} aria-hidden="true" />
+                      )
+                    }
+                    onClick={onToggleJson}
+                  >
+                    {isJsonShown ? "View dry run" : "View JSON"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    icon={<Download size={ICON_SIZE.inline} aria-hidden="true" />}
+                    onClick={onSaveAsJson}
+                  >
+                    Save as JSON
+                  </Button>
+                </>
+              ),
+            }
+          : {})}
+      />
+
+      {isJson ? (
+        <pre
+          aria-label="Payload as JSON"
+          tabIndex={0}
+          style={{
+            flex: 1,
+            margin: 0,
+            padding: "var(--space-3) var(--space-4)",
+            overflow: "auto",
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-1)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--fs-meta)",
+            lineHeight: "var(--lh-body)",
+            color: "var(--fg-1)",
+          }}
+        >
+          {json}
+        </pre>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          {count === 0 ? (
+            <EmptyState
+              size="sm"
+              title="No kept comments"
+              description="Kept comments show up here."
+            />
+          ) : (
+            groupByFile(comments).map((group) => (
+              <Group
+                key={group.file ?? ""}
+                group={group}
+                isStatusShown={mode === "status"}
+                isCompleted={isCompleted}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </section>
+  );
+};

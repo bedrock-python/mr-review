@@ -175,15 +175,31 @@ describe("PostStage", () => {
     expect(screen.getByText("2 comments")).toBeInTheDocument();
   });
 
-  it("marks the dry-run toggle as pressed with separate class names", async () => {
+  it("previews the comments file by file, and the JSON payload on request", async () => {
     renderStage(makeReview(unposted()));
 
-    const toggle = await screen.findByRole("button", { name: "Dry-run preview" });
-    await userEvent.click(toggle);
+    const preview = await screen.findByRole("region", { name: "Preview" });
+    const file = within(preview).getByRole("region", { name: "src/app.py" });
+    expect(within(file).getByText(`body of ${A}`)).toBeInTheDocument();
+    const notes = within(preview).getByRole("region", { name: "General notes" });
+    expect(within(notes).getByText(`body of ${B}`)).toBeInTheDocument();
 
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    expect(toggle).toHaveClass("btn", "ghost", "active");
-    expect(screen.getByText("dry-run · no changes will be made")).toBeInTheDocument();
+    await userEvent.click(within(preview).getByRole("button", { name: "View JSON" }));
+
+    expect(within(preview).getByText(/"target": "group\/repo !7"/)).toBeInTheDocument();
+    await userEvent.click(within(preview).getByRole("button", { name: "View dry run" }));
+    expect(within(preview).getByRole("region", { name: "src/app.py" })).toBeInTheDocument();
+  });
+
+  it("offers the way back to Polish instead of posting nothing", async () => {
+    renderStage(makeReview([makeComment(A, { status: "dismissed" })]));
+
+    const callout = (await screen.findByText("Nothing to post")).closest("[role=note]");
+    expect(callout).not.toBeNull();
+    expect(
+      within(callout as HTMLElement).getByRole("button", { name: "Back to Polish" })
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Post 0 comments/ })).toBeDisabled();
   });
 
   it("posts with the chosen options, waits long enough, and shows what landed", async () => {
@@ -214,10 +230,14 @@ describe("PostStage", () => {
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Post / })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Retry failed/ })).not.toBeInTheDocument();
+    const counts = screen.getByRole("list", { name: "Post counts" });
     const stat = (label: string): string | null =>
-      screen.getByText(label).previousElementSibling?.textContent ?? null;
+      within(counts).getByText(label).previousElementSibling?.textContent ?? null;
     expect([stat("Inline"), stat("General"), stat("Failed")]).toEqual(["1", "1", "0"]);
-    expect(screen.getByRole("button", { name: /Open MR in browser/ })).toBeEnabled();
+    expect(screen.getByRole("link", { name: /Open MR in browser/ })).toHaveAttribute(
+      "href",
+      "https://gitlab.example.com/group/repo/-/merge_requests/7"
+    );
   });
 
   it("reports a partial post with the reason and retries only on request", async () => {
@@ -250,16 +270,19 @@ describe("PostStage", () => {
     expect(within(failures).getByText("May already be on the MR")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Retry failed (1)" }));
-    const confirm = screen.getByRole("alertdialog");
+    const confirm = screen.getByRole("dialog", { name: "Send it again?" });
     expect(within(confirm).getByText(/may already be on the MR/)).toBeInTheDocument();
+    expect(within(confirm).getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(http.history.post).toHaveLength(0);
 
     await userEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     expect(http.history.post).toHaveLength(0);
 
     await userEvent.click(screen.getByRole("button", { name: "Retry failed (1)" }));
-    await userEvent.click(screen.getByRole("button", { name: "Post them again" }));
+    await userEvent.click(screen.getByRole("button", { name: "Post it again" }));
 
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
     expect(sentBody()).toMatchObject({ resend_ambiguous: true });
