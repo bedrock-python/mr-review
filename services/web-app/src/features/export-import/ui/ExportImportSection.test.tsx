@@ -41,8 +41,10 @@ const makePreview = (overrides: Partial<ImportPreview> = {}): ImportPreview => (
   secrets: "encrypted",
   hosts: { total: 1, existing: 1 },
   ai_providers: { total: 0, existing: 0 },
+  review_presets: { total: 1, existing: 0 },
   reviews: { total: 2, existing: 0 },
   reviews_without_host: 0,
+  reviews_without_preset: 0,
   ...overrides,
 });
 
@@ -53,6 +55,9 @@ const IMPORT_RESULT: ImportResult = {
   ai_providers_imported: 0,
   ai_providers_updated: 0,
   ai_providers_skipped: 0,
+  review_presets_imported: 1,
+  review_presets_updated: 0,
+  review_presets_skipped: 0,
   reviews_imported: 2,
   reviews_updated: 0,
   reviews_skipped: 0,
@@ -121,6 +126,7 @@ describe("export", () => {
       expect(api.exportData).toHaveBeenCalledWith({
         include_hosts: true,
         include_ai_providers: true,
+        include_review_presets: true,
         include_reviews: true,
         encryption_password: "s3cret",
       });
@@ -140,6 +146,7 @@ describe("export", () => {
       expect(api.exportData).toHaveBeenLastCalledWith({
         include_hosts: true,
         include_ai_providers: true,
+        include_review_presets: true,
         include_reviews: true,
       });
     });
@@ -151,6 +158,7 @@ describe("export", () => {
       expect(api.exportData).toHaveBeenLastCalledWith({
         include_hosts: true,
         include_ai_providers: true,
+        include_review_presets: true,
         include_reviews: true,
         include_plain_secrets: true,
       });
@@ -169,6 +177,7 @@ describe("import", () => {
     expect(within(summary).getByText("backup.json")).toBeInTheDocument();
     expect(within(summary).getByText("1 host (1 already here)")).toBeInTheDocument();
     expect(within(summary).getByText("2 reviews")).toBeInTheDocument();
+    expect(within(summary).getByText("1 review preset")).toBeInTheDocument();
     expect(api.previewImport).toHaveBeenCalledWith(EXPORT_FILE);
     expect(api.importData).not.toHaveBeenCalled();
   });

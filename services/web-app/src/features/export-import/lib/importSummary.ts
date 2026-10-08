@@ -17,7 +17,8 @@ export const STRATEGY_DESCRIPTIONS: Record<MergeStrategy, string> = {
   skip: "Add what is new. Records that already exist here are left untouched.",
   merge:
     "Add what is new and update existing records from the file. Favourite repositories and " +
-    "models are combined, and of two versions of a review the more recently updated one wins.",
+    "models are combined, and of two versions of a review or a review preset the more " +
+    "recently updated one wins.",
   replace:
     "Add what is new and overwrite existing records with the file's version, " +
     "discarding local changes to them.",
@@ -26,6 +27,7 @@ export const STRATEGY_DESCRIPTIONS: Record<MergeStrategy, string> = {
 const RECORD_KINDS = [
   ["hosts", "Hosts"],
   ["ai_providers", "AI providers"],
+  ["review_presets", "Review presets"],
   ["reviews", "Reviews"],
 ] as const;
 
@@ -39,7 +41,10 @@ export const describeCounts = (counts: ImportPreviewCounts, one: string, many: s
 
 /** Records of the file that already exist here, which the chosen strategy may change. */
 export const existingRecordCount = (preview: ImportPreview): number =>
-  preview.hosts.existing + preview.ai_providers.existing + preview.reviews.existing;
+  preview.hosts.existing +
+  preview.ai_providers.existing +
+  preview.review_presets.existing +
+  preview.reviews.existing;
 
 /** One line per record kind: what the import did with it. */
 export const summarizeImportResult = (result: ImportResult): string[] =>

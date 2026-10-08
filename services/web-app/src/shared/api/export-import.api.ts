@@ -15,6 +15,7 @@ export type SecretsMode = "encrypted" | "plain" | "omitted";
 export type ExportRequest = {
   include_hosts: boolean;
   include_ai_providers: boolean;
+  include_review_presets: boolean;
   include_reviews: boolean;
   /** Encrypts host tokens and provider API keys with this passphrase. */
   encryption_password?: string;
@@ -43,8 +44,10 @@ export const ImportPreviewSchema = z.object({
   secrets: z.enum(["encrypted", "plain", "omitted"]),
   hosts: PreviewCountsSchema,
   ai_providers: PreviewCountsSchema,
+  review_presets: PreviewCountsSchema,
   reviews: PreviewCountsSchema,
   reviews_without_host: z.number(),
+  reviews_without_preset: z.number(),
 });
 
 export type ImportPreview = z.infer<typeof ImportPreviewSchema>;
@@ -57,6 +60,9 @@ export const ImportResultSchema = z.object({
   ai_providers_imported: z.number(),
   ai_providers_updated: z.number(),
   ai_providers_skipped: z.number(),
+  review_presets_imported: z.number(),
+  review_presets_updated: z.number(),
+  review_presets_skipped: z.number(),
   reviews_imported: z.number(),
   reviews_updated: z.number(),
   reviews_skipped: z.number(),

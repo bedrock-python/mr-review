@@ -37,6 +37,7 @@ const SECRETS_CHOICES: { value: SecretsChoice; label: string; hint: string }[] =
 const DATA_CHOICES = [
   ["hosts", "Hosts"],
   ["ai_providers", "AI providers"],
+  ["review_presets", "Review presets"],
   ["reviews", "Review history"],
 ] as const;
 
@@ -46,6 +47,7 @@ export const ExportPanel = (): React.ReactElement => {
   const [included, setIncluded] = useState<Record<DataChoice, boolean>>({
     hosts: true,
     ai_providers: true,
+    review_presets: true,
     reviews: true,
   });
   const [secrets, setSecrets] = useState<SecretsChoice>("encrypted");
@@ -57,13 +59,14 @@ export const ExportPanel = (): React.ReactElement => {
   const needsPassphrase = carriesSecrets && secrets === "encrypted";
   const passphraseMismatch = needsPassphrase && confirmation !== "" && confirmation !== passphrase;
   const isReady =
-    (included.hosts || included.ai_providers || included.reviews) &&
+    Object.values(included).some(Boolean) &&
     (!needsPassphrase || (passphrase !== "" && confirmation === passphrase));
 
   const handleExport = (): void => {
     const request: ExportRequest = {
       include_hosts: included.hosts,
       include_ai_providers: included.ai_providers,
+      include_review_presets: included.review_presets,
       include_reviews: included.reviews,
     };
     if (needsPassphrase) request.encryption_password = passphrase;

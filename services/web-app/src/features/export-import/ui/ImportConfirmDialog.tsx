@@ -48,7 +48,11 @@ export const ImportConfirmDialog = ({
   const [isOverwriteAccepted, setIsOverwriteAccepted] = useState(false);
   const existing = existingRecordCount(preview);
   const isOverwriting = strategy === "replace" && existing > 0;
-  const total = preview.hosts.total + preview.ai_providers.total + preview.reviews.total;
+  const total =
+    preview.hosts.total +
+    preview.ai_providers.total +
+    preview.review_presets.total +
+    preview.reviews.total;
   const confirmLabel = isOverwriting ? "Replace and import" : "Import";
 
   return (

@@ -31,6 +31,7 @@ export const ImportPreviewCard = ({
     <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
       <li>{describeCounts(preview.hosts, "host", "hosts")}</li>
       <li>{describeCounts(preview.ai_providers, "AI provider", "AI providers")}</li>
+      <li>{describeCounts(preview.review_presets, "review preset", "review presets")}</li>
       <li>{describeCounts(preview.reviews, "review", "reviews")}</li>
     </ul>
     {preview.secrets === "plain" && (
@@ -49,6 +50,12 @@ export const ImportPreviewCard = ({
         {plural(preview.reviews_without_host, "review refers", "reviews refer")} to a host that is
         neither here nor in this file. They are imported, but cannot reach their merge requests
         until that host is added.
+      </p>
+    )}
+    {preview.reviews_without_preset > 0 && (
+      <p style={warningStyle}>
+        {plural(preview.reviews_without_preset, "review uses", "reviews use")} a saved review preset
+        that is neither here nor in this file; their briefs fall back to the built-in preset.
       </p>
     )}
   </div>
