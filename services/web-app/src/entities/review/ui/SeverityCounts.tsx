@@ -1,5 +1,6 @@
 import { cn } from "@shared/lib";
-import { SEVERITY_ORDER, SEV_COLOR } from "../lib";
+import { SEVERITY_ORDER } from "../lib";
+import { SeverityDot } from "./SeverityDot";
 import type { SeverityCountMap } from "../lib";
 
 export type SeverityCountsProps = {
@@ -32,7 +33,7 @@ export const SeverityCounts = ({
       <span className="ui-visually-hidden">{summarise(counts)}</span>
       {shown.map((severity) => (
         <span key={severity} className="ui-severity-counts__item" aria-hidden="true">
-          <span className="ui-severity-counts__dot" style={{ background: SEV_COLOR[severity] }} />
+          <SeverityDot severity={severity} />
           {counts[severity] ?? 0}
           {!isCompact && <span className="ui-severity-counts__label">{severity}</span>}
         </span>

@@ -76,7 +76,7 @@ export const ReadinessFilter = ({
       {isActive && (
         <span
           aria-hidden="true"
-          className="bg-accent ring-bg-1 pointer-events-none absolute top-(--space-1) right-(--space-1) size-[6px] rounded-full ring-2"
+          className="bg-accent ring-bg-1 pointer-events-none absolute top-(--space-1) right-(--space-1) size-(--dot-size) rounded-full ring-2"
         />
       )}
       {isOpen && (

@@ -215,6 +215,17 @@
   --icon-inline: 14px;
   --icon-button: 16px;
 
+  /* Marks: a status / severity / "something is on" dot, and the bar that marks the selected
+     row or the focused card */
+  --dot-size: 6px;
+  --indicator-width: 2px;
+
+  /* Provider identity: an icon tint only, never a fill, a CTA or a selection ring.
+     ≥ 3:1 on bg-0…bg-3 in every theme (ink's values hold on phosphor too). */
+  --provider-anthropic: oklch(72% 0.12 45);
+  --provider-openai: oklch(74% 0.11 170);
+  --provider-compat: oklch(72% 0.11 285);
+
   /* Motion */
   --dur-fast: 0.08s;
   --dur-base: 0.15s;
@@ -267,6 +278,10 @@
   --diff-del-fg: #8b2a2a;
   --diff-hunk: #f0efe9;
   --diff-gutter: #f4f3ed;
+
+  --provider-anthropic: oklch(56% 0.14 42);
+  --provider-openai: oklch(54% 0.1 172);
+  --provider-compat: oklch(54% 0.14 285);
 
   --shadow-pop: 0 6px 20px rgb(20 23 26 / 0.12);
   --shadow-dialog: 0 16px 48px rgb(20 23 26 / 0.2);
@@ -633,7 +648,7 @@
   }
   .row-btn.active::before {
     content: "";
-    width: 3px;
+    width: var(--indicator-width);
     height: 16px;
     background: var(--accent);
     border-radius: 999px;

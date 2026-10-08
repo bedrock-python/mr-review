@@ -24,8 +24,8 @@
     background: transparent;
   }
   .ui-badge__dot {
-    width: 6px;
-    height: 6px;
+    width: var(--dot-size);
+    height: var(--dot-size);
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--tone);
@@ -93,8 +93,8 @@
     cursor: not-allowed;
   }
   .ui-chip__dot {
-    width: 6px;
-    height: 6px;
+    width: var(--dot-size);
+    height: var(--dot-size);
     border-radius: 50%;
     background: var(--tone);
   }
@@ -121,12 +121,6 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-  }
-  .ui-severity-counts__dot {
-    width: 6px;
-    height: 6px;
-    flex-shrink: 0;
-    border-radius: 50%;
   }
   .ui-severity-counts__label {
     color: var(--fg-2);

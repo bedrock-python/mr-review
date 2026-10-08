@@ -250,7 +250,7 @@ const ModelOption = ({
       borderRadius: "var(--radius-control)",
       cursor: "pointer",
       background: isActive ? "var(--bg-3)" : undefined,
-      boxShadow: isActive ? "inset 2px 0 0 var(--accent-fg)" : undefined,
+      boxShadow: isActive ? "inset var(--indicator-width) 0 0 var(--accent-fg)" : undefined,
       fontFamily: "var(--font-mono)",
       fontSize: "var(--fs-control)",
       color: isSelected || isActive ? "var(--fg-0)" : "var(--fg-1)",

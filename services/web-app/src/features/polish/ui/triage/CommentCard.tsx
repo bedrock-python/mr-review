@@ -17,9 +17,6 @@ type CommentCardProps = {
   isContextOpen: boolean;
 };
 
-/** The icon size Badge is laid out for. */
-const BADGE_ICON_PX = 12;
-
 const LOCKED_DELETE_REASON = "This iteration was posted; comments can't be deleted";
 /** The look IconButton gives `disabled`, for one that is only aria-disabled. */
 const LOCKED_ICON_BUTTON_CLASS =
@@ -74,7 +71,7 @@ const CommentCardBase = ({
         // A keyboard focus ring lies over the border instead of floating outside it.
         "focus-visible:-outline-offset-1",
         isFocused
-          ? "border-accent-fg shadow-[inset_3px_0_0_var(--accent)]"
+          ? "border-accent-fg shadow-[inset_var(--indicator-width)_0_0_var(--accent)]"
           : "hover:border-border-strong"
       )}
     >
@@ -92,7 +89,7 @@ const CommentCardBase = ({
             tone="warn"
             variant="outline"
             title={anchorProblem}
-            icon={<TriangleAlert size={BADGE_ICON_PX} aria-hidden="true" />}
+            icon={<TriangleAlert size={ICON_SIZE.badge} aria-hidden="true" />}
           >
             not in diff
           </Badge>

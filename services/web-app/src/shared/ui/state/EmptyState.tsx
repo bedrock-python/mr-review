@@ -1,5 +1,6 @@
 import { Inbox } from "lucide-react";
 import { cn } from "@shared/lib";
+import { ICON_SIZE } from "../ICON_SIZE";
 
 export type EmptyStateProps = {
   /** What is empty, as a fact: "No open merge requests". */
@@ -30,7 +31,8 @@ export const EmptyState = ({
   role = "status",
   className,
 }: EmptyStateProps): React.ReactElement => {
-  const shownIcon = icon === undefined ? <Inbox size={size === "sm" ? 14 : 18} /> : icon;
+  const shownIcon =
+    icon === undefined ? <Inbox size={size === "sm" ? ICON_SIZE.inline : ICON_SIZE.state} /> : icon;
   return (
     <div
       role={role === "none" ? undefined : role}

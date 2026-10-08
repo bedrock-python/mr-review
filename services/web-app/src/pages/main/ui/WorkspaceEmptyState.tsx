@@ -3,8 +3,6 @@ import { useHosts } from "@entities/host";
 import { Button, EmptyState, ICON_SIZE, Kbd } from "@shared/ui";
 import { NAVIGATOR_SHORTCUT } from "@widgets/mr-header";
 
-const STATE_ICON_SIZE = 18;
-
 const KEY_HINTS: readonly { keys: readonly string[]; description: string }[] = [
   { keys: ["↑", "↓"], description: "Move through a list" },
   { keys: ["↵"], description: "Open the focused item" },
@@ -47,7 +45,7 @@ export const WorkspaceEmptyState = ({
     return (
       <EmptyState
         isFill
-        icon={<Server size={STATE_ICON_SIZE} />}
+        icon={<Server size={ICON_SIZE.state} />}
         title="Connect a Git host"
         description="Add a GitLab, GitHub, Gitea, Forgejo or Bitbucket host with an access token to browse its merge requests."
         actions={
@@ -66,7 +64,7 @@ export const WorkspaceEmptyState = ({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-(--space-4)">
       <EmptyState
-        icon={<GitPullRequest size={STATE_ICON_SIZE} />}
+        icon={<GitPullRequest size={ICON_SIZE.state} />}
         title="No merge request open"
         description="Pick one from the list to start a review, or open the Inbox for the ones waiting on you."
         {...(isNavCollapsed

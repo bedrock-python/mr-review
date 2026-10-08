@@ -35,7 +35,7 @@ export const MRItemButton = ({
     aria-pressed={isSelected}
     title={title}
     className={cn(
-      "border-border flex w-full flex-col gap-(--space-1) border-b border-l-[3px] py-(--space-2) pr-(--space-3) pl-[calc(var(--space-3)-3px)] text-left",
+      "border-border flex w-full flex-col gap-(--space-1) border-b border-l-(length:--indicator-width) py-(--space-2) pr-(--space-3) pl-[calc(var(--space-3)-var(--indicator-width))] text-left",
       "transition-colors duration-(--dur-fast)",
       isSelected
         ? "bg-bg-2 border-l-(--accent-fg)"
@@ -82,7 +82,7 @@ const PipelineDot = ({ status }: { status: MR["pipeline"] }): React.ReactElement
       role="img"
       aria-label={look.label}
       title={look.label}
-      className="size-[6px] shrink-0 rounded-full"
+      className="size-(--dot-size) shrink-0 rounded-full"
       style={{ background: look.color }}
     />
   );

@@ -25,12 +25,6 @@ export type RunFooterProps = {
   onPolish: () => void;
 };
 
-const inlineIconStyle: React.CSSProperties = {
-  display: "inline-block",
-  verticalAlign: "-2px",
-  marginRight: "var(--space-2)",
-};
-
 /** What a footer button does and says; the slot decides its look. */
 type Action = {
   /** Keeps a secondary button's node, and so its focus, only while it does the same thing. */
@@ -158,7 +152,7 @@ export const RunFooter = ({
           size={ICON_SIZE.inline}
           aria-hidden="true"
           color="var(--c-warn-fg)"
-          style={inlineIconStyle}
+          className="ui-inline-icon mr-(--space-2)"
         />
         {replaceWarning}
       </span>

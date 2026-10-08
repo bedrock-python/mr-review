@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
+import { SeverityDot } from "@entities/review";
 import { Button, ICON_SIZE } from "@shared/ui";
-import { SEVERITY_KEY, SEVERITY_LABEL, SEVERITY_ORDER, SEV_COLOR } from "../../lib";
+import { SEVERITY_KEY, SEVERITY_LABEL, SEVERITY_ORDER } from "../../lib";
 import { Menu, MenuGroup, MenuItem, MenuSeparator } from "../overlay";
 import type { CommentSeverity } from "@entities/review";
 
@@ -89,12 +90,7 @@ export const BulkMenu = ({
         {SEVERITY_ORDER.map((severity) => (
           <MenuItem
             key={severity}
-            icon={
-              <span
-                className="ui-severity-counts__dot"
-                style={{ background: SEV_COLOR[severity] }}
-              />
-            }
+            icon={<SeverityDot severity={severity} />}
             shortcut={SEVERITY_KEY[severity]}
             aria-label={`Set ${scope} comments to ${severity}`}
             onSelect={() => {

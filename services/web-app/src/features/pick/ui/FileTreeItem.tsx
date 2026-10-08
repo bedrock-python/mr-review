@@ -61,7 +61,8 @@ export const FileTreeItem = ({
         "flex cursor-pointer items-center font-mono whitespace-nowrap select-none",
         "hover:bg-bg-hover -outline-offset-2 transition-colors",
         isDir ? "text-fg-2" : "text-fg-1",
-        isSelected && "bg-bg-2 text-fg-0 hover:bg-bg-2 shadow-[inset_2px_0_0_var(--accent-fg)]"
+        isSelected &&
+          "bg-bg-2 text-fg-0 hover:bg-bg-2 shadow-[inset_var(--indicator-width)_0_0_var(--accent-fg)]"
       )}
       style={{
         height: ROW_HEIGHT_PX,

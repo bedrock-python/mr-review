@@ -1,8 +1,8 @@
 export { reviewApi } from "./api";
 export { SEVERITY_ORDER, SEV_COLOR, SEV_TEXT_COLOR, SEVERITY_RANK, countSeverities } from "./lib";
 export type { SeverityCountMap } from "./lib";
-export { SeverityBadge, SeverityCounts } from "./ui";
-export type { SeverityBadgeProps, SeverityCountsProps } from "./ui";
+export { SeverityBadge, SeverityCounts, SeverityDot } from "./ui";
+export type { SeverityBadgeProps, SeverityCountsProps, SeverityDotProps } from "./ui";
 export type {
   ImportResponseResult,
   CommentParseError,

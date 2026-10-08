@@ -1,6 +1,7 @@
 import { RotateCw, TriangleAlert } from "lucide-react";
 import { cn } from "@shared/lib";
 import { Button } from "../button";
+import { ICON_SIZE } from "../ICON_SIZE";
 
 export type ErrorStateProps = {
   /** What could not be done: "Could not load merge requests". */
@@ -39,14 +40,18 @@ export const ErrorState = ({
     )}
   >
     <span className="ui-state__icon" aria-hidden="true">
-      <TriangleAlert size={size === "sm" ? 14 : 18} />
+      <TriangleAlert size={size === "sm" ? ICON_SIZE.inline : ICON_SIZE.state} />
     </span>
     <p className="ui-state__title">{title}</p>
     {message !== undefined && <p className="ui-state__description">{message}</p>}
     {(onRetry !== undefined || actions !== undefined) && (
       <div className="ui-state__actions">
         {onRetry !== undefined && (
-          <Button size="sm" icon={<RotateCw size={12} aria-hidden="true" />} onClick={onRetry}>
+          <Button
+            size="sm"
+            icon={<RotateCw size={ICON_SIZE.inline} aria-hidden="true" />}
+            onClick={onRetry}
+          >
             {retryLabel}
           </Button>
         )}
