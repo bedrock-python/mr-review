@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
+import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { DispatchStage } from "./DispatchStage";
 import type * as ReviewApiModule from "@entities/review/api/reviewApi";
 import type * as AIProviderEntity from "@entities/ai-provider";
@@ -14,6 +15,9 @@ import type {
   ImportResponseResult,
   Review,
 } from "@entities/review";
+
+// A run is several render passes and awaited events; leave room when suites run in parallel.
+configure({ asyncUtilTimeout: 5000 });
 
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -248,7 +252,7 @@ const startDispatch = async (
   return channel;
 };
 
-describe("DispatchStage — run in app", () => {
+describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(resetMocks);
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -489,7 +493,7 @@ const reviewAt = (
   iterations: REVIEW.iterations.map((it) => ({ ...it, stage, comments })),
 });
 
-describe("DispatchStage — after a run", () => {
+describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(resetMocks);
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -623,7 +627,7 @@ describe("DispatchStage — after a run", () => {
   });
 });
 
-describe("DispatchStage — generation settings", () => {
+describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(resetMocks);
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -690,10 +694,9 @@ describe("DispatchStage — generation settings", () => {
     const user = userEvent.setup();
     renderStage();
 
-    await user.type(
-      await screen.findByRole("textbox", { name: "Model" }),
-      "my-gateway-model{Enter}"
-    );
+    await user.click(await screen.findByRole("textbox", { name: "Model" }));
+    await user.paste("my-gateway-model");
+    await user.keyboard("{Enter}");
     await generate(user);
 
     expect(dispatchedRequest().model).toBe("my-gateway-model");
@@ -705,12 +708,11 @@ describe("DispatchStage — generation settings", () => {
     renderStage();
 
     await user.click(await screen.findByRole("button", { name: /Advanced/ }));
-    await user.type(screen.getByRole("spinbutton", { name: "Max output tokens" }), "20000");
+    await user.click(screen.getByRole("spinbutton", { name: "Max output tokens" }));
+    await user.paste("20000");
     await user.click(screen.getByRole("checkbox", { name: /Structured output/ }));
-    await user.type(
-      screen.getByRole("textbox", { name: "System prompt" }),
-      "Only security issues."
-    );
+    await user.click(screen.getByRole("textbox", { name: "System prompt" }));
+    await user.paste("Only security issues.");
     await generate(user);
 
     expect(dispatchedRequest()).toMatchObject({
@@ -742,7 +744,7 @@ describe("DispatchStage — generation settings", () => {
   });
 });
 
-describe("DispatchStage — copy & paste import", () => {
+describe("DispatchStage — copy & paste import", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(resetMocks);
   afterEach(() => {
     vi.unstubAllGlobals();
