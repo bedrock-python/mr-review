@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from unittest.mock import AsyncMock
 
 import pytest
 from mr_review.use_cases.reviews.context_files import (
     _MAX_FILES,
+    CONCURRENCY,
     collect_context_files,
 )
 
@@ -161,3 +163,43 @@ async def test__collect__duplicate_paths__fetched_only_once() -> None:
     result = await collect_context_files(provider, "org/repo", requested_paths=["README.md", "README.md"])
 
     assert list(result.keys()).count("README.md") == 1
+
+
+# ── concurrency ───────────────────────────────────────────────────────────────
+
+
+def _make_slow_provider(files: Mapping[str, str]) -> AsyncMock:
+    """Provider whose calls yield to the event loop like real network I/O does."""
+
+    async def get_file(repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
+        await asyncio.sleep(0.01)
+        return files.get(file_path)
+
+    async def list_directory(repo_path: str, dir_path: str, ref: str = "HEAD") -> list[str]:
+        await asyncio.sleep(0.01)
+        return []
+
+    provider = AsyncMock()
+    provider.get_file.side_effect = get_file
+    provider.list_directory.side_effect = list_directory
+    return provider
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {},
+        {"README.md": "# Readme"},
+        {"README.md": "# Readme", "CONTRIBUTING.md": "# Contributing"},
+        {"CLAUDE.md": "# Rules", "README.md": "# Readme"},
+    ],
+)
+async def test__collect__slow_provider__does_not_deadlock_on_shared_semaphore(files: dict[str, str]) -> None:
+    provider = _make_slow_provider(files)
+
+    result = await asyncio.wait_for(
+        collect_context_files(provider, "org/repo", requested_paths=[], semaphore=asyncio.Semaphore(CONCURRENCY)),
+        timeout=5,
+    )
+
+    assert result == files

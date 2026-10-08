@@ -66,23 +66,18 @@ async def _resolve_path(
     repo_path: str,
     path: str,
     ref: str,
-    semaphore: asyncio.Semaphore,
 ) -> list[str]:
+    # Runs inside _rate_limited_gather, which already holds a semaphore slot for
+    # this coroutine — acquiring the same semaphore again here would deadlock once
+    # every slot is held by an outer acquisition.
     ext = os.path.splitext(path)[1].lower()
+    content = await provider.get_file(repo_path, path, ref)
+    if content is not None:
+        return [path]
     if ext in _READABLE_EXTENSIONS or not ext:
-        async with semaphore:
-            content = await provider.get_file(repo_path, path, ref)
-        if content is not None:
-            return [path]
-        async with semaphore:
-            dir_files = await provider.list_directory(repo_path, path, ref)
+        dir_files = await provider.list_directory(repo_path, path, ref)
         return [f for f in dir_files if os.path.splitext(f)[1].lower() in _READABLE_EXTENSIONS]
-    else:
-        async with semaphore:
-            content = await provider.get_file(repo_path, path, ref)
-        if content is not None:
-            return [path]
-        return []
+    return []
 
 
 def _deduplicate(items: list[str], limit: int) -> list[str]:
@@ -134,7 +129,7 @@ async def collect_context_files(
     paths_to_resolve = requested_paths if requested_paths else _DEFAULT_CONTEXT_PATHS
     semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
-    resolve_coros = [_resolve_path(provider, repo_path, p, ref, semaphore) for p in paths_to_resolve]
+    resolve_coros = [_resolve_path(provider, repo_path, p, ref) for p in paths_to_resolve]
     resolve_results = await _rate_limited_gather(resolve_coros, semaphore)
     resolved: list[str] = []
     for item in resolve_results:
