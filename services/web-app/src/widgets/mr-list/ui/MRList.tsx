@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { FolderGit2 } from "lucide-react";
+import { Book } from "lucide-react";
 import { useNav } from "@app/navigation";
 import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList } from "@shared/ui";
 import { getVcsErrorMessage, useDebouncedSearch, useStableCallback } from "@shared/lib";
@@ -182,9 +182,8 @@ export const MRList = (): React.ReactElement => {
         </>
       ) : (
         <EmptyState
-          isFill
           size="sm"
-          icon={<FolderGit2 size={ICON_SIZE.inline} />}
+          icon={<Book size={ICON_SIZE.inline} />}
           title="No repository selected"
           description="Pick a repository, or the Inbox, to see its merge requests."
         />

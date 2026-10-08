@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ChevronRight, FolderGit2, Star } from "lucide-react";
+import { Book, ChevronRight, Star } from "lucide-react";
 import { ROW_FOCUS_ATTR, cn } from "@shared/lib";
 import { ICON_SIZE } from "@shared/ui";
 import { REPO_ROW_HEIGHT } from "../lib/repoTree";
@@ -47,7 +47,7 @@ const RepoRowComponent = ({
       title={repo.path}
       className="flex min-w-0 flex-1 items-center gap-(--space-2) text-left"
     >
-      <FolderGit2 size={ICON_SIZE.inline} aria-hidden="true" className="text-fg-2 shrink-0" />
+      <Book size={ICON_SIZE.inline} aria-hidden="true" className="text-fg-2 shrink-0" />
       <span className="flex-1 truncate text-(length:--fs-control) font-medium">{repo.name}</span>
     </button>
     <button
@@ -102,7 +102,10 @@ const NamespaceRowComponent = ({
     aria-expanded={isOpen}
     title={fullPath}
     className="ui-eyebrow hover:text-fg-1 flex w-full items-center gap-(--space-1) text-left"
-    style={{ height: REPO_ROW_HEIGHT.namespace, padding: `0 10px 0 ${String(getIndent(depth))}px` }}
+    style={{
+      height: REPO_ROW_HEIGHT.namespace,
+      padding: `0 ${String(INDENT_BASE_PX)}px 0 ${String(getIndent(depth))}px`,
+    }}
   >
     <ChevronRight
       size={ICON_SIZE.inline}

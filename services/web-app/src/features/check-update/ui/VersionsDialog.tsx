@@ -65,7 +65,7 @@ export const VersionsDialog = ({
       <Dialog
         isOpen={isOpen}
         onClose={onClose}
-        size="sm"
+        size="md"
         title="Versions"
         description="mr-review ships as a web app and an API, released separately."
         footer={

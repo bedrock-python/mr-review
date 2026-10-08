@@ -129,7 +129,8 @@ const BranchChip = ({ mr }: { mr: MR }): React.ReactElement | null => {
 export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
   const sha = (mr as MR & { sha?: string }).sha;
   return (
-    <div className="text-fg-2 flex min-w-0 items-center gap-(--space-2) text-(length:--fs-meta)">
+    // Takes what the row leaves (basis 0): the branch chip gets cut before the actions wrap.
+    <div className="text-fg-2 flex min-w-0 flex-1 basis-0 items-center gap-(--space-2) text-(length:--fs-meta)">
       <MetaDivider />
       <span className="flex shrink-0 items-center gap-(--space-1)">
         <span

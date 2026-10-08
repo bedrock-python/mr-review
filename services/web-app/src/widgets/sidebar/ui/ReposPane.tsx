@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
-import { Plus, Server } from "lucide-react";
+import { Server } from "lucide-react";
 import { useNav } from "@app/navigation";
-import { useAppStore } from "@app/store";
 import { MIN_REPO_QUERY_LENGTH } from "@entities/mr";
 import { useHosts, useToggleFavouriteRepo } from "@entities/host";
-import { Button, EmptyState, ICON_SIZE } from "@shared/ui";
+import { EmptyState, ICON_SIZE } from "@shared/ui";
 import { useDebouncedSearch, useStableCallback } from "@shared/lib";
 import { AddRepoByUrlModal } from "@features/add-repo-by-url";
 import { useRepoListRows } from "../model/useRepoListRows";
@@ -23,36 +22,20 @@ const NO_FAVOURITES: readonly string[] = [];
 /** Namespaces collapsed by the user; reset whenever another host is selected. */
 type CollapsedNamespaces = { hostId: string | null; paths: ReadonlySet<string> };
 
+/** Before a host is picked; with none at all, the workspace offers to add one. */
 const NoHostSelected = (): React.ReactElement => {
   const { data: hosts } = useHosts();
-  const setAddHostOpen = useAppStore((s) => s.setAddHostOpen);
-  if (hosts?.length === 0) {
-    return (
-      <EmptyState
-        size="sm"
-        icon={<Server size={ICON_SIZE.inline} />}
-        title="No hosts yet"
-        description="Add a Git host to browse its repositories."
-        actions={
-          <Button
-            size="sm"
-            icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
-            onClick={() => {
-              setAddHostOpen(true);
-            }}
-          >
-            Add host
-          </Button>
-        }
-      />
-    );
-  }
+  const hasNoHosts = hosts?.length === 0;
   return (
     <EmptyState
       size="sm"
       icon={<Server size={ICON_SIZE.inline} />}
-      title="No host selected"
-      description="Pick a host in the rail on the left to browse its repositories."
+      title={hasNoHosts ? "No hosts yet" : "No host selected"}
+      description={
+        hasNoHosts
+          ? "Add a Git host with the + in the rail to browse its repositories."
+          : "Pick a host in the rail on the left to browse its repositories."
+      }
     />
   );
 };
