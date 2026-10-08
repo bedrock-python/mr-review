@@ -346,16 +346,6 @@ class FileReviewRepository:
     async def list_all_uncapped(self) -> list[Review]:
         return await asyncio.to_thread(self._list_sorted, None)
 
-    async def update(self, review: Review) -> Review:
-        def _sync() -> Review:
-            if not self._review_path(review.id).is_file():
-                raise ValueError(f"Review {review.id} not found")
-            updated = review.model_copy(update={"updated_at": _now_utc()})
-            self._write_review(updated)
-            return updated
-
-        return await self._review_locks.run(review.id, lambda: asyncio.to_thread(_sync))
-
     async def update_with(self, review_id: UUID, change: Callable[[Review], Review]) -> Review | None:
         def _existing_only(current: Review | None) -> Review | None:
             return change(current) if current is not None else None

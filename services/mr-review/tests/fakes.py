@@ -9,6 +9,7 @@ from uuid import UUID
 
 from mr_review.core.hosts.entities import Host
 from mr_review.core.reviews.entities import Review
+from mr_review.core.reviews.repositories import ReviewRepository
 
 _E = TypeVar("_E", Host, Review)
 
@@ -31,6 +32,17 @@ def stub_update_with(repo: AsyncMock, stored: _E | None) -> list[_E]:
 
     repo.update_with.side_effect = _update_with
     return writes
+
+
+async def save_review(repo: ReviewRepository, review: Review) -> Review:
+    """Store ``review`` over the existing one with the same id, as tests set up state.
+
+    Goes through ``update_with``, like every write in the application, so ``updated_at`` is
+    bumped. Fails the test when there is no such review.
+    """
+    stored = await repo.update_with(review.id, lambda _current: review)
+    assert stored is not None, f"review {review.id} does not exist"
+    return stored
 
 
 class SingleReviewRepository:

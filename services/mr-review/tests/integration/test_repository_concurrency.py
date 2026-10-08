@@ -8,9 +8,11 @@ the way concurrent HTTP requests do and check that nothing is lost or corrupted.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import stat
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,12 +25,16 @@ from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
 from mr_review.infra.repositories.host import FileHostRepository
 from mr_review.infra.repositories.review import FileReviewRepository
 from mr_review.use_cases.hosts.toggle_favourite_repo import ToggleFavouriteRepoUseCase
+from mr_review.use_cases.reviews._review_change import apply_review_change
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
+from mr_review.use_cases.reviews.dispatch_review import _begin_dispatch, _Started
+from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 from tests.factories.entities import make_comment, make_iteration
+from tests.fakes import save_review
 
 pytestmark = pytest.mark.integration
 
@@ -41,7 +47,7 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
-async def test__review_update__concurrent_writers__never_fail_or_corrupt_the_file(
+async def test__review_writes__concurrent_writers__never_fail_or_corrupt_the_file(
     review_repo: FileReviewRepository,
 ) -> None:
     """Concurrent updates of one review all succeed and leave a readable file behind."""
@@ -60,7 +66,7 @@ async def test__review_update__concurrent_writers__never_fail_or_corrupt_the_fil
 
     for _ in range(15):
         results = await asyncio.gather(
-            *(review_repo.update(big if i % 2 else small) for i in range(8)), return_exceptions=True
+            *(save_review(review_repo, big if i % 2 else small) for i in range(8)), return_exceptions=True
         )
         assert [r for r in results if isinstance(r, BaseException)] == []
         stored = await review_repo.get_by_id(review.id)
@@ -76,7 +82,7 @@ async def test__update_review__concurrent_patches_of_different_iterations__all_s
     """Each PATCH changes another iteration; none may be overwritten by a stale copy."""
     review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
     iterations = [make_iteration(number=n, stage=IterationStage.dispatch) for n in range(1, 11)]
-    review = await review_repo.update(review.model_copy(update={"iterations": iterations}))
+    review = await save_review(review_repo, review.model_copy(update={"iterations": iterations}))
     use_case = UpdateReviewUseCase(review_repo)
 
     await asyncio.gather(
@@ -99,7 +105,7 @@ async def test__brief_change_racing_a_new_comment__both_persist(
     for _ in range(10):
         review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
         first = make_iteration(number=1, stage=IterationStage.polish)
-        review = await review_repo.update(review.model_copy(update={"iterations": [first]}))
+        review = await save_review(review_repo, review.model_copy(update={"iterations": [first]}))
 
         await asyncio.gather(
             CreateCommentUseCase(review_repo).execute(review.id, first.id, "major", "found a bug"),
@@ -118,13 +124,62 @@ async def test__brief_change_racing_a_new_comment__both_persist(
 async def test__create_iteration__two_quick_clicks__append_one_iteration(review_repo: FileReviewRepository) -> None:
     review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
     posted = make_iteration(number=1, stage=IterationStage.post, completed_at=datetime.now(timezone.utc))
-    review = await review_repo.update(review.model_copy(update={"iterations": [posted]}))
+    review = await save_review(review_repo, review.model_copy(update={"iterations": [posted]}))
 
-    await asyncio.gather(*(CreateIterationUseCase(review_repo).execute(review_id=review.id) for _ in range(5)))
+    results = await asyncio.gather(
+        *(CreateIterationUseCase(review_repo).execute(review_id=review.id) for _ in range(5))
+    )
 
     stored = await review_repo.get_by_id(review.id)
     assert stored is not None
     assert [it.number for it in stored.iterations] == [1, 2]
+    # Every click was answered with the iteration that was actually kept.
+    assert {result.iterations[-1].id for result in results} == {stored.iterations[-1].id}
+
+
+async def test__import_response_racing_a_new_iteration__both_persist(review_repo: FileReviewRepository) -> None:
+    """A pasted answer and a new iteration with another brief, at once: neither is lost."""
+    answer = json.dumps([{"file": "a.py", "line": 1, "severity": "minor", "body": "x"}])
+    other_brief = BriefConfig(preset=BriefPreset.security)
+    outcomes: list[tuple[bool, bool]] = []
+    for _ in range(10):
+        review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
+        await CreateIterationUseCase(review_repo).execute(review.id)
+
+        await asyncio.gather(
+            ImportResponseUseCase(review_repo).execute(review.id, answer),
+            CreateIterationUseCase(review_repo).execute(review.id, other_brief),
+        )
+
+        stored = await review_repo.get_by_id(review.id)
+        assert stored is not None
+        outcomes.append(
+            (
+                stored.iterations[-1].brief_config.preset == BriefPreset.security,
+                any(it.comments for it in stored.iterations),
+            )
+        )
+
+    assert outcomes == [(True, True)] * 10
+
+
+async def test__two_dispatches_starting_at_once__share_one_new_iteration(review_repo: FileReviewRepository) -> None:
+    """Both requests mark the same iteration as dispatching; neither builds its own and drops the other."""
+    review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
+    posted = make_iteration(number=1, stage=IterationStage.post, completed_at=datetime.now(timezone.utc))
+    review = await save_review(review_repo, review.model_copy(update={"iterations": [posted]}))
+    started: list[_Started] = []
+    begin = partial(_begin_dispatch, iteration_id=None, ai_provider_id=uuid4(), model="m", started=started)
+
+    await asyncio.gather(*(apply_review_change(review_repo, review.id, begin) for _ in range(3)))
+
+    stored = await review_repo.get_by_id(review.id)
+    assert stored is not None
+    assert [(it.number, it.stage) for it in stored.iterations] == [
+        (1, IterationStage.post),
+        (2, IterationStage.dispatch),
+    ]
+    assert {s.iteration_id for s in started} == {stored.iterations[1].id}
 
 
 async def test__create_review__two_quick_clicks__create_one_review(review_repo: FileReviewRepository) -> None:

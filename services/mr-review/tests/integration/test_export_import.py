@@ -31,6 +31,7 @@ from mr_review.use_cases.import_data import ImportDataUseCase
 from pydantic import SecretStr, ValidationError
 
 from tests.factories.entities import make_comment, make_iteration, make_review
+from tests.fakes import save_review
 
 pytestmark = pytest.mark.integration
 
@@ -82,7 +83,7 @@ async def _populate(store: Store) -> tuple[Host, AIProvider, Review]:
         brief_config=BriefConfig(preset=BriefPreset.security, custom_instructions="SQL injection"),
         comments=[make_comment(body="bug here", severity="major"), make_comment(body="nit", status="dismissed")],
     )
-    review = await store.reviews.update(review.model_copy(update={"iterations": [iteration]}))
+    review = await save_review(store.reviews, review.model_copy(update={"iterations": [iteration]}))
     return host, provider, review
 
 

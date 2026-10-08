@@ -14,6 +14,7 @@ from mr_review.infra.repositories import review_cache
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration, make_review
+from tests.fakes import save_review
 
 pytestmark = pytest.mark.integration
 
@@ -32,7 +33,7 @@ async def _seed(repo: FileReviewRepository, count: int) -> list[str]:
     for n in range(count):
         review = await repo.create(host_id=host_id, repo_path="g/p", mr_iid=n + 1)
         iteration = make_iteration(comments=[make_comment(body="b" * 200) for _ in range(5)])
-        await repo.update(review.model_copy(update={"iterations": [iteration]}))
+        await save_review(repo, review.model_copy(update={"iterations": [iteration]}))
         paths.append(str(review.id))
     return paths
 
@@ -99,7 +100,7 @@ async def test__get_by_id__file_rewritten_by_another_process__returns_the_new_co
     assert await repo.get_by_id(review.id) is not None
 
     other = FileReviewRepository(data_dir)
-    await other.update(review.model_copy(update={"iterations": [make_iteration(comments=[make_comment()])]}))
+    await save_review(other, review.model_copy(update={"iterations": [make_iteration(comments=[make_comment()])]}))
 
     fresh = await repo.get_by_id(review.id)
     assert fresh is not None
@@ -146,7 +147,9 @@ async def test__list_all__returns_the_newest_fifty__uncapped_returns_all(review_
 
 async def test__returned_reviews__are_independent_of_the_cache(review_repo: FileReviewRepository) -> None:
     review = await review_repo.create(host_id=uuid4(), repo_path="g/p", mr_iid=1)
-    await review_repo.update(review.model_copy(update={"iterations": [make_iteration(comments=[make_comment()])]}))
+    await save_review(
+        review_repo, review.model_copy(update={"iterations": [make_iteration(comments=[make_comment()])]})
+    )
 
     fetched = await review_repo.get_by_id(review.id)
     assert fetched is not None

@@ -13,6 +13,8 @@ from mr_review.api.config import Settings
 from mr_review.core.reviews.entities import IterationStage
 from mr_review.infra.repositories.review import FileReviewRepository
 
+from tests.fakes import save_review
+
 pytestmark = [pytest.mark.integration, pytest.mark.http]
 
 _TOKEN = "secret-token"  # noqa: S105
@@ -157,7 +159,7 @@ async def test__comments__posted_iteration__return_409(
     posted = review.iterations[-1].model_copy(
         update={"stage": IterationStage.post, "completed_at": datetime.now(timezone.utc)}
     )
-    await repo.update(review.model_copy(update={"iterations": [*review.iterations[:-1], posted]}))
+    await save_review(repo, review.model_copy(update={"iterations": [*review.iterations[:-1], posted]}))
 
     add = await client.post(
         f"/api/v1/reviews/{review_id}/iterations/{iteration_id}/comments", json={"severity": "minor", "body": "late"}
@@ -179,7 +181,7 @@ async def test__update_review__brief_on_posted_iteration__returns_409_until_a_ne
     posted = review.iterations[-1].model_copy(
         update={"stage": IterationStage.post, "completed_at": datetime.now(timezone.utc)}
     )
-    await repo.update(review.model_copy(update={"iterations": [*review.iterations[:-1], posted]}))
+    await save_review(repo, review.model_copy(update={"iterations": [*review.iterations[:-1], posted]}))
 
     refused = await client.patch(f"/api/v1/reviews/{review_id}", json={"brief_config": {"preset": "security"}})
     stored = await client.get(f"/api/v1/reviews/{review_id}")

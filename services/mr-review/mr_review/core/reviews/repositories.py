@@ -9,6 +9,13 @@ from mr_review.core.reviews.sources import ReviewSource
 
 
 class ReviewRepository(Protocol):
+    """Reviews, one record per review.
+
+    There is deliberately no blind overwrite: every change goes through :meth:`update_with`
+    or :meth:`upsert_with`, which apply it to the review as stored, under that review's lock,
+    so a change derived from an older read can never replace a newer one.
+    """
+
     async def create(
         self,
         host_id: UUID,
@@ -48,13 +55,6 @@ class ReviewRepository(Protocol):
 
     async def list_all_uncapped(self) -> list[Review]:
         """Every stored review, newest first."""
-        ...
-
-    async def update(self, review: Review) -> Review:
-        """Overwrite the stored review with ``review`` and bump ``updated_at``.
-
-        Prefer :meth:`update_with` when the new state is derived from the stored one.
-        """
         ...
 
     async def update_with(self, review_id: UUID, change: Callable[[Review], Review]) -> Review | None:
