@@ -210,12 +210,13 @@ async def test__cached_provider__list_keys_include_every_paging_argument() -> No
         {"state": "opened"},
         {"state": "merged"},
         {"state": "merged", "page": 2},
-        {"state": "merged", "page": 2, "per_page": 10},
-        {"state": "merged", "page": 2, "per_page": 10, "query": "fix"},
-        {"state": "merged", "page": 2, "per_page": 10, "query": "fix"},
+        {"state": "merged", "per_page": 10},
+        {"state": "merged", "per_page": 10, "page": 2},
+        {"state": "merged", "per_page": 10, "query": "fix"},
+        {"state": "merged", "per_page": 10, "query": "fix"},
     ):
         await provider.list_mrs("g/r", **kwargs)
-    assert inner.list_mrs.await_count == 5
+    assert inner.list_mrs.await_count == 6
 
     await provider.list_my_mrs("authored")
     await provider.list_my_mrs("assigned")

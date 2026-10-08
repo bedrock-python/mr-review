@@ -359,12 +359,19 @@ keep-alive connections reused across requests and hosts; `MR_REVIEW__VCS_TIMEOUT
 Read-only responses are cached in memory per host: repository list pages for 15 minutes, everything
 else — repository searches, MR pages, single MRs, diffs, files — for 5 minutes, in bounded
 least-recently-used stores.
+
+Lists are sorted by activity, so a push moves an item from a later page to page 1, and pages fetched
+at different times can each miss it. A later page is therefore only cached together with the page 1
+it was fetched with — within 10 seconds of it, and only if none of page 1's items turn up on it again
+(which is what a move to the top looks like). Otherwise the cached page 1 is dropped, so the next
+load of the list starts from a fresh one.
+
 Concurrent identical requests share one call to the host, and errors are never cached. Editing or
 deleting a host drops its cache, and `POST /api/v1/hosts/{id}/cache/invalidate` drops it on demand
 — for one repository with `?repo_path=`, which is what to call after a push the cache has not seen
-yet. GitHub and Gitea can only list a directory by
-returning the repository's whole tree, so that tree is fetched once per repository and commit and
-every directory the context collectors ask for is answered from it.
+yet. GitHub and Gitea can only list a directory by returning the repository's whole tree, so that
+tree is fetched once per repository and commit and every directory the context collectors ask for is
+answered from it.
 
 ### What goes into the prompt
 

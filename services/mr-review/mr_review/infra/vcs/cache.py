@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import itertools
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Hashable
@@ -98,6 +99,13 @@ class TTLCache:
             # Mark the exception as retrieved: when every waiter was cancelled nobody else will.
             task.exception()
 
+    def peek(self, key: Hashable) -> object:
+        """The live value under ``key`` without loading anything; ``MISS`` when there is none."""
+        return self._get(key)
+
+    def discard(self, key: Hashable) -> None:
+        self._data.pop(key, None)
+
     def _get(self, key: Hashable) -> object:
         entry = self._data.get(key)
         if entry is None:
@@ -125,6 +133,41 @@ class TTLCache:
         self._next_sweep = now + self._ttl
 
 
+# A later page is cached only when fetched within this many seconds of the first page it follows.
+# Listings are sorted by activity, so a page fetched long after page 1 may have lost items to it.
+PAGE_COHERENCE_SECONDS = 10.0
+
+
+@dataclass(frozen=True)
+class _FirstPage:
+    """Page 1 of a listing, and the snapshot generation its later pages are cached under."""
+
+    page: object
+    item_keys: frozenset[Hashable]
+    generation: int
+    fetched_at: float
+
+
+class _StaleFirstPage(Exception):  # noqa: N818 - a signal carrying the page, not an error
+    """A later page that proves the cached page 1 out of date; carried out of the single-flight load."""
+
+    def __init__(self, page: object) -> None:
+        super().__init__("cached first page is stale")
+        self.page = page
+
+
+def _repo_key(repo: Repo) -> Hashable:
+    return repo.path
+
+
+def _mr_key(mr: MR) -> Hashable:
+    return mr.iid
+
+
+def _inbox_mr_key(item: InboxMR) -> Hashable:
+    return (item.repo_path, item.mr.iid)
+
+
 # Cache key kinds that belong to one repository; the repository path is the key's second element.
 _REPO_SCOPED_KINDS = frozenset(
     {"repo", "mrs", "mr", "diff", "branch_diff", "diff_refs", "file", "dir", "tree", "commits"}
@@ -147,6 +190,13 @@ class CachedVCSProvider:
     * metadata (MR pages, single MRs, diff refs, directory listings, commits),
     * content (diffs and file bodies).
 
+    Listing pages are kept coherent with their first page: listings are sorted by activity, so
+    pages fetched minutes apart can disagree (a repository pushed to moves from page 3 to page 1
+    and shows up on neither). Later pages are therefore cached under the generation of the
+    page-1 snapshot they were fetched with: a new page 1 makes them unreachable, and a later page
+    that has to be fetched well after its page 1 retires that snapshot instead of being cached,
+    so the next load of the list starts again from a fresh page 1.
+
     Write methods (post_inline_comment, post_general_note) and test_connection bypass the cache.
     """
 
@@ -158,11 +208,14 @@ class CachedVCSProvider:
         max_entries: int = 1024,
         max_content_entries: int = 256,
         max_repo_entries: int = 256,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._provider = provider
-        self._repos = TTLCache(repos_ttl, max_repo_entries)
-        self._meta = TTLCache(ttl, max_entries)
-        self._content = TTLCache(ttl, max_content_entries)
+        self._clock = clock
+        self._repos = TTLCache(repos_ttl, max_repo_entries, clock=clock)
+        self._meta = TTLCache(ttl, max_entries, clock=clock)
+        self._content = TTLCache(ttl, max_content_entries, clock=clock)
+        self._generations = itertools.count(1)
 
     def invalidate(self, repo_path: str | None = None) -> None:
         """Forget cached responses: one repository's (MRs, diffs, files, ...) or, without a path, all."""
@@ -173,14 +226,75 @@ class CachedVCSProvider:
     async def test_connection(self) -> dict[str, str]:
         return await self._provider.test_connection()
 
+    async def _paged[I](
+        self,
+        store: TTLCache,
+        family: tuple[Hashable, ...],
+        page: int,
+        load: Callable[[], Awaitable[Page[I]]],
+        item_key: Callable[[I], Hashable],
+    ) -> Page[I]:
+        """One page of a listing, cached coherently with the listing's page 1 (see the class docstring)."""
+        first_key = (*family, 1)
+        if page == 1:
+            first = await store.get_or_load(first_key, partial(self._load_first_page, load, item_key))
+            return cast(Page[I], first.page)
+        first_page = store.peek(first_key)
+        if not isinstance(first_page, _FirstPage):
+            # No page 1 to be coherent with: answer from the host and keep it out of the cache.
+            return await load()
+        page_key = (*family, page, first_page.generation)
+        cached = store.peek(page_key)
+        if not isinstance(cached, _Miss):
+            return cast(Page[I], cached)
+        if self._clock() - first_page.fetched_at > PAGE_COHERENCE_SECONDS:
+            self._retire_first_page(store, first_key, first_page)
+            return await load()
+        try:
+            return await store.get_or_load(page_key, partial(self._load_later_page, load, item_key, first_page))
+        except _StaleFirstPage as stale:
+            self._retire_first_page(store, first_key, first_page)
+            return cast(Page[I], stale.page)
+
+    async def _load_first_page[I](
+        self, load: Callable[[], Awaitable[Page[I]]], item_key: Callable[[I], Hashable]
+    ) -> _FirstPage:
+        page = await load()
+        return _FirstPage(
+            page=page,
+            item_keys=frozenset(item_key(item) for item in page.items),
+            generation=next(self._generations),
+            fetched_at=self._clock(),
+        )
+
+    @staticmethod
+    async def _load_later_page[I](
+        load: Callable[[], Awaitable[Page[I]]], item_key: Callable[[I], Hashable], first_page: _FirstPage
+    ) -> Page[I]:
+        page = await load()
+        # Activity moves items to the top, pushing the tail of page 1 onto page 2: an item of the
+        # cached page 1 showing up again means items moved, and the one that moved up is on neither.
+        if any(item_key(item) in first_page.item_keys for item in page.items):
+            raise _StaleFirstPage(page)
+        return page
+
+    @staticmethod
+    def _retire_first_page(store: TTLCache, first_key: Hashable, first_page: _FirstPage) -> None:
+        # Only the snapshot this page was checked against: a newer page 1 may already be in place.
+        if store.peek(first_key) is first_page:
+            store.discard(first_key)
+
     async def list_repos(
         self, query: str | None = None, page: int = 1, per_page: int = DEFAULT_REPOS_PER_PAGE
     ) -> Page[Repo]:
         # Search results are ad hoc: keep them under the short TTL.
         store = self._meta if query else self._repos
-        return await store.get_or_load(
-            ("repos", query or "", page, per_page),
+        return await self._paged(
+            store,
+            ("repos", query or "", per_page),
+            page,
             lambda: self._provider.list_repos(query=query, page=page, per_page=per_page),
+            _repo_key,
         )
 
     async def get_repo(self, repo_path: str) -> Repo:
@@ -194,17 +308,23 @@ class CachedVCSProvider:
         per_page: int = DEFAULT_MRS_PER_PAGE,
         query: str | None = None,
     ) -> Page[MR]:
-        return await self._meta.get_or_load(
-            ("mrs", repo_path, state, page, per_page, query or ""),
+        return await self._paged(
+            self._meta,
+            ("mrs", repo_path, state, query or "", per_page),
+            page,
             lambda: self._provider.list_mrs(repo_path, state=state, page=page, per_page=per_page, query=query),
+            _mr_key,
         )
 
     async def list_my_mrs(
         self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
     ) -> Page[InboxMR]:
-        return await self._meta.get_or_load(
-            ("my_mrs", scope, page, per_page),
+        return await self._paged(
+            self._meta,
+            ("my_mrs", scope, per_page),
+            page,
             lambda: self._provider.list_my_mrs(scope, page=page, per_page=per_page),
+            _inbox_mr_key,
         )
 
     async def get_mr(self, repo_path: str, mr_iid: int) -> MR:
