@@ -35,7 +35,7 @@ describe("parseDispatchStreamEvent", () => {
     expect(warn).toHaveBeenCalledTimes(3);
   });
 
-  it("validates the done result and treats a missing truncated flag as false", () => {
+  it("validates the done result and treats missing truncated and kept_previous flags as false", () => {
     expect(
       parseDispatchStreamEvent(
         "done",
@@ -49,8 +49,17 @@ describe("parseDispatchStreamEvent", () => {
         errors: 1,
         json_error: null,
         truncated: false,
+        kept_previous: false,
       },
     });
+  });
+
+  it("reads the kept_previous flag of the done result", () => {
+    const event = parseDispatchStreamEvent(
+      "done",
+      `{"iteration_id": "${ITERATION_ID}", "comments": 4, "errors": 0, "json_error": "Invalid JSON", "truncated": false, "kept_previous": true}`
+    );
+    expect(event).toMatchObject({ type: "done", result: { comments: 4, kept_previous: true } });
   });
 
   it("reads the truncated flag of the done result", () => {

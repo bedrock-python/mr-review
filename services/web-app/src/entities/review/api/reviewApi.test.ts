@@ -23,6 +23,7 @@ const RESULT = {
   errors: 0,
   json_error: null,
   truncated: false,
+  kept_previous: false,
 };
 
 const FULL_STREAM =

@@ -63,6 +63,19 @@ describe("createDispatchSession", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("replaces the previews, including ones still buffered, with the saved comments", () => {
+    const session = createDispatchSession();
+    session.appendText("raw");
+    session.addComment(comment(0));
+    session.flush();
+    session.addComment(comment(1));
+
+    session.replaceComments([comment(7)]);
+    vi.advanceTimersToNextFrame();
+
+    expect(session.store.getState()).toEqual({ text: "raw", comments: [comment(7)] });
+  });
+
   it("drops buffered updates on reset", () => {
     const session = createDispatchSession();
     session.appendText("old run");

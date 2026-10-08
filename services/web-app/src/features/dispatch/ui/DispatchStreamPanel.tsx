@@ -66,51 +66,55 @@ type PanelHeaderProps = {
   store: SessionStore;
   status: DispatchRunStatus;
   run: DispatchRunInfo;
+  isOutputUnsaved: boolean;
 };
 
-const PanelHeader = memo(({ store, status, run }: PanelHeaderProps): React.ReactElement => {
-  const count = useStore(store, (s) => s.comments.length);
-  const isStreaming = status === "streaming";
-  const countLabel = `${String(count)} comment${count !== 1 ? "s" : ""}`;
+const PanelHeader = memo(
+  ({ store, status, run, isOutputUnsaved }: PanelHeaderProps): React.ReactElement => {
+    const count = useStore(store, (s) => s.comments.length);
+    const isStreaming = status === "streaming";
+    const countLabel = `${String(count)} comment${count !== 1 ? "s" : ""}`;
+    const doneLabel = isOutputUnsaved ? `${countLabel} · not saved` : countLabel;
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "9px 14px",
-        background: "var(--bg-1)",
-        borderBottom: "1px solid var(--border)",
-      }}
-    >
-      {isStreaming ? (
-        <PulseDot color={run.accentColor} size={7} />
-      ) : (
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: STATUS_DOT_COLOR[status],
-            flexShrink: 0,
-          }}
-        />
-      )}
-      <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-2)", flex: 1 }}>
-        {run.providerName} · {STATUS_LABEL[status]}
-      </span>
-      {run.model && (
-        <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-          {run.model}
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 14px",
+          background: "var(--bg-1)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        {isStreaming ? (
+          <PulseDot color={run.accentColor} size={7} />
+        ) : (
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: STATUS_DOT_COLOR[status],
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-2)", flex: 1 }}>
+          {run.providerName} · {STATUS_LABEL[status]}
         </span>
-      )}
-      <span className="chip" style={{ fontSize: 10 }}>
-        {isStreaming ? (count > 0 ? `${countLabel}…` : "parsing…") : countLabel}
-      </span>
-    </div>
-  );
-});
+        {run.model && (
+          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+            {run.model}
+          </span>
+        )}
+        <span className="chip" style={{ fontSize: 10 }}>
+          {isStreaming ? (count > 0 ? `${countLabel}…` : "parsing…") : doneLabel}
+        </span>
+      </div>
+    );
+  }
+);
 PanelHeader.displayName = "PanelHeader";
 
 /* ── Comment previews ───────────────────────────────────────── */
@@ -296,6 +300,8 @@ export type DispatchStreamPanelProps = {
   store: SessionStore;
   status: DispatchRunStatus;
   run: DispatchRunInfo;
+  /** The run finished but its output was not used, so the comments listed were not saved. */
+  isOutputUnsaved?: boolean;
 };
 
 /**
@@ -304,7 +310,12 @@ export type DispatchStreamPanelProps = {
  * list — never the provider and model settings around the panel.
  */
 export const DispatchStreamPanel = memo(
-  ({ store, status, run }: DispatchStreamPanelProps): React.ReactElement => (
+  ({
+    store,
+    status,
+    run,
+    isOutputUnsaved = false,
+  }: DispatchStreamPanelProps): React.ReactElement => (
     <section
       aria-label="Generation output"
       style={{
@@ -314,7 +325,7 @@ export const DispatchStreamPanel = memo(
         marginBottom: 16,
       }}
     >
-      <PanelHeader store={store} status={status} run={run} />
+      <PanelHeader store={store} status={status} run={run} isOutputUnsaved={isOutputUnsaved} />
       <LiveCommentList
         store={store}
         isStreaming={status === "streaming"}

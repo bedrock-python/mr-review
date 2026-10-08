@@ -49,6 +49,7 @@ const buildDispatchFrames = (iterationId: string): string[] => {
       errors: 0,
       json_error: null,
       truncated: false,
+      kept_previous: false,
     })
   );
   return frames;

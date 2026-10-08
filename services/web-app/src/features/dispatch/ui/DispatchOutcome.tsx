@@ -34,6 +34,21 @@ const NOTICE_TITLE_STYLE: React.CSSProperties = {
 
 const NOTICE_BUTTON_STYLE: React.CSSProperties = { fontSize: 11, padding: "4px 10px" };
 
+const RAW_VIEW_STYLE: React.CSSProperties = {
+  margin: 0,
+  background: "var(--bg-0)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  padding: "10px 12px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  color: "var(--fg-1)",
+  maxHeight: RAW_VIEW_MAX_HEIGHT_PX,
+  overflowY: "auto",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+};
+
 /* ── Raw response viewer ────────────────────────────────────── */
 type RawResponseViewerProps = {
   reviewId: string;
@@ -68,25 +83,104 @@ const RawResponseViewer = ({
     );
   }
   return (
-    <pre
-      aria-label="Stored raw model output"
-      style={{
-        margin: 0,
-        background: "var(--bg-0)",
-        border: "1px solid var(--border)",
-        borderRadius: 6,
-        padding: "10px 12px",
-        fontFamily: "var(--font-mono)",
-        fontSize: 11,
-        color: "var(--fg-1)",
-        maxHeight: RAW_VIEW_MAX_HEIGHT_PX,
-        overflowY: "auto",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-      }}
-    >
+    <pre aria-label="Stored raw model output" style={RAW_VIEW_STYLE}>
       {rawResponse.data}
     </pre>
+  );
+};
+
+/* ── A run whose answer was not used ────────────────────────── */
+type UnusedRunOutcomeProps = {
+  result: DispatchResult;
+  store: StoreApi<DispatchSessionState>;
+  onEditInManual: (rawText: string) => void;
+  onContinue: () => void;
+};
+
+const unusedReason = (result: DispatchResult): string => {
+  if (result.json_error !== null) return "The model output couldn't be read as review comments.";
+  return "The model output was cut off before it was complete — raise max tokens or narrow the context.";
+};
+
+const UnusedRunOutcome = ({
+  result,
+  store,
+  onEditInManual,
+  onContinue,
+}: UnusedRunOutcomeProps): React.ReactElement => {
+  const [isOutputOpen, setIsOutputOpen] = useState(false);
+  const output = useStore(store, (s) => s.text);
+  const kept = result.comments;
+  const keptLine =
+    kept > 0
+      ? `Your ${pluralize(kept, "previous comment")} ${kept === 1 ? "is" : "are"} unchanged.`
+      : "The iteration has no comments yet.";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div role="alert" style={NOTICE_STYLE}>
+        <div style={NOTICE_TITLE_STYLE}>Nothing from this run was saved</div>
+        <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5 }}>
+          {unusedReason(result)} {keptLine} To use this output anyway, fix it in{" "}
+          <strong>Copy &amp; paste</strong> mode and import it.
+        </div>
+        {result.json_error !== null && (
+          <div
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "var(--fg-2)",
+              padding: "6px 8px",
+              borderRadius: 4,
+              background: "var(--bg-1)",
+              wordBreak: "break-word",
+            }}
+          >
+            {result.json_error}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn"
+            style={NOTICE_BUTTON_STYLE}
+            aria-expanded={isOutputOpen}
+            onClick={() => {
+              setIsOutputOpen((open) => !open);
+            }}
+          >
+            {isOutputOpen ? "Hide this run's output" : "View this run's output"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            style={NOTICE_BUTTON_STYLE}
+            onClick={() => {
+              onEditInManual(store.getState().text);
+            }}
+          >
+            Fix in Copy &amp; paste mode
+          </button>
+        </div>
+        {isOutputOpen && (
+          <pre aria-label="This run's model output" style={RAW_VIEW_STYLE}>
+            {output}
+          </pre>
+        )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, color: "var(--fg-3)" }}>
+          {kept > 0 ? `${pluralize(kept, "comment")} kept from before` : "No comments saved"}
+        </span>
+        <div style={{ flex: 1 }} />
+        {kept > 0 && (
+          <button type="button" className="btn primary" onClick={onContinue}>
+            Polish comments →
+          </button>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -102,9 +196,13 @@ export type DispatchOutcomeProps = {
 
 /**
  * What a finished run produced: the saved count, clear notices when the model
- * output was cut off or was not valid JSON, and access to the stored raw output.
+ * output was cut off, was not valid JSON or was not used at all, and access to
+ * the output itself.
  */
-export const DispatchOutcome = ({
+export const DispatchOutcome = (props: DispatchOutcomeProps): React.ReactElement =>
+  props.result.kept_previous ? <UnusedRunOutcome {...props} /> : <SavedRunOutcome {...props} />;
+
+const SavedRunOutcome = ({
   reviewId,
   result,
   store,
@@ -112,15 +210,17 @@ export const DispatchOutcome = ({
   onContinue,
 }: DispatchOutcomeProps): React.ReactElement => {
   const qc = useQueryClient();
-  const parsedCount = useStore(store, (s) => s.comments.length);
   const reparse = useReparseIteration(reviewId);
   const [isRawOpen, setIsRawOpen] = useState(false);
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
-  // A re-parse replaces the iteration's comments, so its report supersedes the run's.
+  // A re-parse that read the output replaces the iteration's comments, so its report
+  // supersedes the run's; one that still could not read it leaves the comments alone.
   const reparsed = reparse.data;
+  const hasReparseReplaced =
+    reparsed !== undefined && (reparsed.json_error === null || reparsed.imported > 0);
   const isJsonNoticeShown = result.json_error !== null && reparsed === undefined;
-  const savedCount = reparsed ? reparsed.imported : result.comments;
-  const skippedCount = reparsed ? reparsed.errors.length : result.errors;
+  const savedCount = reparsed && hasReparseReplaced ? reparsed.imported : result.comments;
+  const skippedCount = reparsed && hasReparseReplaced ? reparsed.errors.length : result.errors;
 
   const handleToggleRaw = (): void => {
     setIsRawOpen((open) => !open);
@@ -171,11 +271,9 @@ export const DispatchOutcome = ({
         <div role="alert" style={NOTICE_STYLE}>
           <div style={NOTICE_TITLE_STYLE}>The model output wasn't valid JSON</div>
           <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5 }}>
-            {parsedCount === 0
-              ? "It was saved as one general comment with the raw text, so nothing is lost."
-              : `${pluralize(parsedCount, "comment")} could still be read from it; the rest is only in the raw output.`}{" "}
-            To get individual comments, fix the JSON in <strong>Copy &amp; paste</strong> mode and
-            import it again.
+            It was saved as one general comment with the raw text, so nothing is lost. To get
+            individual comments, fix the JSON in <strong>Copy &amp; paste</strong> mode and import
+            it again.
           </div>
           <div
             className="mono"

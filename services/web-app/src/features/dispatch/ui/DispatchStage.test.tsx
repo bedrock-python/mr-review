@@ -77,7 +77,7 @@ const REVIEW: Review = {
     {
       id: ITERATION_ID,
       number: 1,
-      stage: "dispatch",
+      stage: "brief",
       comments: [],
       ai_provider_id: null,
       model: null,
@@ -96,6 +96,7 @@ const RESULT = {
   errors: 0,
   json_error: null,
   truncated: false,
+  kept_previous: false,
 };
 
 /**
@@ -402,6 +403,165 @@ describe("DispatchStage — run in app", () => {
     await user.click(within(notice).getByRole("button", { name: "Fix in Copy & paste mode" }));
     expect(await screen.findByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
       "Sure! Here are my comments: [{oops"
+    );
+  });
+});
+
+const savedComment = (
+  id: string,
+  body: string
+): Review["iterations"][number]["comments"][number] => ({
+  id,
+  file: "a.py",
+  line: 3,
+  severity: "minor",
+  body,
+  status: "kept",
+  resolved: false,
+  suggested_patch: null,
+  patch_status: "pending",
+  patch_ref_url: null,
+  patch_applied_at: null,
+});
+
+const reviewAt = (
+  stage: Review["iterations"][number]["stage"],
+  comments: Review["iterations"][number]["comments"] = []
+): Review => ({
+  ...REVIEW,
+  iterations: REVIEW.iterations.map((it) => ({ ...it, stage, comments })),
+});
+
+describe("DispatchStage — after a run", () => {
+  beforeEach(resetMocks);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps fetching the review after Stop until the server has written the run", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+    channel.emit({ type: "chunk", text: "[{" });
+    // The server saves only once it notices the stream ended, so the first reads still
+    // show the iteration as dispatching.
+    api.get
+      .mockResolvedValueOnce(reviewAt("dispatch"))
+      .mockResolvedValueOnce(reviewAt("dispatch"))
+      .mockResolvedValue(
+        reviewAt("polish", [savedComment("66666666-6666-4666-8666-666666666666", "Kept")])
+      );
+
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+
+    await waitFor(
+      () => {
+        expect(api.get).toHaveBeenCalledTimes(4);
+      },
+      { timeout: 3000 }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(api.get).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not let the mode switch end a running generation", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    const copyAndPaste = screen.getByRole("button", { name: "Copy & paste" });
+    expect(copyAndPaste).toBeDisabled();
+    expect(copyAndPaste).toHaveAttribute("title", "Stop the generation to switch modes");
+
+    channel.emit({ type: "done", result: RESULT });
+    await screen.findByText("1 comment saved");
+    expect(copyAndPaste).toBeEnabled();
+  });
+
+  it("lists the saved comments once done, not the previews streamed before", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+    channel.emit(
+      {
+        type: "comment",
+        comment: { index: 0, file: null, line: null, severity: "minor", body: "Draft" },
+      },
+      {
+        type: "comment",
+        comment: { index: 1, file: "a.py", line: 3, severity: "minor", body: "Real" },
+      }
+    );
+    await screen.findByText("Draft");
+    api.get.mockResolvedValue(
+      reviewAt("polish", [savedComment("66666666-6666-4666-8666-666666666666", "Real")])
+    );
+
+    channel.emit({ type: "done", result: RESULT });
+
+    await screen.findByText("1 comment saved");
+    const list = screen.getByRole("list", { name: "Generated comments" });
+    expect(within(list).getByText("Real")).toBeInTheDocument();
+    expect(within(list).queryByText("Draft")).not.toBeInTheDocument();
+  });
+
+  it("says the unreadable fallback was saved whatever the previews counted", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    channel.emit(
+      {
+        type: "comment",
+        comment: { index: 0, file: null, line: null, severity: "minor", body: "Draft" },
+      },
+      { type: "done", result: { ...RESULT, json_error: "Expecting value" } }
+    );
+
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("saved as one general comment");
+    expect(notice).not.toHaveTextContent("could still be read");
+  });
+
+  it("explains that an unused answer left the previous comments alone", async () => {
+    api.get.mockResolvedValue(
+      reviewAt("polish", [
+        savedComment("66666666-6666-4666-8666-666666666666", "Old one"),
+        savedComment("77777777-7777-4777-8777-777777777777", "Old two"),
+      ])
+    );
+    const user = userEvent.setup();
+    renderStage();
+    const channel = await startDispatch(user);
+
+    channel.emit(
+      { type: "chunk", text: "Sorry, I can't review this." },
+      {
+        type: "done",
+        result: {
+          ...RESULT,
+          comments: 2,
+          json_error: "Invalid JSON: Expecting value",
+          kept_previous: true,
+        },
+      }
+    );
+
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("Nothing from this run was saved");
+    expect(notice).toHaveTextContent("Your 2 previous comments are unchanged");
+    expect(within(notice).queryByRole("button", { name: "Re-parse" })).not.toBeInTheDocument();
+    expect(screen.getByText("2 comments kept from before")).toBeInTheDocument();
+
+    await user.click(within(notice).getByRole("button", { name: "View this run's output" }));
+    expect(await screen.findByLabelText("This run's model output")).toHaveTextContent(
+      "Sorry, I can't review this."
+    );
+    expect(api.getRawResponse).not.toHaveBeenCalled();
+
+    await user.click(within(notice).getByRole("button", { name: "Fix in Copy & paste mode" }));
+    expect(await screen.findByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
+      "Sorry, I can't review this."
     );
   });
 });

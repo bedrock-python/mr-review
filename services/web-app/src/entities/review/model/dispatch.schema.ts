@@ -22,17 +22,26 @@ export const DispatchCommentPreviewSchema = z.object({
   body: z.string(),
 });
 
-/** `event: done` — sent once the iteration has been persisted with stage=polish. */
+/** `event: done` — sent once, after the server has written the iteration. */
 export const DispatchResultSchema = z.object({
   iteration_id: z.string().uuid(),
+  /** Comments the iteration holds now: the new ones, or the previous ones when `kept_previous`. */
   comments: z.number().int().nonnegative(),
   errors: z.number().int().nonnegative(),
   json_error: z.string().nullable().default(null),
   /** The model output was cut off (e.g. at max tokens), so comments may be missing. */
   truncated: z.boolean().default(false),
+  /**
+   * The answer was not used — unreadable, cut off or empty — so the iteration kept its
+   * previous comments and stage. Its raw output exists only in the streamed text.
+   */
+  kept_previous: z.boolean().default(false),
 });
 
-/** `event: error` — generation failed; the iteration keeps its previous comments. */
+/**
+ * `event: error` — generation failed and the stream ends without `done`. The iteration keeps
+ * its comments; one that had none takes the complete comments that arrived before the failure.
+ */
 export const DispatchErrorPayloadSchema = z.object({
   message: z.string(),
 });

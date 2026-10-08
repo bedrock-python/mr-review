@@ -16,12 +16,13 @@ import {
   formatContextSize,
   getReviewBriefConfig,
 } from "@entities/review";
-import type { DispatchResult, ImportResponseResult } from "@entities/review";
+import type { DispatchResult, ImportResponseResult, Review } from "@entities/review";
 import { readStorageItem, writeStorageItem } from "@shared/lib";
 import { Skeleton } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
 import { createDispatchSession } from "../model/dispatchSession";
+import { waitForSavedRun } from "../model/waitForSavedRun";
 import { DispatchOutcome } from "./DispatchOutcome";
 import { DispatchStreamPanel } from "./DispatchStreamPanel";
 import { ImportReport } from "./ImportReport";
@@ -730,6 +731,8 @@ type AutoDispatchProps = {
   onDone: (count: number) => void;
   /** Opens Copy & paste mode with `rawText` ready to fix and re-import. */
   onEditInManual: (rawText: string) => void;
+  /** Told whether a generation is streaming, so the screen can keep it from being cut short. */
+  onRunningChange: (isRunning: boolean) => void;
   existingCommentsCount: number;
 };
 
@@ -738,6 +741,7 @@ const AutoDispatch = ({
   providers,
   onDone,
   onEditInManual,
+  onRunningChange,
   existingCommentsCount,
 }: AutoDispatchProps): React.ReactElement => {
   const setStage = useStageBarStore((s) => s.setStage);
@@ -788,6 +792,16 @@ const AutoDispatch = ({
       abortRef.current?.abort();
     },
     []
+  );
+
+  useEffect(() => {
+    onRunningChange(status === "streaming");
+  }, [status, onRunningChange]);
+  useEffect(
+    () => () => {
+      onRunningChange(false);
+    },
+    [onRunningChange]
   );
 
   useEffect(() => {
@@ -855,28 +869,45 @@ const AutoDispatch = ({
     }
     session.flush();
 
-    const refreshReview = (): Promise<void> =>
-      qc.invalidateQueries({ queryKey: reviewKeys.detail(activeReviewId) });
-
     if (outcome) {
-      // `done` arrives after the iteration is persisted: one refetch shows the comments.
-      await refreshReview();
+      // `done` arrives after the iteration is written: one refetch shows what was saved.
+      await qc.invalidateQueries({ queryKey: reviewKeys.detail(activeReviewId) });
       if (runId !== runIdRef.current) return;
+      if (!outcome.kept_previous) {
+        // The saved comments, not the previews: the final parse can drop a draft the
+        // stream already showed, or read a comment the preview could not.
+        const iterationId = outcome.iteration_id;
+        const saved = qc
+          .getQueryData<Review>(reviewKeys.detail(activeReviewId))
+          ?.iterations.find((it) => it.id === iterationId)?.comments;
+        if (saved) {
+          session.replaceComments(
+            saved.map(({ file, line, severity, body }, index) => ({
+              index,
+              file,
+              line,
+              severity,
+              body,
+            }))
+          );
+        }
+      }
       setResult(outcome);
       setStatus("done");
       onDone(outcome.comments);
       return;
     }
     if (runId !== runIdRef.current) return;
-    // Show what the server kept: a stopped run's partial output, or the previous
-    // comments of the iteration after a failure.
-    void refreshReview();
+    // Without `done` the server writes what it kept once it notices the stream ended, which
+    // can be after this point: wait for that write, so no screen shows the run as still going.
+    const saved = waitForSavedRun(qc, activeReviewId);
     if (ctrl.signal.aborted) {
       setStatus("stopped");
-      return;
+    } else {
+      setError(failure ?? "Dispatch failed");
+      setStatus("error");
     }
-    setError(failure ?? "Dispatch failed");
-    setStatus("error");
+    await saved;
   }, [
     activeReviewId,
     activeIterationId,
@@ -1503,7 +1534,8 @@ const AutoDispatch = ({
         >
           <span style={{ color: "var(--c-warn, #e6a817)", flexShrink: 0 }}>⚠</span>
           {existingCommentsCount} existing comment
-          {existingCommentsCount !== 1 ? "s" : ""} will be replaced on generation
+          {existingCommentsCount !== 1 ? "s" : ""} will be replaced once a complete answer is saved
+          — a failed or unreadable run keeps them
         </div>
       )}
       <div style={{ marginBottom: 20, display: "flex", gap: 8 }}>
@@ -1615,7 +1647,12 @@ const AutoDispatch = ({
 
       {/* ── Section 5: Stream output ── */}
       {status !== "idle" && run && (
-        <DispatchStreamPanel store={session.store} status={status} run={run} />
+        <DispatchStreamPanel
+          store={session.store}
+          status={status}
+          run={run}
+          isOutputUnsaved={status === "done" && result?.kept_previous === true}
+        />
       )}
 
       {status === "done" && result && (
@@ -1657,6 +1694,8 @@ export const DispatchStage = (): React.ReactElement => {
   const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = useAIProviders();
   const [mode, setMode] = useState<Mode>("auto");
   const [manualDraft, setManualDraft] = useState<string | null>(null);
+  // Switching modes unmounts the generator and would cut a running generation short.
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleEditInManual = useCallback((rawText: string): void => {
     setManualDraft(rawText);
@@ -1759,29 +1798,35 @@ export const DispatchStage = (): React.ReactElement => {
             gap: 2,
           }}
         >
-          {(["manual", "auto"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setMode(m);
-                setManualDraft(null);
-              }}
-              style={{
-                padding: "5px 16px",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: mode === m ? 600 : 400,
-                background: mode === m ? "var(--bg-0)" : "transparent",
-                color: mode === m ? "var(--fg-0)" : "var(--fg-2)",
-                border: mode === m ? "1px solid var(--border)" : "1px solid transparent",
-                cursor: "pointer",
-                transition: "all 0.1s",
-              }}
-            >
-              {m === "manual" ? "Copy & paste" : "Run in app"}
-            </button>
-          ))}
+          {(["manual", "auto"] as const).map((m) => {
+            const isLocked = isGenerating && mode !== m;
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={isLocked}
+                title={isLocked ? "Stop the generation to switch modes" : undefined}
+                onClick={() => {
+                  setMode(m);
+                  setManualDraft(null);
+                }}
+                style={{
+                  padding: "5px 16px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: mode === m ? 600 : 400,
+                  background: mode === m ? "var(--bg-0)" : "transparent",
+                  color: mode === m ? "var(--fg-0)" : "var(--fg-2)",
+                  border: mode === m ? "1px solid var(--border)" : "1px solid transparent",
+                  cursor: isLocked ? "not-allowed" : "pointer",
+                  opacity: isLocked ? 0.5 : 1,
+                  transition: "all 0.1s",
+                }}
+              >
+                {m === "manual" ? "Copy & paste" : "Run in app"}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1816,6 +1861,7 @@ export const DispatchStage = (): React.ReactElement => {
             providers={providers}
             onDone={handleDispatchDone}
             onEditInManual={handleEditInManual}
+            onRunningChange={setIsGenerating}
             existingCommentsCount={existingCommentsCount}
           />
         )}

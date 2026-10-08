@@ -15,6 +15,8 @@ export type DispatchSession = {
   addComment: (comment: DispatchCommentPreview) => void;
   /** Publishes buffered updates now instead of on the next frame. */
   flush: () => void;
+  /** Swaps the previews for the comments the server saved, which may differ from them. */
+  replaceComments: (comments: DispatchCommentPreview[]) => void;
   /** Drops buffered updates and empties the store for a new run. */
   reset: () => void;
 };
@@ -69,6 +71,11 @@ export const createDispatchSession = (): DispatchSession => {
     flush: () => {
       cancelScheduled();
       publish();
+    },
+    replaceComments: (comments) => {
+      cancelScheduled();
+      publish();
+      store.setState({ comments });
     },
     reset: () => {
       cancelScheduled();
