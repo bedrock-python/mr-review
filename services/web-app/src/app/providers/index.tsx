@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { I18nextProvider } from "react-i18next";
-import { Toaster } from "@shared/ui";
+import { Toaster } from "@shared/ui/toaster";
 import { ErrorBoundary } from "@shared/ui/error-boundary";
 import i18n from "@shared/i18n/config";
 import { createAppQueryClient, setupQueryPersistence } from "./queryClient";

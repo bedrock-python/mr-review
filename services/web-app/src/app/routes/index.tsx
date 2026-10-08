@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 import type React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { reloadOnStaleChunk } from "@shared/lib";
-import { StageLoading } from "@shared/ui";
+// Straight from the module: the shared/ui barrel would pull every primitive into the entry chunk.
+import { StageLoading } from "@shared/ui/loading";
 
 const MainPage = lazy(
   reloadOnStaleChunk(() =>
