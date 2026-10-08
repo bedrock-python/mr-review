@@ -1,13 +1,15 @@
 import { useCallback, useState } from "react";
 import { Book } from "lucide-react";
 import { useNav } from "@app/navigation";
-import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList } from "@shared/ui";
 import {
-  describeLoadError,
-  formatLoadError,
-  useDebouncedSearch,
-  useStableCallback,
-} from "@shared/lib";
+  EmptyState,
+  ICON_SIZE,
+  InfiniteVirtualList,
+  ListLoadError,
+  ListStatusBar,
+  RefreshErrorNote,
+} from "@shared/ui";
+import { formatLoadError, useDebouncedSearch, useStableCallback } from "@shared/lib";
 import {
   DEFAULT_READINESS,
   DEFAULT_SCOPE,
@@ -18,9 +20,8 @@ import {
 } from "../lib/mrListView";
 import { useMRListRows } from "../model/useMRListRows";
 import { InboxMRListItem } from "./InboxMRListItem";
-import { ListStatusLine } from "./ListStatusLine";
 import { MRListItem } from "./MRListItem";
-import { EmptyList, MRListSkeleton, RefreshErrorNote } from "./MRListStates";
+import { EmptyList, MRListSkeleton } from "./MRListStates";
 import { MRListToolbar } from "./MRListToolbar";
 import { TruncatedReposNote } from "./TruncatedReposNote";
 import type { InboxMR, InboxScope, MR, MRStateFilter } from "@entities/mr";
@@ -44,6 +45,7 @@ export const MRList = (): React.ReactElement => {
   const [scope, setScope] = useState<InboxScope>(DEFAULT_SCOPE);
   const [readiness, setReadiness] = useState<ReadinessFilter>(DEFAULT_READINESS);
   const [sort, setSort] = useState<MRSortKey>(DEFAULT_SORT);
+  const [isAutoLoadPaused, setIsAutoLoadPaused] = useState(false);
   const search = useDebouncedSearch();
   const { selectedHostId, selectedRepoPath, selectedMRIid, isInbox, setMR, setRepo } = useNav();
 
@@ -116,8 +118,7 @@ export const MRList = (): React.ReactElement => {
   const renderFooter = (): React.ReactNode => {
     if (list.isPending && list.isFetching) return <MRListSkeleton />;
     if (list.isError && !list.hasData) {
-      const { title, message } = describeLoadError(list.error, "merge requests");
-      return <ErrorState size="sm" title={title} message={message} onRetry={list.refetch} />;
+      return <ListLoadError error={list.error} what="merge requests" onRetry={list.refetch} />;
     }
     if (list.hasData && rows.length === 0 && !list.hasNextPage && !list.isPlaceholderData) {
       return (
@@ -159,7 +160,11 @@ export const MRList = (): React.ReactElement => {
           )}
 
           {hasRefreshFailed && (
-            <RefreshErrorNote message={list.error?.message} onRetry={list.refetch} />
+            <RefreshErrorNote
+              what="the list"
+              message={list.error?.message}
+              onRetry={list.refetch}
+            />
           )}
 
           <InfiniteVirtualList
@@ -173,14 +178,16 @@ export const MRList = (): React.ReactElement => {
             pagination={pagination}
             isStale={list.isPlaceholderData}
             footer={renderFooter()}
+            onAutoLoadPausedChange={setIsAutoLoadPaused}
           />
 
           {list.hasData && (
-            <ListStatusLine
+            <ListStatusBar
               loadedCount={loadedCount}
               {...(isFiltered ? { shownCount: rows.length } : {})}
               hasNextPage={list.hasNextPage}
               isFetchingNextPage={list.isFetchingNextPage}
+              isAutoLoadPaused={isAutoLoadPaused}
             />
           )}
         </>

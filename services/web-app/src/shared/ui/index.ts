@@ -87,7 +87,12 @@ export type {
 } from "./loading";
 export { SearchField } from "./SearchField";
 export type { SearchFieldProps } from "./SearchField";
-export { ListMessage, ListStatusBar, LoadMoreRow } from "./ListStates";
-export type { ListMessageProps, ListStatusBarProps, LoadMoreRowProps } from "./ListStates";
+export { ListLoadError, ListStatusBar, LoadMoreRow, RefreshErrorNote } from "./ListStates";
+export type {
+  ListLoadErrorProps,
+  ListStatusBarProps,
+  LoadMoreRowProps,
+  RefreshErrorNoteProps,
+} from "./ListStates";
 export { InfiniteVirtualList } from "./InfiniteVirtualList";
 export type { InfiniteVirtualListProps, ListPagination } from "./InfiniteVirtualList";

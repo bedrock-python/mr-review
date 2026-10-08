@@ -13,6 +13,8 @@ export { copyFolderPath } from "./copyFolderPath";
 export { copyText, COPY_BLOCKED_MESSAGE } from "./copyText";
 export { getApiErrorStatus, getVcsErrorMessage } from "./apiError";
 export { describeLoadError, formatLoadError } from "./describeLoadError";
+export { formatListStatus } from "./formatListStatus";
+export type { ListStatusParams } from "./formatListStatus";
 export type { LoadErrorDescription } from "./describeLoadError";
 export { useDebouncedSearch, SEARCH_DEBOUNCE_MS } from "./useDebouncedSearch";
 export type { DebouncedSearch } from "./useDebouncedSearch";

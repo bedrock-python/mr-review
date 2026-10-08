@@ -1,155 +1,100 @@
-export type ListMessageProps = {
-  children: React.ReactNode;
-  /** Optional call to action rendered under the message (e.g. "Retry"). */
-  actionLabel?: string;
-  onAction?: () => void;
-  isError?: boolean;
-};
-
-const inlineActionStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-2)",
-  padding: "3px 10px",
-  fontSize: 11,
-  fontFamily: "var(--font-mono)",
-  color: "var(--fg-1)",
-  cursor: "pointer",
-};
-
-/** Centered placeholder for empty, hint and first-page error states of a list. */
-export const ListMessage = ({
-  children,
-  actionLabel,
-  onAction,
-  isError = false,
-}: ListMessageProps): React.ReactElement => (
-  <div
-    role={isError ? "alert" : "status"}
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 10,
-      minHeight: 80,
-      color: "var(--fg-2)",
-      fontSize: 12,
-      textAlign: "center",
-      padding: "16px 20px",
-    }}
-  >
-    <span>{children}</span>
-    {actionLabel && onAction && (
-      <button type="button" onClick={onAction} style={inlineActionStyle}>
-        {actionLabel}
-      </button>
-    )}
-  </div>
-);
+import { describeLoadError, formatListStatus } from "@shared/lib";
+import type { ListStatusParams } from "@shared/lib";
+import { Button } from "./button";
+import { Callout } from "./callout";
+import { Spinner } from "./loading";
+import { ErrorState } from "./state";
 
 export type LoadMoreRowProps =
   | { state: "loading" }
   | { state: "error"; message: string; onRetry: () => void }
   | { state: "paused"; message: string; onLoadMore: () => void };
 
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-  padding: "10px 12px",
-  fontSize: 11,
-  fontFamily: "var(--font-mono)",
-  color: "var(--fg-2)",
-};
-
-const SmallSpinner = (): React.ReactElement => (
-  <span
-    aria-hidden="true"
-    style={{
-      width: 10,
-      height: 10,
-      borderRadius: "50%",
-      border: "1.5px solid var(--fg-3)",
-      borderTopColor: "transparent",
-      animation: "spin 0.6s linear infinite",
-      flexShrink: 0,
-    }}
-  />
-);
-
 /** Tail row of an infinite list: next page in flight, failed, or paused. */
 export const LoadMoreRow = (props: LoadMoreRowProps): React.ReactElement => {
   if (props.state === "loading") {
     return (
-      <div role="status" style={rowStyle}>
-        <SmallSpinner />
+      <div role="status" className="ui-load-more">
+        <Spinner size="sm" tone="muted" isDecorative />
         Loading more…
       </div>
     );
   }
   if (props.state === "error") {
     return (
-      <div role="alert" style={{ ...rowStyle, color: "var(--c-critical-fg)" }}>
+      <div role="alert" className="ui-load-more ui-load-more--error">
         <span>{props.message}</span>
-        <button type="button" onClick={props.onRetry} style={inlineActionStyle}>
+        <Button size="sm" onClick={props.onRetry}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
   return (
-    <div style={rowStyle}>
+    <div className="ui-load-more">
       <span>{props.message}</span>
-      <button type="button" onClick={props.onLoadMore} style={inlineActionStyle}>
+      <Button size="sm" onClick={props.onLoadMore}>
         Load more
-      </button>
+      </Button>
     </div>
   );
 };
 
-export type ListStatusBarProps = {
-  loadedCount: number;
-  /** Rows left after client-side filtering; omitted when nothing is hidden. */
-  shownCount?: number;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
+export type ListStatusBarProps = ListStatusParams;
+
+/**
+ * How much of a paginated list is here, at its foot: "Showing 37 · more below", "7 of 52
+ * shown", "Showing 37 · Load more below" while auto-loading is paused. Empty once the list is
+ * complete and nothing is filtered out; the live region itself always stays, so a line that
+ * appears is still announced.
+ */
+export const ListStatusBar = (props: ListStatusBarProps): React.ReactElement => {
+  const status = formatListStatus(props);
+  return (
+    <div aria-live="polite" className="ui-list-status">
+      {status !== null && <p className="ui-list-status__line">{status}</p>}
+    </div>
+  );
 };
 
-const formatListStatus = ({
-  loadedCount,
-  shownCount,
-  hasNextPage,
-  isFetchingNextPage,
-}: ListStatusBarProps): string => {
-  const parts: string[] = [];
-  if (shownCount !== undefined && shownCount !== loadedCount) {
-    parts.push(`${String(shownCount)} shown`);
-  }
-  parts.push(`${String(loadedCount)} loaded`);
-  if (isFetchingNextPage) parts.push("loading more…");
-  else if (hasNextPage) parts.push("more available");
-  else parts.push("all loaded");
-  return parts.join(" · ");
+export type ListLoadErrorProps = {
+  error: unknown;
+  /** What the list holds, for the title: "merge requests", "repositories". */
+  what: string;
+  onRetry: () => void;
 };
 
-/** One-line summary of how much of a paginated list is on the client. */
-export const ListStatusBar = (props: ListStatusBarProps): React.ReactElement => (
-  <div
-    className="mono"
-    aria-live="polite"
-    style={{
-      flexShrink: 0,
-      borderTop: "1px solid var(--border)",
-      padding: "4px 14px",
-      fontSize: 10,
-      color: "var(--fg-2)",
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-    }}
+/** A list's first page that failed, in place of its rows: what, why in the host's words, Retry. */
+export const ListLoadError = ({ error, what, onRetry }: ListLoadErrorProps): React.ReactElement => {
+  const { title, message } = describeLoadError(error, what);
+  return <ErrorState size="sm" title={title} message={message} onRetry={onRetry} />;
+};
+
+export type RefreshErrorNoteProps = {
+  /** What failed to refresh: "the list", "the repositories". */
+  what: string;
+  /** The error's message, if there is one to show. */
+  message: string | undefined;
+  onRetry: () => void;
+};
+
+/** A refresh that failed over a loaded list: the rows stay, this says they may be old. */
+export const RefreshErrorNote = ({
+  what,
+  message,
+  onRetry,
+}: RefreshErrorNoteProps): React.ReactElement => (
+  <Callout
+    tone="danger"
+    size="sm"
+    className="m-(--space-2)"
+    actions={
+      <Button size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    }
   >
-    {formatListStatus(props)}
-  </div>
+    Could not refresh {what}
+    {message === undefined ? "." : ` — ${message}`}
+  </Callout>
 );

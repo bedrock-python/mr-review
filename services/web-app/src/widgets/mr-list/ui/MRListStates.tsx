@@ -1,5 +1,5 @@
 import { GitPullRequest, SearchX } from "lucide-react";
-import { Button, Callout, EmptyState, ICON_SIZE, Skeleton } from "@shared/ui";
+import { Button, EmptyState, ICON_SIZE, Skeleton } from "@shared/ui";
 import type { InboxScope } from "@entities/mr";
 
 const SKELETON_ROWS = 6;
@@ -72,24 +72,3 @@ export const EmptyList = ({
     />
   );
 };
-
-export type RefreshErrorNoteProps = { message: string | undefined; onRetry: () => void };
-
-/** A refresh that failed over a loaded list: the list stays, this says it may be old. */
-export const RefreshErrorNote = ({
-  message,
-  onRetry,
-}: RefreshErrorNoteProps): React.ReactElement => (
-  <Callout
-    tone="danger"
-    size="sm"
-    className="m-(--space-2)"
-    actions={
-      <Button size="sm" onClick={onRetry}>
-        Retry
-      </Button>
-    }
-  >
-    Could not refresh the list{message === undefined ? "." : ` — ${message}`}
-  </Callout>
-);

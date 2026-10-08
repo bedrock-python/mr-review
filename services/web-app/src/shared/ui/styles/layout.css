@@ -28,6 +28,35 @@
     background: var(--border);
   }
 
+  /* ── Lists: the status line at the foot, the tail row ──────── */
+  .ui-list-status {
+    flex-shrink: 0;
+  }
+  .ui-list-status__line {
+    margin: 0;
+    padding: var(--space-1) var(--space-3);
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+    color: var(--fg-2);
+    font-size: var(--fs-meta);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-load-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    color: var(--fg-2);
+    font-size: var(--fs-meta);
+    text-align: center;
+  }
+  .ui-load-more--error {
+    color: var(--c-danger-fg);
+  }
+
   /* ── Disclosure ────────────────────────────────────────────── */
   .ui-disclosure--section {
     border-top: 1px solid var(--border);

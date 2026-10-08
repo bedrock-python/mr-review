@@ -4,26 +4,30 @@ export type ListStatusParams = {
   shownCount?: number;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  /**
+   * Auto-loading stopped after pages that showed nothing new (InfiniteVirtualList reports it):
+   * the rest comes from the "Load more" row at the end, not from scrolling.
+   */
+  isAutoLoadPaused?: boolean;
 };
 
-// "More below", not "scroll for more": auto-loading may have paused on pages that showed
-// nothing, and then the rest comes from the "Load more" row at the end, not from scrolling.
-const describeNextPage = (hasNextPage: boolean, isFetchingNextPage: boolean): string | null => {
+const describeNextPage = ({
+  hasNextPage,
+  isFetchingNextPage,
+  isAutoLoadPaused = false,
+}: ListStatusParams): string | null => {
   if (isFetchingNextPage) return "loading more…";
-  return hasNextPage ? "more below" : null;
+  if (!hasNextPage) return null;
+  return isAutoLoadPaused ? "Load more below" : "more below";
 };
 
 /**
  * The line under a paginated list, or null when it has nothing to add: everything is
  * loaded and nothing is filtered out, so the list itself is the whole story.
  */
-export const formatListStatus = ({
-  loadedCount,
-  shownCount,
-  hasNextPage,
-  isFetchingNextPage,
-}: ListStatusParams): string | null => {
-  const nextPage = describeNextPage(hasNextPage, isFetchingNextPage);
+export const formatListStatus = (params: ListStatusParams): string | null => {
+  const { loadedCount, shownCount } = params;
+  const nextPage = describeNextPage(params);
   if (shownCount !== undefined && shownCount !== loadedCount) {
     const head = `${String(shownCount)} of ${String(loadedCount)} shown`;
     return nextPage === null ? head : `${head} · ${nextPage}`;

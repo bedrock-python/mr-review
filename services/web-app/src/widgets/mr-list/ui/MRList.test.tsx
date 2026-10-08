@@ -325,6 +325,8 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     expect(
       screen.getByText("No open merge requests in the last repositories checked")
     ).toBeInTheDocument();
+    // The status line points at that row exactly while auto-loading is paused.
+    await waitForStatus("Showing 0 · Load more below");
     expect(inboxPages()).toEqual(
       Array.from({ length: MAX_BARREN_AUTO_PAGES }, (_, index) => String(index + 1))
     );

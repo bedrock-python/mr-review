@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAutoLoadMore, useVirtualListKeyboardNav } from "@shared/lib";
 import { LoadMoreRow } from "./ListStates";
@@ -48,6 +48,11 @@ export type InfiniteVirtualListProps<TRow> = {
   isStale?: boolean;
   /** Extra content under the rows (skeletons, empty or error messages). */
   footer?: React.ReactNode;
+  /**
+   * Told when auto-loading pauses after pages that showed nothing new, and when it resumes:
+   * the list's status line can then point at the "Load more" row.
+   */
+  onAutoLoadPausedChange?: (isAutoLoadPaused: boolean) => void;
 };
 
 type ScrollAnchor = { key: string; offsetInRow: number };
@@ -94,6 +99,7 @@ export const InfiniteVirtualList = <TRow,>({
   pagination,
   isStale = false,
   footer,
+  onAutoLoadPausedChange,
 }: InfiniteVirtualListProps<TRow>): React.ReactElement => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const previousRef = useRef<{ rows: readonly TRow[]; resetKey: string } | null>(null);
@@ -139,6 +145,11 @@ export const InfiniteVirtualList = <TRow,>({
     resetKey,
     loadMore: fetchNextPage,
   });
+
+  const isPausedWithMore = isAutoLoadPaused && hasNextPage;
+  useEffect(() => {
+    onAutoLoadPausedChange?.(isPausedWithMore);
+  }, [isPausedWithMore, onAutoLoadPausedChange]);
 
   const isIndexFocusable = useCallback(
     (index: number): boolean => {
