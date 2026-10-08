@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Plus, RefreshCw, X } from "lucide-react";
 
 import { Badge, Button, Callout, ICON_SIZE, IconButton, Input, SearchField } from "@shared/ui";
@@ -13,6 +13,18 @@ const FILTER_THRESHOLD = 8;
 
 // The offered list scrolls instead of pushing the form's Save button far down.
 const OFFERED_LIST_MAX_HEIGHT_PX = 200;
+
+/**
+ * A control that leaves the page when it is used (Make default, ×, Add) hands the focus to its
+ * neighbour: the button of the same kind on the next row, else the previous one.
+ */
+type FocusTarget = { list: "configured" | "offered"; model: string } | "new-model";
+
+const focusKey = (list: "configured" | "offered", model: string): string => `${list}:${model}`;
+
+/** The item after `index` in `items`, else the one before it. */
+const neighbourOf = (items: string[], index: number): string | undefined =>
+  items[index + 1] ?? items[index - 1];
 
 export type ModelListEditorProps = {
   models: string[];
@@ -86,6 +98,24 @@ export const ModelListEditor = ({
   const [filter, setFilter] = useState("");
   const newModelRef = useRef<HTMLInputElement>(null);
   const blockedReasonId = useId();
+  const controls = useRef(new Map<string, HTMLButtonElement>());
+  const pendingFocus = useRef<FocusTarget | null>(null);
+
+  const controlRef =
+    (list: "configured" | "offered", model: string) =>
+    (node: HTMLButtonElement | null): void => {
+      if (node) controls.current.set(focusKey(list, model), node);
+      else controls.current.delete(focusKey(list, model));
+    };
+
+  // The list changes through the form, so the new rows exist only on the next render.
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (target === null) return;
+    pendingFocus.current = null;
+    if (target === "new-model") newModelRef.current?.focus();
+    else controls.current.get(focusKey(target.list, target.model))?.focus();
+  }, [models]);
 
   const addModels = (toAdd: string[]): void => {
     const merged = [...models];
@@ -136,8 +166,10 @@ export const ModelListEditor = ({
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label={`Make ${m} the default`}
+                aria-label={`Make default: ${m}`}
                 onClick={() => {
+                  // The row moves to the top and loses this button; its × keeps the focus.
+                  pendingFocus.current = { list: "configured", model: m };
                   onChange([m, ...models.filter((x) => x !== m)]);
                 }}
               >
@@ -145,12 +177,15 @@ export const ModelListEditor = ({
               </Button>
             )}
             <IconButton
+              ref={controlRef("configured", m)}
               size="sm"
               variant="danger"
               label={`Remove ${m}`}
               tooltip="Remove"
               icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
               onClick={() => {
+                const next = neighbourOf(models, index);
+                pendingFocus.current = next ? { list: "configured", model: next } : "new-model";
                 onChange(models.filter((x) => x !== m));
               }}
             />
@@ -229,6 +264,10 @@ export const ModelListEditor = ({
                 size="sm"
                 icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
                 onClick={() => {
+                  // This button goes once nothing is left to add: stay with what was added.
+                  const [first] = shown;
+                  if (first !== undefined)
+                    pendingFocus.current = { list: "configured", model: first };
                   addModels(shown);
                 }}
               >
@@ -254,17 +293,22 @@ export const ModelListEditor = ({
                 overflowY: "auto",
               }}
             >
-              {shown.map((m) => (
+              {shown.map((m, index) => (
                 <li key={m} style={{ ...rowStyle, minHeight: "var(--control-sm)" }}>
                   <span className="mono" style={modelNameStyle} title={m}>
                     {m}
                   </span>
                   <Button
+                    ref={controlRef("offered", m)}
                     variant="ghost"
                     size="sm"
                     icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
                     aria-label={`Add ${m}`}
                     onClick={() => {
+                      const next = neighbourOf(shown, index);
+                      pendingFocus.current = next
+                        ? { list: "offered", model: next }
+                        : { list: "configured", model: m };
                       addModels([m]);
                     }}
                   >

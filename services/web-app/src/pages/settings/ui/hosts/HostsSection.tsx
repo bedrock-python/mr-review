@@ -7,7 +7,9 @@ import { Badge, ICON_SIZE } from "@shared/ui";
 
 import { HOST_TYPE_LABELS } from "../../lib/hostForm";
 import { SettingsList } from "../SettingsList";
-import { RowActions, SettingsRow } from "../SettingsRow";
+import { useFocusWhenClosed } from "../../lib/useFocusWhenClosed";
+import { RowActions } from "../RowActions";
+import { SettingsRow } from "../SettingsRow";
 import { SettingsSection } from "../SettingsSection";
 import { rowNameStyle } from "../styles";
 import { AddHostForm } from "./AddHostForm";
@@ -26,6 +28,7 @@ const urlStyle: React.CSSProperties = {
 const HostRow = ({ host }: { host: Host }): React.ReactElement => {
   const deleteHost = useDeleteHost();
   const [isEditing, setIsEditing] = useState(false);
+  const editRef = useFocusWhenClosed<HTMLButtonElement>(isEditing);
   const colorId = (host.color ?? HOST_COLORS[0].id) as HostColorId;
 
   if (isEditing) {
@@ -71,11 +74,12 @@ const HostRow = ({ host }: { host: Host }): React.ReactElement => {
             kind="host"
             consequence="Its access token and favourite repositories are deleted. Reviews made on this host stay in the history."
             isRemoving={deleteHost.isPending}
+            editRef={editRef}
             onEdit={() => {
               setIsEditing(true);
             }}
-            onRemove={() => {
-              deleteHost.mutate(host.id);
+            onRemove={(onRemoved) => {
+              deleteHost.mutate(host.id, { onSuccess: onRemoved });
             }}
           />
         }
@@ -85,7 +89,7 @@ const HostRow = ({ host }: { host: Host }): React.ReactElement => {
 };
 
 export const HostsSection = (): React.ReactElement => {
-  const { data: hosts, isLoading } = useHosts();
+  const { data: hosts, isLoading, error, refetch } = useHosts();
   return (
     <SettingsSection
       titleId="settings-hosts"
@@ -95,6 +99,11 @@ export const HostsSection = (): React.ReactElement => {
       <SettingsList
         label="Git hosts"
         isLoading={isLoading}
+        error={error}
+        errorTitle="Could not load hosts"
+        onRetry={() => {
+          void refetch();
+        }}
         emptyTitle="No hosts yet"
         emptyIcon={<Server size={ICON_SIZE.inline} aria-hidden="true" />}
         footer={<AddHostForm />}

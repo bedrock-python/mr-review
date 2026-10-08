@@ -1,8 +1,3 @@
-import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
-
-import { Button, Dialog, ICON_SIZE } from "@shared/ui";
-
 const rowStyle: React.CSSProperties = {
   display: "grid",
   columnGap: "var(--space-3)",
@@ -65,75 +60,5 @@ export const SettingsRow = ({
         </div>
       )}
     </div>
-  );
-};
-
-export type RowActionsProps = {
-  /** The record's name, for the buttons' accessible names and the confirmation. */
-  name: string;
-  /** "host", "provider": completes "Remove host". */
-  kind: string;
-  /** What removing deletes and what stays, said before it happens. */
-  consequence: string;
-  isRemoving: boolean;
-  onEdit: () => void;
-  onRemove: () => void;
-};
-
-/** Edit and Remove for a settings row; Remove asks first. */
-export const RowActions = ({
-  name,
-  kind,
-  consequence,
-  isRemoving,
-  onEdit,
-  onRemove,
-}: RowActionsProps): React.ReactElement => {
-  const [isConfirming, setIsConfirming] = useState(false);
-  const close = (): void => {
-    if (!isRemoving) setIsConfirming(false);
-  };
-
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={<Pencil size={ICON_SIZE.inline} aria-hidden="true" />}
-        aria-label={`Edit ${name}`}
-        onClick={onEdit}
-      >
-        Edit
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
-        aria-label={`Remove ${name}`}
-        style={{ color: "var(--c-danger-fg)" }}
-        onClick={() => {
-          setIsConfirming(true);
-        }}
-      >
-        Remove
-      </Button>
-      <Dialog
-        isOpen={isConfirming}
-        onClose={close}
-        size="sm"
-        title={`Remove ${name}?`}
-        description={consequence}
-        footer={
-          <>
-            <Button variant="ghost" onClick={close} disabled={isRemoving}>
-              Cancel
-            </Button>
-            <Button variant="danger" isLoading={isRemoving} onClick={onRemove}>
-              Remove {kind}
-            </Button>
-          </>
-        }
-      />
-    </>
   );
 };

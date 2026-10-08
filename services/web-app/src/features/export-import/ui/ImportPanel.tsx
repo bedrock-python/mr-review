@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +29,10 @@ type LoadedFile = { name: string; file: ExportFile; preview: ImportPreview };
  */
 export const ImportPanel = (): React.ReactElement => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chooseButtonRef = useRef<HTMLButtonElement>(null);
+  // Cancel and a finished import take away the buttons that had the focus; it goes to
+  // "Choose file…" instead of falling to <body>.
+  const shouldFocusChoose = useRef(false);
   const [loaded, setLoaded] = useState<LoadedFile | null>(null);
   const [strategy, setStrategy] = useState<MergeStrategy>("skip");
   const [passphrase, setPassphrase] = useState("");
@@ -46,6 +50,20 @@ export const ImportPanel = (): React.ReactElement => {
     setStrategy("skip");
     setError(null);
   };
+
+  const resetToChooseFile = (): void => {
+    shouldFocusChoose.current = true;
+    reset();
+  };
+
+  useEffect(() => {
+    if (loaded !== null || !shouldFocusChoose.current) return;
+    shouldFocusChoose.current = false;
+    // After the confirmation dialog, if it was open, has let go of the focus.
+    window.setTimeout(() => {
+      chooseButtonRef.current?.focus();
+    }, 0);
+  }, [loaded]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const chosen = event.target.files?.[0];
@@ -75,7 +93,7 @@ export const ImportPanel = (): React.ReactElement => {
     importMutation.mutate(request, {
       onSuccess: (result) => {
         setIsConfirming(false);
-        reset();
+        resetToChooseFile();
         const details = [...summarizeImportResult(result), ...result.warnings, ...result.errors];
         const notify = result.errors.length > 0 ? toast.warning : toast.success;
         notify(result.errors.length > 0 ? "Import finished with errors" : "Import finished", {
@@ -91,6 +109,7 @@ export const ImportPanel = (): React.ReactElement => {
 
   const chooseButton = (
     <Button
+      ref={chooseButtonRef}
       variant={loaded ? "secondary" : "primary"}
       icon={<Upload size={ICON_SIZE.inline} aria-hidden="true" />}
       isLoading={previewMutation.isPending}
@@ -133,26 +152,25 @@ export const ImportPanel = (): React.ReactElement => {
 
       {error && <Callout tone="danger">{error}</Callout>}
 
+      {/* "Choose file…" keeps its place, so it is the same button with or without a file. */}
       <div style={buttonRowStyle}>
-        {loaded ? (
-          <>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setError(null);
-                setIsConfirming(true);
-              }}
-              disabled={isBusy || (needsPassphrase && passphrase === "")}
-            >
-              Import…
-            </Button>
-            {chooseButton}
-            <Button variant="ghost" onClick={reset} disabled={isBusy}>
-              Cancel
-            </Button>
-          </>
-        ) : (
-          chooseButton
+        {loaded && (
+          <Button
+            variant="primary"
+            onClick={() => {
+              setError(null);
+              setIsConfirming(true);
+            }}
+            disabled={isBusy || (needsPassphrase && passphrase === "")}
+          >
+            Import…
+          </Button>
+        )}
+        {chooseButton}
+        {loaded && (
+          <Button variant="ghost" onClick={resetToChooseFile} disabled={isBusy}>
+            Cancel
+          </Button>
         )}
       </div>
 

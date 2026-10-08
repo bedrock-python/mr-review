@@ -246,6 +246,10 @@ describe("import", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Import file summary")).not.toBeInTheDocument();
     });
+    // The buttons that had the focus are gone with the file; it lands on "Choose file…".
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Choose file…" })).toHaveFocus();
+    });
   });
 
   it("imports nothing when the confirmation is cancelled", async () => {
@@ -259,5 +263,11 @@ describe("import", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(api.importData).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Import file summary")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Import file summary")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Choose file…" })).toHaveFocus();
+    });
   });
 });

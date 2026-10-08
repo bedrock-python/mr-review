@@ -20,6 +20,7 @@ import {
   toPreviewRequest,
 } from "../../lib/providerEndpoint";
 import { TIMEOUT_LIMITS } from "../../lib/timeoutLimits";
+import { useFocusWhenClosed } from "../../lib/useFocusWhenClosed";
 import { FieldRow, InlineForm } from "../InlineForm";
 import { addRowStyle, fieldWithNoteStyle } from "../styles";
 import { BaseUrlWarning } from "./BaseUrlWarning";
@@ -32,6 +33,7 @@ type CreateAIProviderInput = z.input<typeof CreateAIProviderSchema>;
 /** "Add provider" at the bottom of the providers list, opening the form in its place. */
 export const AddProviderForm = (): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
+  const addButtonRef = useFocusWhenClosed<HTMLButtonElement>(isOpen);
   const createProvider = useCreateAIProvider();
   const form = useForm<CreateAIProviderInput, unknown, CreateAIProvider>({
     resolver: zodResolver(CreateAIProviderSchema),
@@ -68,6 +70,8 @@ export const AddProviderForm = (): React.ReactElement => {
     return (
       <div style={addRowStyle}>
         <Button
+          ref={addButtonRef}
+          data-add-button=""
           variant="ghost"
           size="sm"
           icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}

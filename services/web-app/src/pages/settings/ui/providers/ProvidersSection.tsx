@@ -7,7 +7,9 @@ import { Badge, ICON_SIZE } from "@shared/ui";
 
 import { PROVIDER_TYPE_LABELS, claudeBaseUrlWarning } from "../../lib/providerEndpoint";
 import { SettingsList } from "../SettingsList";
-import { RowActions, SettingsRow } from "../SettingsRow";
+import { useFocusWhenClosed } from "../../lib/useFocusWhenClosed";
+import { RowActions } from "../RowActions";
+import { SettingsRow } from "../SettingsRow";
 import { SettingsSection } from "../SettingsSection";
 import { fieldWithNoteStyle, rowMetaStyle, rowNameStyle } from "../styles";
 import { AddProviderForm } from "./AddProviderForm";
@@ -18,6 +20,7 @@ import { ModelTags } from "./ModelTags";
 const ProviderRow = ({ provider }: { provider: AIProvider }): React.ReactElement => {
   const deleteProvider = useDeleteAIProvider();
   const [isEditing, setIsEditing] = useState(false);
+  const editRef = useFocusWhenClosed<HTMLButtonElement>(isEditing);
   const modelCount = provider.models.length;
 
   if (isEditing) {
@@ -62,11 +65,12 @@ const ProviderRow = ({ provider }: { provider: AIProvider }): React.ReactElement
             kind="provider"
             consequence="Its API key and model list are deleted. Reviews generated with it stay in the history."
             isRemoving={deleteProvider.isPending}
+            editRef={editRef}
             onEdit={() => {
               setIsEditing(true);
             }}
-            onRemove={() => {
-              deleteProvider.mutate(provider.id);
+            onRemove={(onRemoved) => {
+              deleteProvider.mutate(provider.id, { onSuccess: onRemoved });
             }}
           />
         }
@@ -76,7 +80,7 @@ const ProviderRow = ({ provider }: { provider: AIProvider }): React.ReactElement
 };
 
 export const ProvidersSection = (): React.ReactElement => {
-  const { data: providers, isLoading } = useAIProviders();
+  const { data: providers, isLoading, error, refetch } = useAIProviders();
   return (
     <SettingsSection
       titleId="settings-providers"
@@ -86,6 +90,11 @@ export const ProvidersSection = (): React.ReactElement => {
       <SettingsList
         label="AI providers"
         isLoading={isLoading}
+        error={error}
+        errorTitle="Could not load AI providers"
+        onRetry={() => {
+          void refetch();
+        }}
         emptyTitle="No AI providers yet"
         emptyIcon={<Bot size={ICON_SIZE.inline} aria-hidden="true" />}
         footer={<AddProviderForm />}

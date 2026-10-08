@@ -1,4 +1,4 @@
-import { Card, EmptyState, Spinner } from "@shared/ui";
+import { Card, EmptyState, ErrorState, Spinner } from "@shared/ui";
 
 const statusRowStyle: React.CSSProperties = {
   display: "flex",
@@ -15,6 +15,11 @@ export type SettingsListProps = {
   /** Names the list for assistive tech: "Git hosts". */
   label: string;
   isLoading: boolean;
+  /** The list could not be loaded and there is nothing cached to show instead. */
+  error: Error | null;
+  /** "Could not load hosts". */
+  errorTitle: string;
+  onRetry: () => void;
   /** Shown when loaded and there are no rows. */
   emptyTitle: string;
   emptyIcon: React.ReactNode;
@@ -28,21 +33,29 @@ export type SettingsListProps = {
 export const SettingsList = ({
   label,
   isLoading,
+  error,
+  errorTitle,
+  onRetry,
   emptyTitle,
   emptyIcon,
   children,
   footer,
 }: SettingsListProps): React.ReactElement => {
   const rows = children ?? [];
+  // Rows from the cache stay listed when a refetch fails; with none, the failure is the content.
+  const failure = rows.length === 0 ? error : null;
   return (
-    <Card padding="none" style={{ overflow: "hidden" }}>
+    <Card padding="none" style={{ overflow: "hidden" }} data-settings-list="">
       {isLoading && (
         <div style={statusRowStyle}>
           <Spinner size="sm" tone="muted" isDecorative />
           Loading…
         </div>
       )}
-      {!isLoading && rows.length === 0 && (
+      {failure && (
+        <ErrorState size="sm" title={errorTitle} message={failure.message} onRetry={onRetry} />
+      )}
+      {!isLoading && !failure && rows.length === 0 && (
         <EmptyState size="sm" role="none" icon={emptyIcon} title={emptyTitle} />
       )}
       {rows.length > 0 && (

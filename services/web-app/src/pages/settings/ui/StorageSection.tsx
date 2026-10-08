@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { systemApi } from "@shared/api";
 import { copyFolderPath } from "@shared/lib";
-import { Button, Card, Field, ICON_SIZE, Input, Skeleton } from "@shared/ui";
+import { Button, Card, ErrorState, Field, ICON_SIZE, Input, Skeleton } from "@shared/ui";
 
 import { formatPlatform } from "../lib/formatPlatform";
 import { SettingsSection } from "./SettingsSection";
@@ -29,10 +29,17 @@ const COPY_LABELS: Record<string, string> = {
 };
 
 export const StorageSection = (): React.ReactElement => {
-  const { data: info, isLoading } = useQuery({
+  const {
+    data: info,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["system-info"],
     queryFn: systemApi.getInfo,
     staleTime: Infinity,
+    // The section shows its own error with a Retry; no global toast on top of it.
+    meta: { silent: true },
   });
 
   const handleCopyPath = async (): Promise<void> => {
@@ -53,30 +60,41 @@ export const StorageSection = (): React.ReactElement => {
       description="Location of local data files (hosts, providers, reviews)."
     >
       <Card aria-busy={isLoading || undefined}>
-        <div style={pathRowStyle}>
-          <Field label="Data folder" style={{ flex: 1 }}>
-            {isLoading ? (
-              <Skeleton width="100%" height="var(--control-md)" radius="control" />
-            ) : (
-              <Input
-                readOnly
-                isMono
-                value={info?.data_dir ?? "—"}
-                title={info?.data_dir}
-                onFocus={(e) => {
-                  e.currentTarget.select();
-                }}
-              />
-            )}
-          </Field>
-          <Button
-            icon={<Copy size={ICON_SIZE.inline} aria-hidden="true" />}
-            disabled={!info?.data_dir}
-            onClick={() => void handleCopyPath()}
-          >
-            {copyLabel}
-          </Button>
-        </div>
+        {error && !info ? (
+          <ErrorState
+            size="sm"
+            title="Could not read the data folder"
+            message={error.message}
+            onRetry={() => {
+              void refetch();
+            }}
+          />
+        ) : (
+          <div style={pathRowStyle}>
+            <Field label="Data folder" style={{ flex: 1 }}>
+              {isLoading ? (
+                <Skeleton width="100%" height="var(--control-md)" radius="control" />
+              ) : (
+                <Input
+                  readOnly
+                  isMono
+                  value={info?.data_dir ?? "—"}
+                  title={info?.data_dir}
+                  onFocus={(e) => {
+                    e.currentTarget.select();
+                  }}
+                />
+              )}
+            </Field>
+            <Button
+              icon={<Copy size={ICON_SIZE.inline} aria-hidden="true" />}
+              disabled={!info?.data_dir}
+              onClick={() => void handleCopyPath()}
+            >
+              {copyLabel}
+            </Button>
+          </div>
+        )}
         {info && (
           <p style={platformStyle}>
             <span>{formatPlatform(info.os, info.os_version)}</span>

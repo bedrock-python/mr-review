@@ -9,6 +9,7 @@ import { Button, Field, ICON_SIZE, Input, Select } from "@shared/ui";
 
 import { CreateHostFormSchema, HOST_TYPE_LABELS } from "../../lib/hostForm";
 import { TIMEOUT_LIMITS } from "../../lib/timeoutLimits";
+import { useFocusWhenClosed } from "../../lib/useFocusWhenClosed";
 import { getTokenLink } from "../../lib/tokenLink";
 import { FieldRow, InlineForm } from "../InlineForm";
 import { addRowStyle } from "../styles";
@@ -28,6 +29,7 @@ const EMPTY_HOST: CreateHostFormValues = {
 /** "Add host" at the bottom of the hosts list, opening the form in its place. */
 export const AddHostForm = (): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
+  const addButtonRef = useFocusWhenClosed<HTMLButtonElement>(isOpen);
   const createHost = useCreateHost();
   const form = useForm<CreateHostFormValues>({
     resolver: zodResolver(CreateHostFormSchema),
@@ -53,6 +55,8 @@ export const AddHostForm = (): React.ReactElement => {
     return (
       <div style={addRowStyle}>
         <Button
+          ref={addButtonRef}
+          data-add-button=""
           variant="ghost"
           size="sm"
           icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
