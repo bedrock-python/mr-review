@@ -381,13 +381,6 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               color: "var(--fg-1)",
-              outline: "none",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--accent)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "var(--border)";
             }}
           />
           {query && (

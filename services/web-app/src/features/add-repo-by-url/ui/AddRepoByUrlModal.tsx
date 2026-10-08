@@ -118,7 +118,6 @@ export const AddRepoByUrlModal = ({
                   fontSize: 13,
                   color: "var(--fg-0)",
                   fontFamily: "var(--font-mono)",
-                  outline: "none",
                   width: "100%",
                 }}
               />

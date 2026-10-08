@@ -167,7 +167,6 @@ export const MRListToolbar = ({
           color: "var(--fg-1)",
           fontFamily: "var(--font-mono)",
           cursor: "pointer",
-          outline: "none",
         }}
       >
         {SORT_OPTIONS.map((option) => (

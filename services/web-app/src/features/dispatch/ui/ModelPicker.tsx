@@ -52,6 +52,7 @@ export const ModelPicker = ({
   return (
     <div style={{ position: "relative" }}>
       <div
+        className="ui-focus-within"
         style={{
           display: "flex",
           alignItems: "center",
@@ -102,7 +103,6 @@ export const ModelPicker = ({
           style={{
             flex: 1,
             border: "none",
-            outline: "none",
             background: "transparent",
             fontSize: 13,
             fontFamily: "var(--font-mono)",

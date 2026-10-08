@@ -129,7 +129,7 @@ export const CommentEditor = ({
         onLineChange={state.setLineText}
       />
 
-      <div className="border-border overflow-hidden rounded-lg border">
+      <div className="border-border ui-focus-within overflow-hidden rounded-lg border">
         <div role="tablist" className="border-border bg-bg-2 flex gap-1 border-b px-1.5 pt-1.5">
           {TABS.map(({ id, label }) => (
             <button
@@ -160,7 +160,7 @@ export const CommentEditor = ({
           aria-invalid={bodyError !== null}
           placeholder="Markdown supported"
           rows={4}
-          className="bg-bg-0 text-fg-0 block min-h-[96px] w-full resize-none px-3 py-2.5 text-[12.5px] leading-[1.55] outline-none"
+          className="bg-bg-0 text-fg-0 block min-h-[96px] w-full resize-none px-3 py-2.5 text-[12.5px] leading-[1.55]"
         />
         {tab === "preview" && (
           <div role="tabpanel" aria-label="Preview" className="bg-bg-0 min-h-[96px] px-3 py-2.5">

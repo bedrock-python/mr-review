@@ -172,7 +172,6 @@ const inputCss: React.CSSProperties = {
   fontSize: 12,
   fontFamily: "var(--font-mono)",
   color: "var(--fg-0)",
-  outline: "none",
   width: "100%",
   boxSizing: "border-box",
   transition: "border-color 0.1s",

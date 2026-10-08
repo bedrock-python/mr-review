@@ -155,6 +155,7 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
     <>
       <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div
+          className="ui-focus-within"
           style={{
             display: "flex",
             alignItems: "center",
@@ -180,7 +181,6 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
             style={{
               background: "none",
               border: "none",
-              outline: "none",
               fontSize: 12,
               color: "var(--fg-0)",
               width: "100%",

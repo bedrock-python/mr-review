@@ -304,7 +304,6 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
                   fontSize: 13,
                   color: "var(--fg-0)",
                   fontFamily: "var(--font-mono)",
-                  outline: "none",
                   width: "100%",
                 }}
               />

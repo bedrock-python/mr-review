@@ -37,6 +37,7 @@ export const SearchField = ({
 
   return (
     <div
+      className="ui-focus-within"
       style={{
         flex: 1,
         display: "flex",
@@ -64,7 +65,6 @@ export const SearchField = ({
           flex: 1,
           background: "transparent",
           border: "none",
-          outline: "none",
           fontSize: 12,
           color: "var(--fg-0)",
           minWidth: 0,

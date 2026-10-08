@@ -63,7 +63,7 @@ const CommentCardBase = ({
       className={cn(
         "bg-bg-1 rounded-[var(--radius-3)] border px-3.5 py-3 transition-colors outline-none",
         isFocused
-          ? "border-accent shadow-[inset_3px_0_0_var(--accent)]"
+          ? "border-accent-fg shadow-[inset_3px_0_0_var(--accent)]"
           : "border-border hover:border-border-strong"
       )}
     >

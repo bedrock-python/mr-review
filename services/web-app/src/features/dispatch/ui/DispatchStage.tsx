@@ -597,7 +597,6 @@ const ManualDispatch = ({
                 fontSize: 11,
                 color: "var(--fg-1)",
                 resize: "vertical",
-                outline: "none",
                 boxSizing: "border-box",
               }}
             />

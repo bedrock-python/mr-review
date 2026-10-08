@@ -161,7 +161,6 @@ export const PinnedCommentEditor = ({
           fontSize: 12.5,
           lineHeight: 1.55,
           resize: "vertical",
-          outline: "none",
         }}
         aria-label="Edit comment body"
       />
