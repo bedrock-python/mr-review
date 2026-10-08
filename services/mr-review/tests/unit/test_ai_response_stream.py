@@ -223,3 +223,31 @@ def test__reasoning_filter__line_starting_with_angle_bracket__released_unchanged
     text = "<thin ice>\n<b>bold</b>\n["
 
     assert _filter_all(list(text)) == text
+
+
+@pytest.mark.parametrize(
+    "split", [_char_by_char, _random_splitter(4), lambda raw: [raw]], ids=["char_by_char", "random", "whole"]
+)
+def test__streaming_parser__unclosed_object_in_preamble__answer_after_a_blank_line_still_previewed(
+    split: Callable[[str], list[str]],
+) -> None:
+    raw = (
+        'Each item looks like {"file": "...", "body": ... and so on.\n\n'
+        '[{"file": "a.py", "body": "real"}, {"file": "b.py", "body": "two"}]'
+    )
+
+    assert [c.body for c in _feed_in_pieces(raw, split)] == ["real", "two"]
+
+
+def test__streaming_parser__wrapper_key_without_comments_first__later_wrapper_key_previewed() -> None:
+    raw = '{"review": {"summary": "Looks fine"}, "comments": [{"file": "a.py", "body": "X"}]}'
+
+    assert [c.body for c in _feed_in_pieces(raw, _char_by_char)] == ["X"]
+    assert [c.body for c in parse_ai_response(raw).comments] == ["X"]
+
+
+def test__streaming_parser__deeply_nested_line__no_recursion_error() -> None:
+    depth = 995
+    raw = '[{"body": "x", "line": ' + "[" * depth + "1" + "]" * depth + "}]"
+
+    assert [c.body for c in _feed_in_pieces(raw, lambda text: [text])] == ["x"]

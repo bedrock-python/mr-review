@@ -6,8 +6,12 @@ JSON-ish fragment into review comments as leniently as is safe:
 * ``decode_exact`` — ``json.loads(strict=False)``, then after a light string-aware repair
   (comments, trailing commas, smart or single quotes, bare keys, Python literals);
   ``decode_repaired`` — the ``json-repair`` package, the last resort, within a ``RepairBudget``;
-* ``extract_items`` — a bare array, a wrapper object holding the array, or one comment object;
+* ``wrapper_candidates`` — a bare array, the arrays a wrapper object holds, or one comment object;
 * ``normalize_comment`` — key aliases, severity synonyms, the first integer of a line reference.
+
+Every regular expression here runs in linear time on any input: repetition is possessive or
+atomic, and a string or comment that is never closed runs to the end of the text instead of
+being tried again from each later position.
 """
 
 from __future__ import annotations
@@ -34,28 +38,38 @@ _SEVERITY_KEYS: Final = ("severity", "level", "priority")
 
 _FILE_PLACEHOLDERS: Final = frozenset({"null", "none", "n/a", "-"})
 _KEY_SEPARATORS_RE: Final = re.compile(r"[\s-]+")
-_INT_RE: Final = re.compile(r"-?\d+")
+_INT_RE: Final = re.compile(r"-?\d++")
 _MAX_LINE_DIGITS: Final = 9
+# A line given as a list ("[12, 15]") is read from its first element, through this many levels.
+_MAX_LINE_NESTING: Final = 4
 
 # json-repair is quadratic or worse on prose full of brackets (40 KB of it takes most of a minute).
 # It is only given text shaped like JSON, in fragments up to this size and this much per parse.
 _REPAIR_MAX_CHARS: Final = 8_000
 _REPAIR_BUDGET_CHARS: Final = 16_000
-_STRING_TOKEN_RE: Final = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"' r"|'[^'\\]*(?:\\.[^'\\]*)*'" r"|“[^”]*”")
 
-# One pass of the light repair: JSON strings are kept verbatim (nothing inside a body is touched),
-# smart- and single-quoted strings are re-quoted, comments are dropped and so is a comma right
-# before a closer, bare keys get quotes and Python's True/False/None become JSON literals.
-_LIGHT_REPAIR_RE: Final = re.compile(
-    r'(?P<string>"[^"\\]*(?:\\.[^"\\]*)*")'
-    r"|'(?P<single>[^'\\]*(?:\\.[^'\\]*)*)'"
-    r"|“(?P<smart>[^”\"]*)[”\"]"
-    r"|(?P<comment>//[^\n]*|/\*.*?\*/)"
-    r"|(?P<comma>,(?=(?:\s|//[^\n]*|/\*.*?\*/)*[\]}]))"
-    r"|(?P<key>\b[A-Za-z_][\w-]*)(?=\s*:)"
-    r"|(?P<literal>\b(?:True|False|None)\b)",
+# A double-quoted string; one that never closes runs to the end of the text.
+_DQ_STRING: Final = r'"[^"\\]*+(?:\\.?[^"\\]*+)*+(?:"|\Z)'
+_STRING_TOKEN_RE: Final = re.compile(
+    _DQ_STRING + r"|'[^'\\]*+(?:\\.?[^'\\]*+)*+(?:'|\Z)" + r"|“[^”]*+(?:”|\Z)",
     re.DOTALL,
 )
+
+# First pass of the light repair. JSON strings are kept verbatim, so nothing inside a body is
+# touched; single- and smart-quoted strings are re-quoted; comments are dropped; bare keys get
+# quotes; Python's True/False/None become JSON literals. Anything left unclosed is kept as is.
+_LIGHT_REPAIR_RE: Final = re.compile(
+    rf"(?P<string>{_DQ_STRING})"
+    r"|'(?P<single>[^'\\]*+(?:\\.?[^'\\]*+)*+)(?P<single_end>'|\Z)"
+    r"|“(?P<smart>[^”\"]*+)(?P<smart_end>[”\"]|\Z)"
+    r"|(?P<comment>//[^\n]*+|/\*(?>.*?\*/))"
+    r"|(?P<open_comment>/\*.*+)"
+    r"|(?<![\w-])(?P<key>[A-Za-z_][\w-]*+)(?=\s*+:)"
+    r"|(?<![\w-])(?P<literal>True|False|None)(?![\w-])",
+    re.DOTALL,
+)
+# Second pass, once comments are gone: a comma right before a closer.
+_TRAILING_COMMA_RE: Final = re.compile(rf"(?P<string>{_DQ_STRING})|,(?=\s*+[\]}}])", re.DOTALL)
 _PYTHON_LITERALS: Final = {"True": "true", "False": "false", "None": "null"}
 _UNESCAPED_QUOTE_RE: Final = re.compile(r'(?<!\\)"')
 
@@ -83,11 +97,11 @@ class RepairBudget:
     def __init__(self, total: int = _REPAIR_BUDGET_CHARS) -> None:
         self._left = total
 
-    def take(self, size: int) -> bool:
-        if size > _REPAIR_MAX_CHARS or size > self._left:
-            return False
+    def allows(self, size: int) -> bool:
+        return size <= _REPAIR_MAX_CHARS and size <= self._left
+
+    def take(self, size: int) -> None:
         self._left -= size
-        return True
 
 
 def _shaped_like_json(text: str) -> bool:
@@ -119,19 +133,25 @@ def _requote(content: str) -> str:
 
 def _light_repair_token(match: re.Match[str]) -> str:
     kind = match.lastgroup
-    if kind == "string":
-        return match.group()
-    if kind in ("single", "smart"):
-        return _requote(match.group(kind))
+    if kind in ("single_end", "smart_end"):
+        # A quoted string; an unclosed one (empty end) is left alone.
+        content = match.group(kind.removesuffix("_end"))
+        return _requote(content) if match.group(kind) else match.group()
     if kind == "key":
         return f'"{match.group(kind)}"'
     if kind == "literal":
         return _PYTHON_LITERALS[match.group(kind)]
-    return ""
+    if kind == "comment":
+        return ""
+    return match.group()
+
+
+def _trailing_comma_token(match: re.Match[str]) -> str:
+    return match.group("string") or ""
 
 
 def _light_repair(text: str) -> str:
-    return _LIGHT_REPAIR_RE.sub(_light_repair_token, text)
+    return _TRAILING_COMMA_RE.sub(_trailing_comma_token, _LIGHT_REPAIR_RE.sub(_light_repair_token, text))
 
 
 def _loads(text: str) -> object:
@@ -156,8 +176,9 @@ def decode_exact(text: str) -> Decoded | None:
 
 def decode_repaired(text: str, budget: RepairBudget) -> Decoded | None:
     """The ``json-repair`` reading of ``text`` when it is a non-empty array or object."""
-    if not _shaped_like_json(text) or not budget.take(len(text)):
+    if not budget.allows(len(text)) or not _shaped_like_json(text):
         return None
+    budget.take(len(text))
     try:
         value = json_repair.loads(text, skip_json_loads=True)
     except Exception:  # a best-effort heuristic: any failure only means "not repairable"
@@ -167,31 +188,42 @@ def decode_repaired(text: str, budget: RepairBudget) -> Decoded | None:
     return None
 
 
-def extract_items(value: object) -> tuple[list[object], bool] | None:
-    """Comment candidates in a decoded value and whether they came from an array.
+_Container = list[object] | dict[object, object]
 
-    Accepts a bare array, a wrapper object whose first wrapper key (in document order) holds the
-    array or another wrapper, and a single comment object. ``None`` for any other value.
+
+def _wrapped_values(obj: dict[object, object]) -> list[_Container]:
+    wrapped: list[_Container] = []
+    for key, inner in obj.items():
+        if isinstance(key, str) and key.strip().lower() in WRAPPER_KEYS and isinstance(inner, (list, dict)):
+            wrapped.append(inner)
+    return wrapped
+
+
+def wrapper_candidates(value: object) -> list[tuple[list[object], bool]] | None:
+    """The item lists a decoded value may hold its comments in, each with whether it is an array.
+
+    A bare array is its own single candidate. An object offers what every wrapper key holds, in
+    document order — an array as it is, a nested object by the same rule — or, with no wrapper
+    key at all, itself as a single comment. ``None`` for any other value.
     """
     if isinstance(value, list):
-        return value, True
+        return [(value, True)]
     if not isinstance(value, dict):
         return None
-    current: dict[object, object] = value
-    while True:
-        nested = next(
-            (
-                inner
-                for key, inner in current.items()
-                if isinstance(key, str) and key.strip().lower() in WRAPPER_KEYS and isinstance(inner, (list, dict))
-            ),
-            None,
-        )
-        if nested is None:
-            return [current], False
-        if isinstance(nested, list):
-            return nested, True
-        current = nested
+    candidates: list[tuple[list[object], bool]] = []
+    # Depth-first in document order, without recursion: nesting depth is up to the model.
+    pending: list[_Container] = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, list):
+            candidates.append((current, True))
+            continue
+        nested = _wrapped_values(current)
+        if nested:
+            pending.extend(reversed(nested))
+        else:
+            candidates.append(([current], False))
+    return candidates
 
 
 def _normalize_key(key: str) -> str:
@@ -222,7 +254,19 @@ def _first_int(text: str) -> int | None:
     return int(match.group())
 
 
+def _first_element(value: object) -> object:
+    """The first scalar of a list such as ``[12, 15]``, through a few levels; ``None`` past that."""
+    for _ in range(_MAX_LINE_NESTING):
+        if not isinstance(value, list):
+            return value
+        if not value:
+            return None
+        value = value[0]
+    return None if isinstance(value, list) else value
+
+
 def _line_number(value: object) -> int | None:
+    value = _first_element(value)
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -231,8 +275,6 @@ def _line_number(value: object) -> int | None:
         return int(value) if math.isfinite(value) else None
     if isinstance(value, str):
         return _first_int(value)
-    if isinstance(value, list) and value:
-        return _line_number(value[0])
     return None
 
 

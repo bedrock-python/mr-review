@@ -372,3 +372,129 @@ def test__parse_ai_response__empty_alias__falls_through_to_the_next_one() -> Non
     result = parse_ai_response(json.dumps([{"body": "  ", "message": "From message", "file": "", "path": "a.py"}]))
 
     assert _rows(result) == [("a.py", None, "suggestion", "From message")]
+
+
+# ── which readings make up the answer ─────────────────────────────────────────
+
+
+def test__parse_ai_response__comments_split_across_fences__merged_in_order() -> None:
+    raw = (
+        "Issues in a.py:\n```json\n"
+        + _array({"file": "a.py", "line": 1, "body": "A1"}, {"file": "a.py", "line": 2, "body": "A2"})
+        + "\n```\nIssues in b.py:\n```json\n"
+        + _array({"file": "b.py", "line": 3, "body": "B1"})
+        + "\n```"
+    )
+
+    result = parse_ai_response(raw)
+
+    assert [c.body for c in result.comments] == ["A1", "A2", "B1"]
+    assert result.json_error is None
+
+
+def test__parse_ai_response__comments_split_across_arrays_in_prose__merged_without_duplicates() -> None:
+    first = _array({"file": "a.py", "body": "A1"})
+    second = _array({"file": "b.py", "body": "B1"}, {"file": "a.py", "body": "A1"})
+    raw = f"First batch: {first} and the second batch: {second}"
+
+    assert [c.body for c in parse_ai_response(raw).comments] == ["A1", "B1"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        (
+            'Example of a valid response:\n[\n  {"file": "src/auth/login.py", "line": 42, "severity": "critical",\n'
+            '   "body": "SQL injection risk: concatenated user input."}\n]\nMy answer:\n```json\n[]\n```'
+        ),
+        (
+            'The format is [{"file": "path", "line": 1, "severity": "minor", "body": "text"}]. I found nothing:\n'
+            "```json\n[]\n```"
+        ),
+    ],
+    ids=["echoed_prompt_example", "inline_format_example"],
+)
+def test__parse_ai_response__fenced_answer__beats_an_example_quoted_in_prose(raw: str) -> None:
+    result = parse_ai_response(raw)
+
+    assert result.comments == []
+    assert result.json_error is None
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["[]\n\nNo issues found.", '{"comments": []}\nThe change looks good.'],
+    ids=["array", "wrapper"],
+)
+def test__parse_ai_response__answer_opens_with_an_empty_review__clean_empty_despite_trailing_prose(raw: str) -> None:
+    result = parse_ai_response(raw)
+
+    assert result.comments == []
+    assert result.json_error is None
+    assert result.comments_to_store() == []
+
+
+def test__parse_ai_response__answer_opens_with_comments_then_prose__prose_ignored() -> None:
+    result = parse_ai_response(_TWO + '\n\nNote: the format was {"file": path')
+
+    assert _rows(result) == _TWO_ROWS
+    assert result.truncated is False
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        'Each item looks like {"file": "...", "body": ... and so on.\n\n' + _TWO,
+        '{"plan": [read the diff, then\n\n[{"draft": 1}]\n\nThe review:\n```json\n' + _TWO + "\n```",
+    ],
+    ids=["after_prose", "opening_the_answer_before_a_fence"],
+)
+def test__parse_ai_response__unclosed_object_in_preamble__answer_read_and_not_truncated(raw: str) -> None:
+    result = parse_ai_response(raw)
+
+    assert _rows(result) == _TWO_ROWS
+    assert result.truncated is False
+
+
+def test__parse_ai_response__wrapper_key_without_comments_first__later_wrapper_key_used() -> None:
+    raw = '{"review": {"summary": "Looks fine", "verdict": "approve"}, "comments": ' + _TWO + "}"
+
+    result = parse_ai_response(raw)
+
+    assert _rows(result) == _TWO_ROWS
+    assert result.json_error is None
+
+
+def test__parse_ai_response__deeply_nested_line__no_recursion_error() -> None:
+    depth = 995
+    raw = '[{"body": "x", "line": ' + "[" * depth + "1" + "]" * depth + "}]"
+
+    result = parse_ai_response(raw)
+
+    assert [c.body for c in result.comments] == ["x"]
+
+
+# ── worst-case input size and shape ───────────────────────────────────────────
+
+
+_PATHOLOGICAL_INPUTS = {
+    "comma_then_many_block_comments": "[1, " + "/**/ " * 40 + "x]",
+    "comma_then_many_line_comments": "[1, // " + "http://x " * 40 + "\nx]",
+    "object_comma_then_comments": '{"a": 1, ' + "/* a */ " * 40 + "x}",
+    "hyphenated_tokens": "a-" * 100_000,
+    "fenced_c_code": "Here\n```c\n" + "    foo(a, /* arg */ b);\n" * 8000 + "```\n",
+    "escaped_quotes_outside_strings": '[{\\"file\\": \\"a.py\\", \\"body\\": \\"x\\"}, ' * 4000 + "]",
+    "unterminated_block_comments": "[1, /* " * 20_000 + "]",
+    "unterminated_smart_quotes": "{“a: " * 20_000 + "}",
+    "backtick_run": "`" * 200_000,
+    "tilde_run": "~" * 200_000,
+}
+
+
+@pytest.mark.parametrize("raw", list(_PATHOLOGICAL_INPUTS.values()), ids=list(_PATHOLOGICAL_INPUTS))
+def test__parse_ai_response__pathological_input__finishes_quickly(raw: str) -> None:
+    started = time.perf_counter()
+
+    parse_ai_response(raw)
+
+    assert time.perf_counter() - started < 3

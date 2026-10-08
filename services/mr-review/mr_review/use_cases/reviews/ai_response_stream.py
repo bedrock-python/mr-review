@@ -30,9 +30,10 @@ _CLOSE_TAG_RE: Final = re.compile(r"</think(?:ing)?>", re.IGNORECASE)
 _REASONING_TAIL: Final = max(len(tag) for tag in _CLOSE_TAGS) - 1
 _LINE_INDENT_RE: Final = re.compile(r"[ \t]*")
 
-_SPACE_RE: Final = re.compile(r"\s*")
+_SPACE_RE: Final = re.compile(r"\s*+")
+_NON_SPACE_RE: Final = re.compile(r"\S")
 _TOP_LEVEL_OPENER_RE: Final = re.compile(r"[\[{]")
-_STRUCTURE_RE: Final = re.compile(r"[\[\]{}\"',:“]")
+_STRUCTURE_RE: Final = re.compile(r"[\[\]{}\"',:“\n]")
 _STRING_STOP_RES: Final = {
     '"': re.compile(r'["\\]'),
     "'": re.compile(r"['\\]"),
@@ -170,7 +171,13 @@ class ScannedValue:
     kind: str
     end: int | None = None  # exclusive; None while the value is still open (truncated output)
     wrapper: bool = False  # an object whose comment array sits under a wrapper key
+    abandoned: bool = False  # left open by prose: a new value started after a blank line
     items: list[str] = field(default_factory=list)
+
+    @property
+    def runs_to_end(self) -> bool:
+        """Still open when the text ended: the text was cut off inside this value."""
+        return self.end is None and not self.abandoned
 
 
 class JsonStructureScanner:
@@ -198,6 +205,10 @@ class JsonStructureScanner:
         # Only one object is ever being cut out: a comment, or a wrapper that may turn out to be one.
         self._capture: list[str] | None = None
         self._capture_start = 0
+        # Inside a value: line breaks since the last non-blank character, and whether nothing has
+        # followed the last one yet.
+        self._blank_newlines = 0
+        self._at_line_start = False
 
     def reset(self) -> None:
         """Forget all structure seen so far, e.g. when it turns out to have been reasoning."""
@@ -207,6 +218,8 @@ class JsonStructureScanner:
         self._key_parts = None
         self._pending = None
         self._capture = None
+        self._blank_newlines = 0
+        self._at_line_start = False
 
     def feed(self, chunk: str) -> list[str]:
         """Scan ``chunk`` and return the text of every comment object that closed in it."""
@@ -225,11 +238,52 @@ class JsonStructureScanner:
             else:
                 match = _STRUCTURE_RE.search(chunk, pos)
                 if match is None:
+                    self._note_gap(chunk, pos, end)
                     break
-                pos = self._structural(chunk, match.start(), items)
+                pos = self._step(chunk, pos, match.start(), items)
         self._carry_over(chunk)
         self._offset += end
         return items
+
+    def _note_gap(self, chunk: str, start: int, stop: int) -> None:
+        """Account for the text skipped between two structural characters inside a value."""
+        if stop > start:
+            self._at_line_start = False
+            if _NON_SPACE_RE.search(chunk, start, stop):
+                self._blank_newlines = 0
+
+    def _step(self, chunk: str, pos: int, at: int, items: list[str]) -> int:
+        self._note_gap(chunk, pos, at)
+        char = chunk[at]
+        if char == "\n":
+            self._blank_newlines += 1
+            self._at_line_start = True
+            return at + 1
+        if char in "[{" and self._starts_new_answer(chunk, at):
+            # Pretty-printed JSON has no blank lines, so a value opening at the start of a line
+            # after one is a fresh answer, and what is still open was prose quoting a bracket.
+            self._abandon_open_value()
+            return self._open_top_level(chunk, at)
+        self._blank_newlines = 0
+        self._at_line_start = False
+        return self._structural(chunk, at, items)
+
+    def _starts_new_answer(self, chunk: str, at: int) -> bool:
+        if self._blank_newlines < 2 or not self._at_line_start:
+            return False
+        following = _SPACE_RE.match(chunk, at + 1)
+        nxt = following.end() if following is not None else at + 1
+        # With the deciding character still to come, restart anyway: the opener is then pending
+        # at the top level, where that character decides whether it starts a value at all.
+        return nxt == len(chunk) or self._continues_json(chunk[at], chunk[nxt])
+
+    def _abandon_open_value(self) -> None:
+        # The abandoned value stays recorded, unclosed, with whatever comments it already gave.
+        self._frames.clear()
+        self._key_parts = None
+        self._capture = None
+        if self._record:
+            self.values[-1].abandoned = True
 
     def _carry_over(self, chunk: str) -> None:
         """Keep the unfinished tails of the capture and of a key for the next chunk."""
@@ -274,6 +328,8 @@ class JsonStructureScanner:
     def _push_top_level(self, opener: str, start: int, *, capture_from: int, carried: str) -> None:
         """Open a top-level value; an object is captured from ``capture_from`` after the ``carried`` text."""
         self._frames.append(_Frame(_Role.ITEMS if opener == "[" else _Role.WRAPPER))
+        self._blank_newlines = 0
+        self._at_line_start = False
         if self._record:
             self.values.append(ScannedValue(start=start, kind=opener))
         if opener == "{":
@@ -334,9 +390,9 @@ class JsonStructureScanner:
         role = _Role.OTHER
         if parent.role is _Role.ITEMS and char == "{":
             role = _Role.ITEM
-        elif (
-            parent.role is _Role.WRAPPER and not parent.expect_key and not parent.yielded and parent.key in WRAPPER_KEYS
-        ):
+        elif parent.role is _Role.WRAPPER and not parent.expect_key and parent.key in WRAPPER_KEYS:
+            # Every wrapper key is followed, not just the first: {"review": {"summary": ...},
+            # "comments": [...]} keeps its comments under the second one.
             parent.yielded = True
             self._capture = None
             if self._record and len(self._frames) == 1:
