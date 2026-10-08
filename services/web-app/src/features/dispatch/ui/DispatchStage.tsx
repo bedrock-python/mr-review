@@ -609,13 +609,13 @@ const ManualDispatch = ({
                   gap: 8,
                   padding: "7px 10px",
                   borderRadius: 6,
-                  background: "color-mix(in oklch, var(--c-warn, #e6a817) 12%, var(--bg-1))",
-                  border: "1px solid color-mix(in oklch, var(--c-warn, #e6a817) 35%, transparent)",
+                  background: "color-mix(in oklch, var(--c-warn) 12%, var(--bg-1))",
+                  border: "1px solid color-mix(in oklch, var(--c-warn) 35%, transparent)",
                   fontSize: 11,
                   color: "var(--fg-1)",
                 }}
               >
-                <span style={{ color: "var(--c-warn, #e6a817)", flexShrink: 0 }}>⚠</span>
+                <span style={{ color: "var(--c-warn)", flexShrink: 0 }}>⚠</span>
                 {existingCommentsCount} existing comment
                 {existingCommentsCount !== 1 ? "s" : ""} will be replaced on import
               </div>
@@ -1086,13 +1086,13 @@ const AutoDispatch = ({
             padding: "7px 10px",
             borderRadius: 6,
             marginBottom: 8,
-            background: "color-mix(in oklch, var(--c-warn, #e6a817) 12%, var(--bg-1))",
-            border: "1px solid color-mix(in oklch, var(--c-warn, #e6a817) 35%, transparent)",
+            background: "color-mix(in oklch, var(--c-warn) 12%, var(--bg-1))",
+            border: "1px solid color-mix(in oklch, var(--c-warn) 35%, transparent)",
             fontSize: 11,
             color: "var(--fg-1)",
           }}
         >
-          <span style={{ color: "var(--c-warn, #e6a817)", flexShrink: 0 }}>⚠</span>
+          <span style={{ color: "var(--c-warn)", flexShrink: 0 }}>⚠</span>
           {existingCommentsCount} existing comment
           {existingCommentsCount !== 1 ? "s" : ""} will be replaced once a complete answer is saved
           — a failed or unreadable run keeps them

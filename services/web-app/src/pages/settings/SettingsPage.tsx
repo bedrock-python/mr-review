@@ -816,7 +816,7 @@ type BaseUrlWarningProps = { message: string | null };
 
 const BaseUrlWarning = ({ message }: BaseUrlWarningProps): React.ReactElement | null =>
   message ? (
-    <div role="note" style={{ fontSize: 11, color: "var(--c-warn, #e6a817)", marginTop: 4 }}>
+    <div role="note" style={{ fontSize: 11, color: "var(--c-warn)", marginTop: 4 }}>
       ⚠ {message}
     </div>
   ) : null;

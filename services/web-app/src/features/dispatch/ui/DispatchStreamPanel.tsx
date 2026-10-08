@@ -20,7 +20,7 @@ const SEVERITY_COLOR: Record<CommentSeverity, string> = {
   critical: "var(--c-critical)",
   major: "var(--c-major)",
   minor: "var(--c-minor)",
-  suggestion: "var(--c-suggestion)",
+  suggestion: "var(--c-suggest)",
 };
 
 const STATUS_LABEL: Record<DispatchRunStatus, string> = {
@@ -58,7 +58,7 @@ const PulseDot = ({ color, size }: { color: string; size: number }): React.React
 );
 
 const Cursor = ({ color }: { color: string }): React.ReactElement => (
-  <span style={{ animation: "pulse 1s step-end infinite", color }}>▌</span>
+  <span style={{ animation: "blink 1s step-end infinite", color }}>▌</span>
 );
 
 /* ── Header ─────────────────────────────────────────────────── */
