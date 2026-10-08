@@ -22,7 +22,7 @@ export const VIRTUALIZE_THRESHOLD = 80;
 const GROUP_ROW_ESTIMATE_PX = 34;
 const CARD_ROW_ESTIMATE_PX = 140;
 const VIRTUAL_OVERSCAN = 6;
-const SCROLL_AREA_CLASS = "h-full overflow-auto px-5 py-4";
+const SCROLL_AREA_CLASS = "h-full overflow-auto px-4 py-3";
 
 const rowKey = (row: TriageRow): string =>
   row.kind === "group" ? `group:${row.group.key}` : row.comment.id;

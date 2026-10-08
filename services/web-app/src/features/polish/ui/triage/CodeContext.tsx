@@ -27,7 +27,7 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
 
   if (snippet === null) {
     return (
-      <div className="text-fg-2 px-2.5 py-2 font-mono text-[11px]" role="status">
+      <div className="text-fg-2 px-2.5 py-2 font-mono text-(length:--fs-meta)" role="status">
         {isDiffLoading
           ? "Loading code…"
           : `Line ${String(line)} of ${file} is not shown in the diff.`}
@@ -37,7 +37,7 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
 
   return (
     <table
-      className="w-full table-fixed border-collapse font-mono text-[11px] leading-[18px]"
+      className="w-full table-fixed border-collapse font-mono text-(length:--fs-meta) leading-[18px]"
       aria-label={`Code around ${file}:${String(line)}`}
     >
       <colgroup>
