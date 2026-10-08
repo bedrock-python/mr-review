@@ -73,9 +73,9 @@ stay on the Brief and the error says why.
 
 ## DISPATCH — run the review
 
-Pick a provider and a model — one from the provider's list, or any model id typed into the
-model field (Enter takes it). The generation settings below show only what that model
-accepts:
+Pick a provider and a model — one from the provider's list (type to search, arrow keys and
+Enter to choose), or any model id typed into the model field (Enter takes it, and so does
+leaving the field). The generation settings below show only what that model accepts:
 
 - **Reasoning** — an effort level (`low` … `max`) on models that reason by effort, with
   **Default** keeping the model's own; a thinking budget on older Claude models; an On/Off
@@ -89,8 +89,14 @@ The model and settings are remembered per provider, so switching providers bring
 you last used with each. See [AI providers](ai-providers.md#dispatch-settings) for what each
 model accepts and how the settings are fitted to it.
 
-Click **Generate**. The request streams back via SSE — each comment appears as soon as the AI
-finishes writing it, while the rest of the answer is still arriving.
+Click **Generate review** in the bar at the bottom of the stage; next to it, the bar warns
+when the run will replace the iteration's existing comments. The request streams back via SSE —
+each comment appears as soon as the AI finishes writing it, while the rest of the answer is
+still arriving. Once the run starts, the provider, model and settings fold into one line above
+the output — provider, model, status and **Stop** while it streams, **Edit** to unfold them
+again once it is over. When the run is done the bar offers **Polish N comments** and
+**Run again**; after a run that saved nothing, a stop or a failure, **Run again** comes first.
+A failed run says why, with **Retry** and **Use Copy & paste** next to the message.
 
 The AI produces structured comments, each anchored to a specific file and line. With
 structured output on, the model can only answer in the review's JSON shape. Without it, models
@@ -112,7 +118,9 @@ tokens), and an answer that can't be read at all is kept as a single general com
 
 The raw answer the comments came from is stored with the iteration, so you can always look at
 exactly what the model said and have it parsed again. While a run is streaming, the
-Copy & paste / Run in app switch is locked so that it can't cut the run short.
+Copy & paste / Run in app switch is locked so that it can't cut the run short. A response
+pasted in Copy & paste mode, and the report of its import, stay there when you switch to
+Run in app and back.
 
 ## POLISH — edit comments
 
