@@ -10,6 +10,7 @@ top-level parameter; a thinking budget, which has no standard parameter, goes ou
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, AsyncIterator
+from dataclasses import dataclass
 from typing import Final
 
 import httpx2
@@ -41,8 +42,16 @@ def _response_format(plan: GenerationPlan) -> ResponseFormatJSONSchema | Omit:
     }
 
 
-def _chunk_text_and_finish(chunk: ChatCompletionChunk) -> tuple[str, str | None]:
-    """The text delta and finish reason of a chunk.
+@dataclass(frozen=True, slots=True)
+class _ChunkParts:
+    text: str = ""
+    # Under structured output OpenAI streams a refusal here instead of content.
+    refusal: str = ""
+    finish_reason: str | None = None
+
+
+def _chunk_parts(chunk: ChatCompletionChunk) -> _ChunkParts:
+    """The text delta, refusal delta and finish reason of a chunk.
 
     Chunks without choices are skipped quietly: Azure sends content-filter results that way, and
     servers that report usage send a final chunk with an empty list. Some servers also leave out
@@ -50,10 +59,14 @@ def _chunk_text_and_finish(chunk: ChatCompletionChunk) -> tuple[str, str | None]
     """
     choices = getattr(chunk, "choices", None) or []
     if not choices:
-        return "", None
+        return _ChunkParts()
     choice = choices[0]
-    content = getattr(getattr(choice, "delta", None), "content", None)
-    return content or "", getattr(choice, "finish_reason", None)
+    delta = getattr(choice, "delta", None)
+    return _ChunkParts(
+        text=getattr(delta, "content", None) or "",
+        refusal=getattr(delta, "refusal", None) or "",
+        finish_reason=getattr(choice, "finish_reason", None),
+    )
 
 
 class OpenAICompatProvider:
@@ -115,22 +128,32 @@ class OpenAICompatProvider:
             extra_body={"reasoning_budget": plan.budget_tokens} if plan.budget_tokens is not None else None,
         )
 
-    async def _stream(self, prompt: str, plan: GenerationPlan) -> AsyncGenerator[AIStreamItem, None]:
-        finish_reason: str | None = None
-        async with self._client() as client:
-            try:
-                stream = await self._open_stream(client, prompt, plan)
-                async for chunk in stream:
-                    text, finished = _chunk_text_and_finish(chunk)
-                    finish_reason = finished or finish_reason
-                    if text:
-                        yield text
-            except openai.APIError as exc:
-                raise to_provider_error(
-                    exc, _ERRORS, provider=self._label, structured_output=plan.structured_output
-                ) from exc
+    def _check_ending(self, finish_reason: str | None, refusal: str) -> None:
+        """Raise when the model declined: a refusal message, or a content filter that cut the answer."""
+        if refusal.strip():
+            raise AIProviderRefusalError(
+                f"{capitalized(self._label)} declined to complete the review: {refusal.strip()}"
+            )
         if finish_reason == "content_filter":
             raise AIProviderRefusalError(
                 f"{capitalized(self._label)} stopped the answer with its content filter. What arrived before was kept."
             )
+
+    async def _stream(self, prompt: str, plan: GenerationPlan) -> AsyncGenerator[AIStreamItem, None]:
+        finish_reason: str | None = None
+        refusal: list[str] = []
+        async with self._client() as client:
+            try:
+                stream = await self._open_stream(client, prompt, plan)
+                async for chunk in stream:
+                    parts = _chunk_parts(chunk)
+                    finish_reason = parts.finish_reason or finish_reason
+                    refusal.append(parts.refusal)
+                    if parts.text:
+                        yield parts.text
+            except openai.APIError as exc:
+                raise to_provider_error(
+                    exc, _ERRORS, provider=self._label, structured_output=plan.structured_output
+                ) from exc
+        self._check_ending(finish_reason, "".join(refusal))
         yield AIStreamEnd(truncated=finish_reason == "length")

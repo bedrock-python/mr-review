@@ -109,6 +109,29 @@ async def test__dispatch__content_filter_stop__refusal_error() -> None:
         await _dispatch(transport, "openai_compat", "model")
 
 
+async def test__dispatch__structured_output_refusal__refusal_error_with_its_text() -> None:
+    """Regression: a refusal streamed in ``delta.refusal`` was dropped and read as an empty answer."""
+    refusal_start = _chunk()
+    refusal_start["choices"][0]["delta"] = {"role": "assistant", "content": None, "refusal": ""}
+    refusal = _chunk()
+    refusal["choices"][0]["delta"] = {"refusal": "I'm sorry, I can't help with that."}
+    transport = _Recorder(_streaming(_stream(refusal_start, refusal, _chunk(None, "stop"))))
+    received: list[AIStreamItem] = []
+
+    with pytest.raises(AIProviderRefusalError, match="declined to complete the review: I'm sorry"):
+        await _drain(transport, "openai", "gpt-4o", received)
+
+    assert received == []
+    assert transport.closed
+
+
+async def _drain(transport: _Recorder, provider_type: AIProviderType, model: str, into: list[AIStreamItem]) -> None:
+    provider = OpenAICompatProvider("sk-test", provider_type=provider_type, transport=transport)
+    plan = plan_generation(resolve_capabilities(provider_type, model), DispatchOptions(model=model))
+    async for item in provider.dispatch("review this", plan):
+        into.append(item)
+
+
 async def test__dispatch__reasoning_budget__not_used_as_the_output_limit() -> None:
     """Regression: max_completion_tokens was set to the reasoning budget, capping the whole answer at it."""
     transport = _Recorder(_streaming(_stream(_chunk("[]", "stop"))))
