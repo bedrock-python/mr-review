@@ -75,7 +75,7 @@ def _refusal(message: Message) -> AIProviderRefusalError:
         reason += f" (category: {details.category})"
     if details is not None and details.explanation:
         reason += f": {details.explanation}"
-    return AIProviderRefusalError(f"{reason}. What it wrote before stopping was kept.")
+    return AIProviderRefusalError(f"{reason}.")
 
 
 def sdk_base_url(base_url: str | None) -> str | None:

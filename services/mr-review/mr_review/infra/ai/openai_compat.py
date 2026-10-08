@@ -135,9 +135,7 @@ class OpenAICompatProvider:
                 f"{capitalized(self._label)} declined to complete the review: {refusal.strip()}"
             )
         if finish_reason == "content_filter":
-            raise AIProviderRefusalError(
-                f"{capitalized(self._label)} stopped the answer with its content filter. What arrived before was kept."
-            )
+            raise AIProviderRefusalError(f"{capitalized(self._label)} stopped the answer with its content filter.")
 
     async def _stream(self, prompt: str, plan: GenerationPlan) -> AsyncGenerator[AIStreamItem, None]:
         finish_reason: str | None = None

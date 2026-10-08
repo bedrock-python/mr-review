@@ -162,11 +162,14 @@ is not silently retried without.
 ### How an answer can end
 
 - **Truncated.** The provider stopped at the output limit (Claude `max_tokens`, or the context
-  window; OpenAI `finish_reason: length`). The comments completed before the cut are kept and
-  the run is marked truncated — raise **Max output tokens** or narrow the context.
+  window; OpenAI `finish_reason: length`). The answer counts as cut off even when its text
+  happens to parse, so it never replaces existing comments; on an iteration without comments
+  the ones completed before the cut are saved. The run is marked truncated — raise **Max output
+  tokens** or narrow the context.
 - **Refused.** Claude declined to answer (`stop_reason: refusal`, with its category when it
-  gives one), or an endpoint's content filter stopped the answer. The dispatch ends with an
-  error saying so; what arrived before is kept.
+  gives one), OpenAI returned a `refusal` under structured output, or an endpoint's content
+  filter stopped the answer. The dispatch ends with an error saying so and is settled like any
+  failed run: existing comments stay as they were.
 
 ## Concurrency
 

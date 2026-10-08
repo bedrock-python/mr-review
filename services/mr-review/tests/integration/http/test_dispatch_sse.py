@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from mr_review.api.config import Settings
 from mr_review.api.routers.v1.reviews import router as reviews_router
 from mr_review.core.ai.entities import AIStreamEnd, AIStreamItem, DispatchOptions
+from mr_review.core.ai.errors import AIProviderRefusalError
 from mr_review.core.mrs.entities import DiffFile
 from mr_review.core.reviews.entities import BriefConfig, Comment, Iteration, IterationStage, Review
 from mr_review.core.reviews.sources import BranchDiffSource
@@ -253,6 +254,35 @@ async def test__dispatch__provider_stopped_at_its_limit__done_flags_truncation_e
 
     assert [name for name, _ in events] == ["chunk", "comment", "done"]
     assert (events[-1][1]["comments"], events[-1][1]["truncated"]) == (1, True)
+
+
+async def test__dispatch__provider_stopped_at_its_limit__previous_comments_kept(harness: _Harness) -> None:
+    """A parseable answer the provider reports as cut off is still not used over existing comments."""
+    review, _ = await _seed(harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish)
+    harness.dispatch.model = _Model(['[{"body": "New"}]'], end=AIStreamEnd(truncated=True))
+
+    events = await _dispatch(harness, review.id)
+
+    done = events[-1][1]
+    assert (done["truncated"], done["kept_previous"], done["comments"]) == (True, True, 1)
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert [c.body for c in stored.iterations[0].comments] == ["Old"]
+    assert stored.iterations[0].stage == IterationStage.polish
+
+
+async def test__dispatch__refusal__error_event_and_previous_comments_kept(harness: _Harness) -> None:
+    review, _ = await _seed(harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish)
+    refusal = AIProviderRefusalError("OpenAI declined to complete the review: I'm sorry, I can't help with that.")
+    harness.dispatch.model = _Model([], error=refusal)
+
+    events = await _dispatch(harness, review.id)
+
+    assert events == [("error", {"message": str(refusal)})]
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert [c.body for c in stored.iterations[0].comments] == ["Old"]
+    assert stored.iterations[0].stage == IterationStage.polish
 
 
 async def test__dispatch__settings__reach_the_dispatcher_as_one_options_object(harness: _Harness) -> None:
