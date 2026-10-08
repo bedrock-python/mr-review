@@ -429,6 +429,58 @@ describe("BriefStage — saved presets", () => {
 
 describe("BriefStage — advanced", () => {
   it(
+    "escapes glob characters in a path it takes back in",
+    async () => {
+      api.getExcludedFiles.mockResolvedValue({
+        total: 3,
+        excluded: [{ path: "app/[slug]/page.tsx", reason: "*.tsx" }],
+      });
+      const user = userEvent.setup();
+      renderStage();
+
+      await user.click(await screen.findByRole("button", { name: /Advanced/ }));
+      await user.click(
+        await screen.findByRole("button", { name: "Review app/[slug]/page.tsx anyway" })
+      );
+
+      await waitFor(() => {
+        expect(lastSavedBrief().exclude_paths).toEqual(["!/app/\\[slug\\]/page.tsx"]);
+      }, SAVE_WAIT);
+    },
+    INTEGRATION_TEST_TIMEOUT_MS
+  );
+
+  it("blocks Dispatch and says why when the path filters exclude every changed file", async () => {
+    api.getExcludedFiles.mockResolvedValue({
+      total: 2,
+      excluded: [
+        { path: "src/a.py", reason: "(not matched by the include patterns)" },
+        { path: "src/b.py", reason: "(not matched by the include patterns)" },
+      ],
+    });
+    renderStage({ ...DEFAULT_BRIEF_CONFIG, include_paths: ["docs/**"] });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "All 2 changed files are excluded by the path filters"
+    );
+    expect(screen.getByRole("button", { name: /Dispatch/ })).toBeDisabled();
+  });
+
+  it("shows the server's reason when the preview is refused", async () => {
+    api.getPromptPreview.mockRejectedValue(
+      new ApiError("All 2 changed files are excluded by the path filters", 422)
+    );
+    const user = userEvent.setup();
+    renderStage();
+
+    await user.click(await screen.findByRole("button", { name: "Preview prompt" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not build the prompt: All 2 changed files are excluded by the path filters"
+    );
+  });
+
+  it(
     "shows how many files the path filters exclude and lets one be reviewed anyway",
     async () => {
       const user = userEvent.setup();

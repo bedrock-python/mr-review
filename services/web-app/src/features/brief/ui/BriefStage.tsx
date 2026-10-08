@@ -3,6 +3,7 @@ import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { copyText } from "@shared/lib";
 import { useDiffSize } from "@entities/review";
+import { isEverythingExcluded } from "../lib";
 import { useBriefDraft, useExcludedFiles, usePromptPreview } from "../model";
 import { AdvancedSection } from "./AdvancedSection";
 import { ContextFilesField } from "./ContextFilesField";
@@ -42,6 +43,7 @@ export const BriefStage = (): React.ReactElement => {
   const { isLoading, config, update, flush } = useBriefDraft(activeReviewId);
   const diffSize = useDiffSize(activeReviewId);
   const excludedFiles = useExcludedFiles(activeReviewId, config);
+  const nothingToReview = isEverythingExcluded(excludedFiles.data);
   const preview = usePromptPreview(activeReviewId, config);
   const [copy, setCopy] = useState<CopyState>({ status: "idle" });
   const [isSaving, setIsSaving] = useState(false);
@@ -134,11 +136,16 @@ export const BriefStage = (): React.ReactElement => {
           {saveError}
         </div>
       )}
+      {!saveError && nothingToReview && (
+        <div role="alert" style={{ ...noticeStyle("var(--c-critical)"), flex: 1 }}>
+          {`All ${String(excludedFiles.data?.total ?? 0)} changed files are excluded by the path filters, so there is nothing to review. Loosen the include or exclude patterns under Advanced.`}
+        </div>
+      )}
       <button
         type="button"
         className="btn primary"
         onClick={handleDispatch}
-        disabled={isSaving}
+        disabled={isSaving || nothingToReview}
         style={{ gap: 8 }}
       >
         {isSaving ? "Saving…" : "Dispatch"}

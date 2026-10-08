@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import type { BriefConfig, ExcludedFiles } from "@entities/review";
-import { excludedSummary, useLinesField } from "../lib";
+import { escapeGlob, excludedSummary, useLinesField } from "../lib";
 import { CHECKBOX_STYLE, HINT_STYLE } from "./styles";
 
 export type PathFiltersProps = {
@@ -30,17 +30,19 @@ export const PathFilters = ({
   const shown = showAll ? files : files.slice(0, LIST_PREVIEW);
 
   const reviewAnyway = (path: string): void => {
-    onChange({ exclude_paths: [...config.exclude_paths, `!/${path}`] });
+    onChange({ exclude_paths: [...config.exclude_paths, `!/${escapeGlob(path)}`] });
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={HINT_STYLE}>
         Glob patterns over changed-file paths, one per line, as in{" "}
-        <span className="mono">.gitignore</span>: <span className="mono">*.snap</span> matches a
-        file name anywhere, <span className="mono">gen/</span> a directory anywhere,{" "}
-        <span className="mono">src/**/*.py</span> a path from the root. Excluded files are left out
-        of the diff and of context gathering.
+        <span className="mono">.gitignore</span>: <span className="mono">*.snap</span> or{" "}
+        <span className="mono">docs</span> match at any depth, a directory with everything in it;{" "}
+        <span className="mono">src/generated</span> and <span className="mono">src/**/*.py</span>{" "}
+        are paths from the root; <span className="mono">\</span> escapes{" "}
+        <span className="mono">* ? [</span>. Your patterns are case-sensitive, the built-in defaults
+        are not. Excluded files are left out of the diff and of context gathering.
       </div>
       <div>
         <label className="field-label" htmlFor={`${id}-include`}>

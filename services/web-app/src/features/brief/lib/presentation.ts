@@ -13,3 +13,10 @@ export const excludedSummary = (excluded: ExcludedFiles | undefined): string | n
   if (!excluded || excluded.total === 0 || excluded.excluded.length === 0) return null;
   return `${String(excluded.excluded.length)} of ${String(excluded.total)} changed files excluded`;
 };
+
+/** Whether the path filters leave none of the change's files — the server refuses to dispatch. */
+export const isEverythingExcluded = (excluded: ExcludedFiles | undefined): boolean =>
+  excluded !== undefined && excluded.total > 0 && excluded.excluded.length === excluded.total;
+
+/** `path` as a pattern matching exactly that path: glob characters are escaped with `\`. */
+export const escapeGlob = (path: string): string => path.replace(/[\\*?[\]]/g, "\\$&");
