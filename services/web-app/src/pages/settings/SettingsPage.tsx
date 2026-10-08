@@ -40,6 +40,7 @@ import {
 import type { Host, UpdateHost, HostColorId } from "@entities/host";
 
 import { ExportImportSection } from "@features/export-import";
+import { ReviewPresetsManager } from "@features/manage-review-presets";
 
 import { ModelListEditor } from "./ModelListEditor";
 
@@ -1819,6 +1820,14 @@ export const SettingsPage = (): React.ReactElement => {
               <AIProviderRow key={p.id} provider={p} />
             ))}
             <AddAIProviderForm />
+          </Section>
+
+          {/* Review presets section */}
+          <Section
+            title="Review Presets"
+            description="Review intents saved from the Brief, with the instructions they put in the prompt."
+          >
+            <ReviewPresetsManager />
           </Section>
 
           {/* Appearance section */}
