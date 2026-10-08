@@ -62,7 +62,7 @@ export const ChangelogModal = ({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.55)",
+            background: "var(--overlay)",
             zIndex: 200,
           }}
         />

@@ -125,7 +125,7 @@ const Tooltip = ({ label, children }: TooltipProps): React.ReactElement => {
             whiteSpace: "nowrap",
             pointerEvents: "none",
             zIndex: 100,
-            boxShadow: "var(--shadow)",
+            boxShadow: "var(--shadow-pop)",
           }}
         >
           {label}
@@ -235,13 +235,13 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
     >
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+        style={{ background: "var(--overlay)" }}
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         className="card relative z-10 w-full max-w-md p-6"
-        style={{ boxShadow: "var(--shadow)" }}
+        style={{ boxShadow: "var(--shadow-dialog)" }}
       >
         <h2 style={{ color: "var(--fg-0)", fontSize: 14, fontWeight: 600, marginBottom: 20 }}>
           Add Host

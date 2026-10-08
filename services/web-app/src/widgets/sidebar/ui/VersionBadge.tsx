@@ -78,7 +78,7 @@ export const VersionBadge = (): React.ReactElement => {
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-3)",
             padding: "12px 14px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+            boxShadow: "var(--shadow-pop)",
             zIndex: 100,
           }}
         >

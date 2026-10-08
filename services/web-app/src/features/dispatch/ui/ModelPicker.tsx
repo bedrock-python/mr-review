@@ -144,7 +144,7 @@ export const ModelPicker = ({
             borderRadius: "var(--radius-3)",
             border: "1px solid var(--border)",
             background: "var(--bg-1)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            boxShadow: "var(--shadow-pop)",
             maxHeight: 240,
             overflowY: "auto",
           }}

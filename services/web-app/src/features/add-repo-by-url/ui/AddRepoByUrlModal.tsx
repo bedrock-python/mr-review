@@ -64,8 +64,7 @@ export const AddRepoByUrlModal = ({
             position: "fixed",
             inset: 0,
             zIndex: 50,
-            background: "rgba(0,0,0,0.6)",
-            backdropFilter: "blur(4px)",
+            background: "var(--overlay)",
           }}
         />
         <Dialog.Content
@@ -80,7 +79,7 @@ export const AddRepoByUrlModal = ({
             width: 448,
             maxWidth: "calc(100vw - 32px)",
             padding: 24,
-            boxShadow: "var(--shadow)",
+            boxShadow: "var(--shadow-dialog)",
           }}
         >
           <Dialog.Title
