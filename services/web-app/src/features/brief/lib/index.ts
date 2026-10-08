@@ -4,6 +4,7 @@ export {
   isSameBrief,
   presetOverridesFrom,
   applyPreset,
+  changedFields,
 } from "./briefConfig";
 export {
   BUILTIN_PRESET_CARDS,

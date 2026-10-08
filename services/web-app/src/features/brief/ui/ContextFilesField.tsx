@@ -31,6 +31,7 @@ export const ContextFilesField = ({
     >
       <Textarea
         isMono
+        spellCheck={false}
         rows={PATH_ROWS}
         value={field.value}
         onChange={field.onChange}

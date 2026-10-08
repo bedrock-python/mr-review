@@ -35,6 +35,17 @@ const NOT_STORED_IN_PRESETS = new Set<string>([
 export const presetOverridesFrom = (config: BriefConfig): Record<string, unknown> =>
   Object.fromEntries(Object.entries(config).filter(([key]) => !NOT_STORED_IN_PRESETS.has(key)));
 
+/**
+ * The fields `after` changed, with the values they had in `before`: applying the result to
+ * `after` undoes the change and leaves every other field as it is.
+ */
+export const changedFields = (before: BriefConfig, after: BriefConfig): Partial<BriefConfig> =>
+  Object.fromEntries(
+    (Object.keys(after) as (keyof BriefConfig)[])
+      .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+      .map((key) => [key, before[key]])
+  );
+
 /** `config` with a saved preset picked: its stored fields applied over the current ones. */
 export const applyPreset = (
   config: BriefConfig,

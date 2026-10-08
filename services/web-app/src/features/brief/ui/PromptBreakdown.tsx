@@ -42,6 +42,7 @@ export type PromptBreakdownProps = {
 /** What the prompt is made of, what the budget cut, and which files were left out. */
 export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactElement => {
   const lossy = preview.sections.filter(hasLoss);
+  const skipped = preview.sections.flatMap((section) => section.skipped);
 
   return (
     <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
@@ -134,6 +135,11 @@ export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactE
             ))}
           </ul>
         </Callout>
+      )}
+      {skipped.length > 0 && (
+        <p className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>
+          {`Skipped as binary: ${skipped.join(", ")}.`}
+        </p>
       )}
       {preview.excluded_files.length > 0 && (
         <p className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>

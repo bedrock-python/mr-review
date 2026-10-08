@@ -32,7 +32,6 @@ export const PathFilters = ({
   const exclude = useLinesField(config.exclude_paths, (lines) => {
     onChange({ exclude_paths: lines });
   });
-  const files = excluded?.excluded ?? [];
 
   return (
     <BriefSection
@@ -49,6 +48,7 @@ export const PathFilters = ({
             <Textarea
               ref={includeFieldRef}
               isMono
+              spellCheck={false}
               rows={PATTERN_ROWS}
               placeholder="e.g. src/**"
               value={include.value}
@@ -59,6 +59,7 @@ export const PathFilters = ({
           <Field label="Exclude" hint="A leading ! takes a file back in.">
             <Textarea
               isMono
+              spellCheck={false}
               rows={PATTERN_ROWS}
               placeholder={"e.g. *.snap\n!/go.sum"}
               value={exclude.value}
@@ -84,19 +85,18 @@ export const PathFilters = ({
             onChange({ use_default_excludes });
           }}
         />
-        <div aria-live="polite" className="text-fg-2" style={{ fontSize: "var(--fs-meta)" }}>
-          {isChecking && !excluded ? "Checking which files are excluded…" : null}
-          {excluded &&
-            files.length === 0 &&
-            `All ${String(excluded.total)} changed files are reviewed.`}
-        </div>
-        {excluded && files.length > 0 && (
+        {excluded ? (
           <ExcludedFilesList
             excluded={excluded}
+            excludePatterns={config.exclude_paths}
             onReviewAnyway={(pattern) => {
               onChange({ exclude_paths: [...config.exclude_paths, pattern] });
             }}
           />
+        ) : (
+          <p aria-live="polite" className="text-fg-2 m-0" style={{ fontSize: "var(--fs-meta)" }}>
+            {isChecking ? "Checking which files are excluded…" : null}
+          </p>
         )}
       </div>
     </BriefSection>

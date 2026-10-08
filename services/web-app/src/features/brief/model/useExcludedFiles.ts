@@ -33,5 +33,9 @@ export const useExcludedFiles = (
     },
     enabled: reviewId !== null,
     staleTime: EXCLUDED_STALE_MS,
+    // The last answer for this review stays up while changed filters are re-checked: the
+    // list (and the button focus is on) does not vanish and come back, nor Dispatch flicker.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === reviewId ? previous : undefined,
   });
 };

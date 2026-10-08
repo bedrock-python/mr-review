@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
-import { applyPreset, isSameBrief, parseLines, presetOverridesFrom } from "./briefConfig";
+import {
+  applyPreset,
+  changedFields,
+  isSameBrief,
+  parseLines,
+  presetOverridesFrom,
+} from "./briefConfig";
 
 const PRESET_ID = "33333333-3333-4333-8333-333333333333";
 
@@ -58,5 +64,22 @@ describe("presets", () => {
     const applied = applyPreset(DEFAULT_BRIEF_CONFIG, PRESET_ID, { min_severity: "catastrophic" });
 
     expect(applied).toEqual({ ...DEFAULT_BRIEF_CONFIG, custom_preset_id: PRESET_ID });
+  });
+});
+
+describe("changedFields", () => {
+  it("returns the old values of only the fields that changed", () => {
+    const before = {
+      ...DEFAULT_BRIEF_CONFIG,
+      focus_areas: ["Tests"],
+      min_severity: "minor" as const,
+    };
+    const after = applyPreset(before, PRESET_ID, { min_severity: "major", max_comments: 5 });
+
+    expect(changedFields(before, after)).toEqual({
+      custom_preset_id: null,
+      min_severity: "minor",
+      max_comments: null,
+    });
   });
 });

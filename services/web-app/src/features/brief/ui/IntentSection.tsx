@@ -1,17 +1,21 @@
 import { useId, useState } from "react";
-import { BookmarkPlus, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { BookmarkPlus, Eye, EyeOff } from "lucide-react";
 import {
   useBuiltinPresets,
   useDeleteReviewPreset,
   useReviewPresets,
 } from "@entities/review-preset";
 import { Button, Callout, Card, ICON_SIZE } from "@shared/ui";
-import { BUILTIN_PRESET_CARDS, applyPreset } from "../lib";
+import { BUILTIN_PRESET_CARDS, applyPreset, changedFields } from "../lib";
 import { BriefSection } from "./BriefSection";
 import { PresetPicker } from "./PresetPicker";
+import { SavedPresetList } from "./SavedPresetList";
 import { SavePresetForm } from "./SavePresetForm";
 import type { BriefConfig } from "@entities/review";
 import type { ReviewPreset } from "@entities/review-preset";
+
+const PRESET_UNDO_TOAST_ID = "brief-preset-applied";
 
 export type IntentSectionProps = {
   config: BriefConfig;
@@ -41,8 +45,32 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
   const customText = selectedCustom?.instructions.trim() ?? "";
   const shownInstructions = customText !== "" ? customText : builtinText;
   const builtinLabel = BUILTIN_PRESET_CARDS.find((card) => card.id === config.preset)?.label ?? "";
-  const isConfirmingDelete =
-    confirmingDeleteId !== null && confirmingDeleteId === selectedCustom?.id;
+
+  // Applying a saved preset overwrites brief settings; Undo puts back what it changed.
+  const handleToggleSaved = (preset: ReviewPreset): void => {
+    setConfirmingDeleteId(null);
+    if (preset.id === config.custom_preset_id) {
+      onChange({ custom_preset_id: null });
+      return;
+    }
+    const next = applyPreset(config, preset.id, preset.brief_config);
+    const undo = changedFields(config, next);
+    onChange(next);
+    const overwritten = Object.keys(undo).filter((key) => key !== "custom_preset_id").length;
+    if (overwritten === 0) return;
+    toast(
+      `Applied preset ${preset.name}: ${String(overwritten)} brief setting${overwritten === 1 ? "" : "s"} changed`,
+      {
+        id: PRESET_UNDO_TOAST_ID,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            onChange(undo);
+          },
+        },
+      }
+    );
+  };
 
   const handleDelete = (preset: ReviewPreset): void => {
     if (confirmingDeleteId !== preset.id) {
@@ -62,19 +90,29 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
       title="Review intent"
       description="What the review looks for: a built-in preset, or one you saved."
     >
-      <PresetPicker
-        presets={presets}
-        builtinSelected={builtinSelected}
-        savedSelectedId={selectedCustom?.id ?? null}
-        onSelectBuiltin={(preset) => {
-          setConfirmingDeleteId(null);
-          onChange({ preset, custom_preset_id: null });
-        }}
-        onSelectSaved={(preset) => {
-          setConfirmingDeleteId(null);
-          onChange(applyPreset(config, preset.id, preset.brief_config));
-        }}
-      />
+      <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
+        <PresetPicker
+          selected={builtinSelected}
+          onSelect={(preset) => {
+            setConfirmingDeleteId(null);
+            onChange({ preset, custom_preset_id: null });
+          }}
+        />
+        {presets && presets.length > 0 && (
+          <SavedPresetList
+            presets={presets}
+            selectedId={selectedCustom?.id ?? null}
+            confirmingDeleteId={confirmingDeleteId}
+            deletingId={deletePreset.isPending ? deletePreset.variables : null}
+            onToggle={handleToggleSaved}
+            onEdit={(preset) => {
+              setConfirmingDeleteId(null);
+              setEditor({ mode: "edit", preset });
+            }}
+            onDelete={handleDelete}
+          />
+        )}
+      </div>
       {isMissing && (
         <Callout tone="warn" size="sm" role="status" style={{ marginTop: "var(--space-3)" }}>
           {`The saved preset this brief used was deleted; the built-in ${builtinLabel} preset is used instead.`}
@@ -106,37 +144,6 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
         >
           Save as preset…
         </Button>
-        {selectedCustom && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={icon(Pencil)}
-              aria-label={`Edit preset ${selectedCustom.name}`}
-              onClick={() => {
-                setEditor({ mode: "edit", preset: selectedCustom });
-              }}
-            >
-              Edit preset
-            </Button>
-            <Button
-              variant={isConfirmingDelete ? "danger" : "ghost"}
-              size="sm"
-              icon={icon(Trash2)}
-              isLoading={deletePreset.isPending}
-              aria-label={
-                isConfirmingDelete
-                  ? `Confirm deleting preset ${selectedCustom.name}`
-                  : `Delete preset ${selectedCustom.name}`
-              }
-              onClick={() => {
-                handleDelete(selectedCustom);
-              }}
-            >
-              {isConfirmingDelete ? "Confirm" : "Delete preset"}
-            </Button>
-          </>
-        )}
       </div>
       {showInstructions && (
         <Card surface="sunken" padding="sm" style={{ marginTop: "var(--space-2)" }}>
