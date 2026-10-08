@@ -75,15 +75,19 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
     rows = visibleTreeRows(tree, trimmed ? new Set(collectDirPaths(tree)) : openDirs);
   }
 
+  // While filtering, every folder holding a match is shown open; toggling one would only
+  // change how the tree looks once the filter is cleared.
+  const canToggle = !trimmed;
   const handleActivate = (row: FileTreeRow): void => {
     if (row.file) onSelect(row.path);
-    else handleToggleDir(row.path);
+    else if (canToggle) handleToggleDir(row.path);
   };
   const keyboard = useTreeKeyboard({
     rows,
     selectedPath,
     onActivate: handleActivate,
     onToggleDir: handleToggleDir,
+    canToggle,
   });
 
   return (

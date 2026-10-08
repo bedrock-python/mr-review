@@ -18,6 +18,8 @@ export type UseTreeKeyboardParams = {
   /** Enter or Space on a row: open a file, or open or close a folder. */
   onActivate: (row: FileTreeRow) => void;
   onToggleDir: (path: string) => void;
+  /** False while the folders are held open (a filter is on): ← and → only move focus. */
+  canToggle: boolean;
 };
 
 /**
@@ -30,6 +32,7 @@ export const useTreeKeyboard = ({
   selectedPath,
   onActivate,
   onToggleDir,
+  canToggle,
 }: UseTreeKeyboardParams): TreeKeyboard => {
   const elements = useRef(new Map<string, HTMLElement>());
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
@@ -65,11 +68,11 @@ export const useTreeKeyboard = ({
         focusRow(rows.length - 1);
         break;
       case "ArrowRight":
-        if (isDir && !row.isOpen) onToggleDir(row.path);
-        else if (isDir) focusRow(index + 1);
+        if (isDir && !row.isOpen && canToggle) onToggleDir(row.path);
+        else if (isDir && row.isOpen) focusRow(index + 1);
         break;
       case "ArrowLeft":
-        if (isDir && row.isOpen) onToggleDir(row.path);
+        if (isDir && row.isOpen && canToggle) onToggleDir(row.path);
         else if (row.parentPath !== null) {
           focusRow(rows.findIndex((candidate) => candidate.path === row.parentPath));
         }
