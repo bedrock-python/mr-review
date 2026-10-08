@@ -95,7 +95,7 @@ const renderPanel = (url = "/") => {
 
 const openPanel = async (user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> => {
   await user.click(screen.getByRole("button", { name: "History" }));
-  return screen.findByRole("dialog", { name: "Review History" });
+  return screen.findByRole("dialog", { name: "Review history" });
 };
 
 describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
@@ -186,6 +186,21 @@ describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(within(dialog).queryByRole("button", { name: /^service.*!12/ })).not.toBeInTheDocument();
   });
 
+  it("says when nothing matches and clears the filters on request", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(reviewApi, "list").mockResolvedValue(REVIEWS);
+    renderPanel();
+    const dialog = await openPanel(user);
+    await within(dialog).findByRole("button", { name: /^service.*!12/ });
+
+    await user.type(within(dialog).getByRole("searchbox", { name: "Search reviews" }), "nothing");
+
+    expect(within(dialog).getByText("No matching reviews")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Clear filters" }));
+    expect(within(dialog).getByRole("searchbox", { name: "Search reviews" })).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: /^service.*!12/ })).toBeInTheDocument();
+  });
+
   it("keeps hosts that share a name in separate groups", async () => {
     const user = userEvent.setup();
     vi.spyOn(reviewApi, "list").mockResolvedValue(REVIEWS);
@@ -228,6 +243,9 @@ describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     expect(remove).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: /^service.*!12/ })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Delete review of group/service !12" })
+    ).toHaveFocus();
   });
 
   it("deletes after confirmation and leaves the page of the deleted review", async () => {

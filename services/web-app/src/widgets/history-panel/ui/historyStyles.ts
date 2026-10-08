@@ -1,23 +1,60 @@
-import type { CommentSeverity, ReviewStage } from "@entities/review";
+import type { ReviewStage } from "@entities/review";
+import type { Status, Tone } from "@shared/ui";
 
-export const STAGE_META: Record<ReviewStage, { label: string; color: string }> = {
-  pick: { label: "Picking", color: "var(--fg-2)" },
-  brief: { label: "Brief", color: "var(--fg-2)" },
-  dispatch: { label: "Dispatching", color: "var(--c-major)" },
-  polish: { label: "Polishing", color: "var(--accent)" },
-  post: { label: "Posted", color: "var(--c-add)" },
+/** How a review's stage reads in a row (StatusBadge) and in the stage filter (Chip tone). */
+export const STAGE_META: Record<ReviewStage, { label: string; status: Status; tone: Tone }> = {
+  pick: { label: "Picking", status: "neutral", tone: "neutral" },
+  brief: { label: "Brief", status: "neutral", tone: "neutral" },
+  dispatch: { label: "Dispatching", status: "info", tone: "info" },
+  polish: { label: "Polishing", status: "active", tone: "accent" },
+  post: { label: "Posted", status: "success", tone: "success" },
 };
 
-export const SEVERITY_ORDER: readonly CommentSeverity[] = [
-  "critical",
-  "major",
-  "minor",
-  "suggestion",
-];
+/** One review row: open button on the left, delete on the right. */
+export const ROW_CLASS =
+  "group relative flex items-center border-b border-border hover:bg-bg-hover";
 
-export const SEVERITY_COLORS: Record<CommentSeverity, string> = {
-  critical: "var(--c-critical)",
-  major: "var(--c-major)",
-  minor: "var(--c-minor)",
-  suggestion: "var(--c-suggest)",
+export const ROW_ACTIVE: React.CSSProperties = {
+  background: "var(--bg-2)",
+  boxShadow: "inset 2px 0 0 var(--accent)",
+};
+
+export const ROW_OPEN: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--space-1)",
+  flex: 1,
+  minWidth: 0,
+  padding: "var(--space-3) var(--space-2) var(--space-3) var(--space-4)",
+  border: 0,
+  background: "none",
+  color: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+export const ROW_LINE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--space-2)",
+  minWidth: 0,
+};
+
+export const TRUNCATE: React.CSSProperties = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+export const MONO_META: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-meta)",
+  color: "var(--fg-2)",
+};
+
+export const ROW_TITLE: React.CSSProperties = {
+  fontSize: "var(--fs-body)",
+  fontWeight: "var(--fw-medium)",
+  color: "var(--fg-0)",
 };
