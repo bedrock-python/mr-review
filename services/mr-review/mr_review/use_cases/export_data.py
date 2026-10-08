@@ -69,12 +69,28 @@ _Sealer = Callable[[SecretStr], SecretStr | None]
 
 def _secret_sealer(request: ExportRequest) -> tuple[_Sealer, EncryptionParams | None]:
     """How each secret goes into the package, and the encryption block to store with it."""
+    seal: _Sealer
+    encryption: EncryptionParams | None = None
     if request.encryption_password is not None:
         cipher, encryption = PackageCipher.create(request.encryption_password.get_secret_value())
-        return (lambda secret: SecretStr(cipher.encrypt(secret.get_secret_value()))), encryption
-    if request.include_plain_secrets:
-        return (lambda secret: secret), None
-    return (lambda _secret: None), None
+
+        def seal(secret: SecretStr) -> SecretStr | None:
+            return SecretStr(cipher.encrypt(secret.get_secret_value()))
+
+    elif request.include_plain_secrets:
+
+        def seal(secret: SecretStr) -> SecretStr | None:
+            return secret
+
+    else:
+        return (lambda _secret: None), None
+
+    def seal_present(secret: SecretStr) -> SecretStr | None:
+        # A host or provider imported without its secret stores an empty one. Writing it
+        # as absent keeps an import elsewhere from replacing a real secret with nothing.
+        return seal(secret) if secret.get_secret_value() else None
+
+    return seal_present, encryption
 
 
 def _package_secrets(

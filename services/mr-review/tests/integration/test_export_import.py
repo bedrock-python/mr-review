@@ -227,6 +227,53 @@ async def test__import_without_secrets__into_an_empty_store__creates_records_and
     assert len(result.warnings) == 2
 
 
+@pytest.mark.parametrize("secrets", ["plain", "encrypted"])
+async def test__export__secret_that_was_never_set__is_written_as_absent(source: Store, secrets: str) -> None:
+    """A host imported without its token has an empty one; exporting it must not carry ""."""
+    await source.hosts.create(name="tokenless", type_="gitlab", base_url="https://gl.example", token="")
+    await source.providers.create(name="keyless", type_="claude", api_key="", base_url="", models=[])
+    options: dict[str, object] = (
+        {"include_plain_secrets": True} if secrets == "plain" else {"encryption_password": _PASSPHRASE}
+    )
+
+    package = await source.export(**options)
+
+    assert [h.token for h in package.hosts] == [None]
+    assert [p.api_key for p in package.ai_providers] == [None]
+
+
+@pytest.mark.parametrize("strategy", ["merge", "replace"])
+@pytest.mark.parametrize("secrets", ["plain", "encrypted"])
+async def test__import__empty_secret_in_the_file__keeps_the_real_local_one(
+    source: Store, target: Store, strategy: MergeStrategy, secrets: str
+) -> None:
+    """Files written before empty secrets were dropped carry "" (or its ciphertext): that is no secret."""
+    host, provider, _ = await _populate(source)
+    await target.import_(await source.export(include_plain_secrets=True))
+    if secrets == "plain":
+        package = await source.export(include_plain_secrets=True)
+        empty = SecretStr("")
+        password = None
+    else:
+        package = await source.export(encryption_password=_PASSPHRASE)
+        assert package.encryption is not None
+        cipher = encryption.PackageCipher.open(_PASSPHRASE.get_secret_value(), package.encryption)
+        empty = SecretStr(cipher.encrypt(""))
+        password = _PASSPHRASE
+    package.hosts[0].token = empty
+    package.ai_providers[0].api_key = empty
+
+    result = await target.import_(package, strategy, password)
+
+    stored_host = await target.hosts.get_by_id(host.id)
+    stored_provider = await target.providers.get_by_id(provider.id)
+    assert stored_host is not None
+    assert stored_provider is not None
+    assert stored_host.token.get_secret_value() == "glpat-SECRET"
+    assert stored_provider.api_key.get_secret_value() == "sk-SECRET"
+    assert (result.hosts_updated, result.ai_providers_updated) == (0, 0)
+
+
 async def test__export__more_reviews_than_the_history_page__exports_all(source: Store) -> None:
     for n in range(60):
         await source.reviews.create(host_id=uuid4(), repo_path="g/p", mr_iid=n)

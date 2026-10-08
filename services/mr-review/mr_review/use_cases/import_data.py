@@ -160,10 +160,14 @@ def _count(result: ImportResult, kind: _RecordKind, outcome: ImportOutcome) -> N
 def _reveal_secrets(
     data: ExportData, password: SecretStr | None
 ) -> tuple[list[tuple[PackagedHost, str | None]], list[tuple[PackagedAIProvider, str | None]]]:
-    """Every record with its secret in plain text (``None`` when the file carries none)."""
+    """Every record with its secret in plain text (``None`` when the file carries none).
+
+    An empty secret — plain or encrypted, as files exported from a store that had imported a
+    record without its secret contain — counts as none, so it never replaces a real one.
+    """
     reveal = _secret_revealer(data, password)
-    hosts = [(host, reveal(host.token, f"host '{host.name}'")) for host in data.hosts]
-    providers = [(p, reveal(p.api_key, f"AI provider '{p.name}'")) for p in data.ai_providers]
+    hosts = [(host, reveal(host.token, f"host '{host.name}'") or None) for host in data.hosts]
+    providers = [(p, reveal(p.api_key, f"AI provider '{p.name}'") or None) for p in data.ai_providers]
     return hosts, providers
 
 
