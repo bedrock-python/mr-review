@@ -68,6 +68,40 @@ async def test__default_allowlist__foreign_host__returns_400(
     assert "MR_REVIEW__ALLOWED_HOSTS" in response.text
 
 
+async def test__refused_host__400_names_the_host_to_allow(default_client: AsyncClient) -> None:
+    """The message names the refused host without its port — the value the setting takes."""
+    response = await default_client.get(_LIVEZ, headers={"host": "Review.LAN:17240"})
+
+    assert response.status_code == 400
+    assert "'review.lan'" in response.text
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-type"].startswith("text/plain")
+
+
+async def test__refused_host__markup_in_the_header__is_not_echoed(default_client: AsyncClient) -> None:
+    """Only host-name characters of the header reach the body."""
+    response = await default_client.get(_LIVEZ, headers={"host": "<script>x</script>.example"})
+
+    assert response.status_code == 400
+    assert "<" not in response.text
+    assert ">" not in response.text
+
+
+async def test__proxy_upstream_name__refused_until_allowed(make_app: AppFactory) -> None:
+    """A proxy that does not forward Host sends its upstream's name; allowing that name works."""
+    refused_app = make_app(None)
+    async with AsyncClient(transport=ASGITransport(app=refused_app), base_url="http://localhost") as client:
+        refused = await client.get(_LIVEZ, headers={"host": "mr-review:8000"})
+
+    allowed_app = make_app("localhost,mr-review")
+    async with AsyncClient(transport=ASGITransport(app=allowed_app), base_url="http://localhost") as client:
+        allowed = await client.get(_LIVEZ, headers={"host": "mr-review:8000"})
+
+    assert refused.status_code == 400
+    assert "'mr-review'" in refused.text
+    assert allowed.status_code == 200
+
+
 async def test__configured_allowlist__lan_address__is_served_and_loopback_still_works(make_app: AppFactory) -> None:
     """Exposing the port on the LAN needs its address listed; loopback stays reachable for health checks."""
     app = make_app("mr-review.lan, 192.168.1.10")

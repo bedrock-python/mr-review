@@ -6,6 +6,7 @@ Events pass through untouched and unbuffered.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 import structlog
@@ -16,6 +17,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 logger = structlog.get_logger(__name__)
 
 ALLOW_ANY_HOST = "*"
+# The longest a DNS name can be; anything longer in a Host header is cut in the message.
+_MAX_HOST_IN_MESSAGE = 253
+_PRINTABLE_HOST = re.compile(r"[^a-z0-9.\-:\[\]_]")
 # A page cannot make the browser send one of these names for its own origin, so DNS
 # rebinding cannot reach the API through them; the container health checks use them.
 LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -69,7 +73,20 @@ class AllowedHostsMiddleware:
             await send({"type": "websocket.close", "code": 1008})
             return
         response = PlainTextResponse(
-            "Invalid host header. Add this host name to MR_REVIEW__ALLOWED_HOSTS to serve it.",
+            rejection_message(host_header),
             status_code=400,
+            # The body repeats a request header: never let a browser read it as anything else.
+            headers={"X-Content-Type-Options": "nosniff"},
         )
         await response(scope, receive, send)
+
+
+def rejection_message(host_header: str) -> str:
+    """The 400 body: which name was refused and the setting that would allow it."""
+    host = _PRINTABLE_HOST.sub("", normalise_host(host_header))[:_MAX_HOST_IN_MESSAGE]
+    if not host:
+        return "Invalid host header: the request named no host."
+    return (
+        f"Invalid host header: '{host}' is not an allowed host name. "
+        f"If this server is meant to be reached as '{host}', add it to MR_REVIEW__ALLOWED_HOSTS."
+    )
