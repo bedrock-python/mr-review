@@ -1,0 +1,134 @@
+/* Badge, StatusBadge, CountBadge, Chip, SeverityCounts. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Badge, StatusBadge, CountBadge, Chip ──────────────────── */
+  .ui-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 18px;
+    padding: 0 6px;
+    border: 1px solid var(--tone-line);
+    border-radius: var(--radius-badge);
+    background: var(--tone-tint);
+    color: var(--tone-fg);
+    font-family: var(--font-mono);
+    font-size: var(--fs-eyebrow);
+    font-weight: var(--fw-medium);
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .ui-badge--outline {
+    background: transparent;
+  }
+  .ui-badge__dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--tone);
+  }
+  .ui-badge__dot--pulse {
+    animation: ui-pulse 1.4s ease-in-out infinite;
+  }
+  .ui-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-3);
+    color: var(--fg-1);
+    font-family: var(--font-mono);
+    font-size: var(--fs-eyebrow);
+    font-weight: var(--fw-semibold);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-count[data-tone] {
+    background: var(--tone-tint);
+    color: var(--tone-fg);
+  }
+
+  .ui-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--control-sm);
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--fg-1);
+    font-family: var(--font-sans);
+    font-size: var(--fs-control);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background var(--dur-fast),
+      border-color var(--dur-fast),
+      color var(--dur-fast);
+  }
+  .ui-chip:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--fg-0);
+  }
+  .ui-chip[aria-pressed="true"] {
+    border-color: var(--accent-line);
+    background: var(--accent-tint);
+    color: var(--fg-0);
+  }
+  .ui-chip[data-tone][aria-pressed="true"] {
+    border-color: var(--tone-line);
+    background: var(--tone-tint);
+    color: var(--tone-fg);
+  }
+  .ui-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ui-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tone);
+  }
+  .ui-chip__count {
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    color: var(--fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-chip[aria-pressed="true"] .ui-chip__count {
+    color: inherit;
+  }
+
+  .ui-severity-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    color: var(--fg-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-severity-counts__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ui-severity-counts__dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+  .ui-severity-counts__label {
+    color: var(--fg-2);
+  }
+}

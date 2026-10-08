@@ -19,6 +19,15 @@ export type {
 } from "./field";
 export { Checkbox, Radio, RadioGroup, Switch } from "./choice";
 export type { CheckboxProps, RadioProps, RadioGroupProps, SwitchProps } from "./choice";
+export { Badge, StatusBadge, CountBadge, Chip, toneAttribute } from "./badge";
+export type {
+  BadgeProps,
+  Status,
+  StatusBadgeProps,
+  CountBadgeProps,
+  ChipProps,
+  Tone,
+} from "./badge";
 export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,

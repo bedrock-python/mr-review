@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@shared/lib";
-import { SEVERITY_ORDER, SEV_COLOR, countBySeverity } from "../../lib";
+import { SEVERITY_ORDER, SEV_COLOR, SEV_TEXT_COLOR, countBySeverity } from "../../lib";
 import type { CommentGroup } from "../../lib";
 
 type GroupHeaderProps = {
@@ -42,7 +42,7 @@ const GroupHeaderBase = ({
             key={severity}
             title={`${String(counts[severity])} ${severity}`}
             className="flex items-center gap-1 font-mono text-[10px]"
-            style={{ color: SEV_COLOR[severity] }}
+            style={{ color: SEV_TEXT_COLOR[severity] }}
           >
             <span className="dot" style={{ background: SEV_COLOR[severity] }} />
             {counts[severity]}
