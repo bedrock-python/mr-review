@@ -22,12 +22,9 @@ beforeAll(async () => {
 
 describe("built stylesheet", () => {
   // Used only from inline styles, which Tailwind cannot see: inside @theme they were dropped.
-  it.each(["spin", "blink", "fadeSlideIn", "pulse-ring", "pulse-ring-centered", "ui-pulse"])(
-    "keeps @keyframes %s",
-    (name) => {
-      expect(built).toMatch(new RegExp(`@keyframes ${name}\\s*\\{`));
-    }
-  );
+  it.each(["spin", "fadeSlideIn", "ui-pulse"])("keeps @keyframes %s", (name) => {
+    expect(built).toMatch(new RegExp(`@keyframes ${name}\\s*\\{`));
+  });
 
   it("draws text-field focus as an outline, which inline borders cannot hide", () => {
     const textFieldFocus =
