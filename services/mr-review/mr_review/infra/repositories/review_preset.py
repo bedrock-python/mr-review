@@ -9,7 +9,11 @@ from uuid import UUID, uuid4
 
 import yaml
 
-from mr_review.core.review_presets.entities import ReviewPreset
+from mr_review.core.review_presets.entities import (
+    ReviewPreset,
+    ReviewPresetNameTakenError,
+    ReviewPresetNotFoundError,
+)
 from mr_review.core.reviews.entities import normalize_brief_overrides
 from mr_review.infra.utils import now_utc as _now_utc
 
@@ -37,6 +41,13 @@ def _preset_from_dict(data: dict[str, object]) -> ReviewPreset:
         created_at=_aware(data["created_at"]),
         updated_at=_aware(data.get("updated_at") or data["created_at"]),
     )
+
+
+def _ensure_name_free(items: list[dict[str, object]], name: str, *, except_id: UUID | None) -> None:
+    wanted = name.casefold()
+    for item in items:
+        if str(item.get("id")) != str(except_id) and str(item.get("name", "")).casefold() == wanted:
+            raise ReviewPresetNameTakenError(f"A review preset named {item.get('name')!r} already exists")
 
 
 def _preset_to_dict(preset: ReviewPreset) -> dict[str, object]:
@@ -101,6 +112,7 @@ class FileReviewPresetRepository:
 
         def _sync() -> None:
             items = self._read()
+            _ensure_name_free(items, name, except_id=None)
             items.append(_preset_to_dict(preset))
             self._write(items)
 
@@ -116,19 +128,41 @@ class FileReviewPresetRepository:
         presets = await asyncio.to_thread(self._load_all)
         return sorted(presets, key=lambda p: p.created_at)
 
-    async def update(self, preset: ReviewPreset) -> ReviewPreset | None:
-        def _sync() -> bool:
+    async def update(
+        self,
+        preset_id: UUID,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        instructions: str | None = None,
+        brief_config: dict[str, object] | None = None,
+    ) -> ReviewPreset:
+        changes: dict[str, object] = {
+            key: value
+            for key, value in (
+                ("name", name),
+                ("description", description),
+                ("instructions", instructions),
+                ("brief_config", brief_config),
+            )
+            if value is not None
+        }
+
+        def _sync() -> ReviewPreset:
             items = self._read()
-            index = next((i for i, item in enumerate(items) if str(item.get("id")) == str(preset.id)), None)
+            index = next((i for i, item in enumerate(items) if str(item.get("id")) == str(preset_id)), None)
             if index is None:
-                return False
-            items[index] = _preset_to_dict(preset)
+                raise ReviewPresetNotFoundError(f"Review preset {preset_id} not found")
+            if name is not None:
+                _ensure_name_free(items, name, except_id=preset_id)
+            current = _preset_from_dict(items[index])
+            updated = current.model_copy(update={**changes, "updated_at": _now_utc()})
+            items[index] = _preset_to_dict(updated)
             self._write(items)
-            return True
+            return updated
 
         async with self._lock:
-            found = await asyncio.to_thread(_sync)
-        return preset if found else None
+            return await asyncio.to_thread(_sync)
 
     async def delete(self, preset_id: UUID) -> bool:
         def _sync() -> bool:

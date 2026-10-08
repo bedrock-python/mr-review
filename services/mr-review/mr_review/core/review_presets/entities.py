@@ -64,6 +64,14 @@ BUILTIN_PRESETS: Final[dict[BriefPreset, BuiltinPreset]] = {
 }
 
 
+class ReviewPresetNotFoundError(LookupError):
+    """No saved review preset has the requested id."""
+
+
+class ReviewPresetNameTakenError(ValueError):
+    """Another saved review preset already has this name (compared case-insensitively)."""
+
+
 class ReviewPreset(BaseModel):
     """A review intent saved by the user, offered in the Brief next to the built-in ones.
 

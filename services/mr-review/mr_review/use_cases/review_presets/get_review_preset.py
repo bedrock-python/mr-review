@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from mr_review.core.review_presets.entities import ReviewPreset
+from mr_review.core.review_presets.entities import ReviewPreset, ReviewPresetNotFoundError
 from mr_review.core.review_presets.repositories import ReviewPresetRepository
-from mr_review.use_cases.review_presets.errors import ReviewPresetNotFoundError
 
 
 class GetReviewPresetUseCase:

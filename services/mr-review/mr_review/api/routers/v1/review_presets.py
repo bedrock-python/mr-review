@@ -11,10 +11,14 @@ from mr_review.api.schemas.review_presets import (
     ReviewPresetResponse,
     UpdateReviewPresetRequest,
 )
-from mr_review.core.review_presets.entities import BUILTIN_PRESETS, ReviewPreset
+from mr_review.core.review_presets.entities import (
+    BUILTIN_PRESETS,
+    ReviewPreset,
+    ReviewPresetNameTakenError,
+    ReviewPresetNotFoundError,
+)
 from mr_review.use_cases.review_presets.create_review_preset import CreateReviewPresetUseCase
 from mr_review.use_cases.review_presets.delete_review_preset import DeleteReviewPresetUseCase
-from mr_review.use_cases.review_presets.errors import ReviewPresetNameTakenError, ReviewPresetNotFoundError
 from mr_review.use_cases.review_presets.get_review_preset import GetReviewPresetUseCase
 from mr_review.use_cases.review_presets.list_review_presets import ListReviewPresetsUseCase
 from mr_review.use_cases.review_presets.update_review_preset import UpdateReviewPresetUseCase
