@@ -1,4 +1,11 @@
-export { SEVERITY_ORDER, SEV_COLOR, SEV_TEXT_COLOR, SEVERITY_RANK } from "./severity";
+export {
+  SEVERITY_ORDER,
+  SEV_COLOR,
+  SEV_TEXT_COLOR,
+  SEVERITY_RANK,
+  SEVERITY_LABEL,
+  SEVERITY_KEY,
+} from "./severity";
 export {
   buildDiffIndex,
   describeAnchorProblem,
@@ -28,3 +35,4 @@ export type {
 export { useAutosizeTextarea } from "./useAutosizeTextarea";
 export { parseLineNumber } from "./parseLineNumber";
 export { isIterationLocked } from "./isIterationLocked";
+export { useFittingLayout } from "./useFittingLayout";

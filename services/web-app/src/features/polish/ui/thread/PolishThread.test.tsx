@@ -1,7 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { PolishThread } from "./PolishThread";
 import type { Comment } from "@entities/review";
+
+// The Markdown renderer is a lazy chunk: its first import takes seconds when suites run in
+// parallel, well past findBy's 1 s default.
+const MARKDOWN_LOAD_TIMEOUT_MS = 10_000;
 
 const comment = (overrides: Partial<Comment>): Comment => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -18,7 +24,7 @@ const comment = (overrides: Partial<Comment>): Comment => ({
   ...overrides,
 });
 
-describe("PolishThread", () => {
+describe("PolishThread", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("renders comment bodies as Markdown", async () => {
     render(
       <PolishThread
@@ -27,7 +33,42 @@ describe("PolishThread", () => {
       />
     );
 
-    expect((await screen.findByText("Fix")).tagName).toBe("STRONG");
+    const strong = await screen.findByText("Fix", {}, { timeout: MARKDOWN_LOAD_TIMEOUT_MS });
+    expect(strong.tagName).toBe("STRONG");
     expect(screen.getByText("loop").tagName).toBe("CODE");
+  });
+
+  it("threads comments by file under a heading with their severities", () => {
+    render(
+      <PolishThread
+        comments={[
+          comment({ id: "a1", severity: "critical" }),
+          comment({ id: "g1", file: null, line: null, severity: "suggestion" }),
+          comment({ id: "a2", severity: "minor" }),
+        ]}
+        onToggleStatus={vi.fn()}
+      />
+    );
+
+    const file = screen.getByRole("region", { name: "src/a.ts" });
+    expect(within(file).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(file).getByText("1 critical, 1 minor")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "General notes" })).toBeInTheDocument();
+  });
+
+  it("dismisses and keeps a comment from its bubble", async () => {
+    const user = userEvent.setup();
+    const onToggleStatus = vi.fn();
+    render(
+      <PolishThread
+        comments={[comment({}), comment({ id: "d1", status: "dismissed" })]}
+        onToggleStatus={onToggleStatus}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Dismiss comment" }));
+    await user.click(screen.getByRole("button", { name: "Keep comment" }));
+
+    expect(onToggleStatus.mock.calls).toEqual([["11111111-1111-4111-8111-111111111111"], ["d1"]]);
   });
 });

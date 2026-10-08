@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Eyebrow } from "@shared/ui";
 import { CommentEditor } from "./CommentEditor";
 import type { CommentDraft, PolishActions } from "../../model";
 import type { RegisterEditor } from "./triageContext";
@@ -45,7 +46,8 @@ export const NewCommentPanel = ({
   };
 
   return (
-    <div className="border-border max-h-[55%] shrink-0 overflow-auto border-b px-5 py-3">
+    <section className="border-border bg-bg-1 flex max-h-[55%] shrink-0 flex-col gap-(--space-2) overflow-auto border-b px-(--space-4) py-(--space-3)">
+      <Eyebrow as="h2">New comment</Eyebrow>
       <CommentEditor
         saved={saved}
         mode="create"
@@ -55,6 +57,6 @@ export const NewCommentPanel = ({
         onRequestCancel={onRequestCancel}
         onRegister={onRegister}
       />
-    </div>
+    </section>
   );
 };

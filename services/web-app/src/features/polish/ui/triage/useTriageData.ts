@@ -6,7 +6,7 @@ import {
   matchesFilters,
   matchesNonSeverityFilters,
 } from "../../lib";
-import type { FileFilterOption } from "./TriageFilterBar";
+import type { FileFilterOption } from "./ListFilters";
 import type { CommentFilters, SeverityCounts, TriageRow } from "../../lib";
 import type { Comment } from "@entities/review";
 

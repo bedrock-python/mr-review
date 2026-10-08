@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { cn } from "@shared/lib";
-import { Markdown } from "@shared/ui";
-import { SEVERITY_ORDER, SEV_COLOR, useAutosizeTextarea } from "../../lib";
+import { Button, Kbd, Markdown, SegmentedControl } from "@shared/ui";
+import { useAutosizeTextarea } from "../../lib";
+import { SEVERITY_OPTIONS } from "../severityOptions";
 import { AnchorFields } from "./AnchorFields";
 import { useCommentDraft } from "./useCommentDraft";
 import type { CommentDraft, CommentDraftChanges } from "../../model";
@@ -41,6 +42,8 @@ export const CommentEditor = ({
   const [tab, setTab] = useState<EditorTab>("write");
   const [hasTriedSave, setHasTriedSave] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const severityLabelId = useId();
+  const bodyErrorId = useId();
   useAutosizeTextarea(textareaRef, state.body, tab === "write");
 
   useEffect(() => {
@@ -86,7 +89,6 @@ export const CommentEditor = ({
   };
 
   const bodyError = hasTriedSave ? state.bodyError : null;
-  const { lineError } = state;
   const createLabel = isSubmitting ? "Adding…" : "Add comment";
   const saveLabel = mode === "create" ? createLabel : "Save";
 
@@ -95,42 +97,36 @@ export const CommentEditor = ({
       role="group"
       aria-label={mode === "create" ? "New comment" : "Edit comment"}
       onKeyDown={handleKeyDown}
-      className="flex flex-col gap-2.5"
+      className="flex flex-col gap-(--space-3)"
     >
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Severity">
-        {SEVERITY_ORDER.map((severity) => (
-          <button
-            key={severity}
-            type="button"
-            aria-pressed={state.severity === severity}
-            onClick={() => {
-              state.setSeverity(severity);
-            }}
-            className={cn("sev cursor-pointer", severity)}
-            style={{
-              opacity: state.severity === severity ? 1 : 0.4,
-              background:
-                state.severity === severity
-                  ? `color-mix(in oklch, ${SEV_COLOR[severity]} 12%, transparent)`
-                  : undefined,
-            }}
-          >
-            <span className="dot" />
-            {severity}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-start gap-x-(--space-4) gap-y-(--space-2)">
+        <div className="ui-field">
+          <span id={severityLabelId} className="ui-eyebrow">
+            Severity
+          </span>
+          <SegmentedControl
+            size="sm"
+            aria-labelledby={severityLabelId}
+            options={SEVERITY_OPTIONS}
+            value={state.severity}
+            onValueChange={state.setSeverity}
+          />
+        </div>
+        <AnchorFields
+          file={state.file}
+          lineText={state.lineText}
+          lineError={state.lineError}
+          onFileChange={state.setFile}
+          onLineChange={state.setLineText}
+        />
       </div>
 
-      <AnchorFields
-        file={state.file}
-        lineText={state.lineText}
-        lineError={lineError}
-        onFileChange={state.setFile}
-        onLineChange={state.setLineText}
-      />
-
-      <div className="border-border ui-focus-within overflow-hidden rounded-lg border">
-        <div role="tablist" className="border-border bg-bg-2 flex gap-1 border-b px-1.5 pt-1.5">
+      <div className="border-border-control bg-bg-2 ui-focus-within overflow-hidden rounded-(--radius-control) border">
+        <div
+          role="tablist"
+          aria-label="Write or preview"
+          className="border-border flex gap-(--space-1) border-b px-(--space-2)"
+        >
           {TABS.map(({ id, label }) => (
             <button
               key={id}
@@ -141,8 +137,11 @@ export const CommentEditor = ({
                 setTab(id);
               }}
               className={cn(
-                "rounded-t-md px-3 py-1 font-mono text-[11px]",
-                tab === id ? "bg-bg-0 text-fg-0" : "text-fg-2 hover:text-fg-0"
+                "h-(--control-sm) px-(--space-2) text-(length:--fs-control) transition-colors",
+                "focus-visible:-outline-offset-2",
+                tab === id
+                  ? "text-fg-0 shadow-[inset_0_-2px_0_var(--accent-fg)]"
+                  : "text-fg-2 hover:text-fg-0"
               )}
             >
               {label}
@@ -158,49 +157,54 @@ export const CommentEditor = ({
           }}
           aria-label="Comment body"
           aria-invalid={bodyError !== null}
+          aria-describedby={bodyError === null ? undefined : bodyErrorId}
           placeholder="Markdown supported"
           rows={4}
-          className="bg-bg-0 text-fg-0 block min-h-[96px] w-full resize-none px-3 py-2.5 text-[12.5px] leading-[1.55]"
+          className="text-fg-0 block min-h-[96px] w-full resize-none bg-transparent px-(--space-3) py-(--space-2) text-(length:--fs-body) leading-(--lh-body)"
         />
         {tab === "preview" && (
-          <div role="tabpanel" aria-label="Preview" className="bg-bg-0 min-h-[96px] px-3 py-2.5">
+          <div
+            role="tabpanel"
+            aria-label="Preview"
+            className="min-h-[96px] px-(--space-3) py-(--space-2)"
+          >
             {state.body.trim().length > 0 ? (
               <Markdown>{state.body}</Markdown>
             ) : (
-              <p className="text-fg-2 text-[12px]">Nothing to preview.</p>
+              <p className="text-fg-2 text-(length:--fs-control)">Nothing to preview.</p>
             )}
           </div>
         )}
       </div>
       {bodyError !== null && (
-        <p role="alert" className="text-[11px] text-[var(--c-critical-fg)]">
+        <p id={bodyErrorId} role="alert" className="text-(length:--fs-meta) text-(--c-critical-fg)">
           {bodyError}
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-fg-2 mr-auto text-[11px]">
-          <span className="kbd">⌘/Ctrl ↵</span> save · <span className="kbd">Esc</span> cancel
+      <div className="flex items-center justify-end gap-(--space-2)">
+        <span className="text-fg-2 mr-auto flex items-center gap-(--space-1) text-(length:--fs-meta)">
+          <Kbd>⌘/Ctrl ↵</Kbd> save · <Kbd>Esc</Kbd> cancel
         </span>
-        <button
-          type="button"
-          className="btn ghost"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => {
             onCancel();
           }}
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          className="btn primary"
-          disabled={isSubmitting}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          isLoading={isSubmitting}
           onClick={() => {
             save();
           }}
         >
           {saveLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

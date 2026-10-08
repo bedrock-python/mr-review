@@ -1,10 +1,16 @@
 import { useMemo } from "react";
-import { Markdown } from "@shared/ui";
+import { Check, X } from "lucide-react";
+import { SeverityBadge } from "@entities/review";
+import { cn } from "@shared/lib";
+import { Card, EmptyState, ICON_SIZE, IconButton, Markdown, SectionHeader } from "@shared/ui";
 import { SEV_COLOR } from "../../lib";
 import { PinnedCommentEditor } from "./PinnedCommentEditor";
 import { ReviewDiffViewer } from "./ReviewDiffViewer";
 import type { CommentFieldPatch } from "../../model";
 import type { Comment } from "@entities/review";
+
+/** The comment pane beside the diff. */
+const PANE_WIDTH_PX = 380;
 
 export type PolishPinnedProps = {
   reviewId: string;
@@ -15,6 +21,93 @@ export type PolishPinnedProps = {
   onToggleStatus: (id: string) => void;
   isPending: boolean;
 };
+
+const lineLabel = (comment: Comment): string =>
+  `${comment.file?.split("/").pop() ?? ""}${comment.line !== null ? `:${String(comment.line)}` : ""}`;
+
+type InlineCommentListProps = {
+  comments: readonly Comment[];
+  onOpen: (id: string) => void;
+};
+
+const InlineCommentList = ({ comments, onOpen }: InlineCommentListProps): React.ReactElement => {
+  if (comments.length === 0) {
+    return <EmptyState size="sm" title="No inline comments" />;
+  }
+  return (
+    <section className="flex flex-col gap-(--space-2) p-(--space-4)">
+      <SectionHeader title="Inline comments" count={comments.length} />
+      <ul className="m-0 flex list-none flex-col gap-(--space-2) p-0">
+        {comments.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onOpen(c.id);
+              }}
+              className={cn(
+                "flex w-full items-start gap-(--space-2) px-(--space-3) py-(--space-2) text-left",
+                "border-border bg-bg-1 rounded-(--radius-control) border",
+                "hover:border-border-strong hover:bg-bg-hover transition-colors"
+              )}
+            >
+              <span
+                className="ui-severity-counts__dot mt-(--space-1)"
+                style={{ background: SEV_COLOR[c.severity] }}
+                aria-hidden="true"
+              />
+              <span className="flex min-w-0 flex-1 flex-col gap-(--space-1)">
+                <span className="text-fg-2 font-mono text-(length:--fs-meta)">{lineLabel(c)}</span>
+                <span className="text-fg-1 truncate text-(length:--fs-control)">{c.body}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+type GeneralNotesProps = {
+  comments: readonly Comment[];
+  onToggleStatus: (id: string) => void;
+};
+
+const GeneralNotes = ({ comments, onToggleStatus }: GeneralNotesProps): React.ReactElement => (
+  <section className="border-border mt-auto flex flex-col gap-(--space-2) border-t p-(--space-4)">
+    <SectionHeader title="General notes" count={comments.length} />
+    {comments.map((c) => {
+      const isDismissed = c.status === "dismissed";
+      return (
+        <Card
+          key={c.id}
+          padding="sm"
+          className={cn("flex flex-col gap-(--space-2)", isDismissed && "opacity-45")}
+        >
+          <div className="flex items-center gap-(--space-2)">
+            <SeverityBadge severity={c.severity} />
+            <IconButton
+              size="sm"
+              className="ml-auto"
+              label={isDismissed ? "Keep comment" : "Dismiss comment"}
+              icon={
+                isDismissed ? (
+                  <Check size={ICON_SIZE.inline} aria-hidden="true" />
+                ) : (
+                  <X size={ICON_SIZE.inline} aria-hidden="true" />
+                )
+              }
+              onClick={() => {
+                onToggleStatus(c.id);
+              }}
+            />
+          </div>
+          <Markdown className="[&>:last-child]:mb-0!">{c.body}</Markdown>
+        </Card>
+      );
+    })}
+  </section>
+);
 
 export const PolishPinned = ({
   reviewId,
@@ -53,233 +146,55 @@ export const PolishPinned = ({
   }, [comments]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 380px", flex: 1, overflow: "hidden" }}
-      >
-        {/* Left: real diff viewer */}
-        <div
-          style={{
-            overflow: "hidden",
-            borderRight: "1px solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* File path header */}
-          {active?.file && (
-            <div
-              style={{
-                padding: "6px 12px",
-                borderBottom: "1px solid var(--border)",
-                background: "var(--bg-2)",
-                flexShrink: 0,
-              }}
-            >
-              <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)" }}>
-                {active.file}
-              </span>
-              {active.line !== null && (
-                <span
-                  className="mono"
-                  style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 4 }}
-                >
-                  :{active.line}
-                </span>
-              )}
-            </div>
-          )}
-          <ReviewDiffViewer
-            reviewId={reviewId}
-            targetFile={active?.file ?? null}
-            targetLine={active?.line ?? null}
-            activeCommentId={activeCommentId}
-            commentsOnLines={commentsOnLines}
-            onCommentClick={setActiveCommentId}
+    <div
+      className="grid h-full overflow-hidden"
+      style={{ gridTemplateColumns: `minmax(0, 1fr) ${String(PANE_WIDTH_PX)}px` }}
+    >
+      <div className="border-border flex min-w-0 flex-col overflow-hidden border-r">
+        {active?.file && (
+          <div className="border-border bg-bg-2 text-fg-2 shrink-0 truncate border-b px-(--space-3) py-(--space-2) font-mono text-(length:--fs-meta)">
+            {active.file}
+            {active.line !== null && `:${String(active.line)}`}
+          </div>
+        )}
+        <ReviewDiffViewer
+          reviewId={reviewId}
+          targetFile={active?.file ?? null}
+          targetLine={active?.line ?? null}
+          activeCommentId={activeCommentId}
+          commentsOnLines={commentsOnLines}
+          onCommentClick={setActiveCommentId}
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-col overflow-auto">
+        {active !== null && active.file !== null ? (
+          <PinnedCommentEditor
+            // Remount per comment: body/severity live in local state, so without a
+            // fresh instance the editor keeps showing (and saving) the previous one.
+            key={active.id}
+            comment={active}
+            onPrev={() => {
+              if (prevComment) setActiveCommentId(prevComment.id);
+            }}
+            onNext={() => {
+              if (nextComment) setActiveCommentId(nextComment.id);
+            }}
+            canGoPrev={prevComment !== undefined}
+            canGoNext={nextComment !== undefined}
+            position={activeIndex}
+            total={navComments.length}
+            onUpdate={onUpdate}
+            onToggleStatus={onToggleStatus}
+            isPending={isPending}
           />
-        </div>
+        ) : (
+          <InlineCommentList comments={inlineComments} onOpen={setActiveCommentId} />
+        )}
 
-        {/* Right: comment pane */}
-        <div style={{ display: "flex", flexDirection: "column", overflow: "auto" }}>
-          {active !== null && active.file !== null ? (
-            <PinnedCommentEditor
-              // Remount per comment: body/severity live in local state, so without a
-              // fresh instance the editor keeps showing (and saving) the previous one.
-              key={active.id}
-              comment={active}
-              onPrev={() => {
-                if (prevComment) setActiveCommentId(prevComment.id);
-              }}
-              onNext={() => {
-                if (nextComment) setActiveCommentId(nextComment.id);
-              }}
-              canGoPrev={prevComment !== undefined}
-              canGoNext={nextComment !== undefined}
-              position={activeIndex}
-              total={navComments.length}
-              onUpdate={onUpdate}
-              onToggleStatus={onToggleStatus}
-              isPending={isPending}
-            />
-          ) : (
-            <div style={{ padding: "20px 16px" }}>
-              {/* Comment list for navigation */}
-              {inlineComments.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: 10,
-                      color: "var(--fg-2)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      marginBottom: 4,
-                    }}
-                  >
-                    Inline comments
-                  </div>
-                  {inlineComments.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveCommentId(c.id);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 8,
-                        padding: "8px 10px",
-                        borderRadius: "var(--radius-2)",
-                        border: "1px solid var(--border)",
-                        background: "var(--bg-2)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: SEV_COLOR[c.severity],
-                          flexShrink: 0,
-                          marginTop: 3,
-                        }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          className="mono"
-                          style={{ fontSize: 10, color: "var(--fg-2)", marginBottom: 2 }}
-                        >
-                          {c.file?.split("/").pop()}
-                          {c.line !== null ? `:${String(c.line)}` : ""}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--fg-1)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {c.body}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {inlineComments.length === 0 && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "var(--fg-2)",
-                    fontSize: 12,
-                    paddingTop: 20,
-                  }}
-                >
-                  No inline comments
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* General notes section */}
-          {generalComments.length > 0 && (
-            <div style={{ padding: 16, borderTop: "1px solid var(--border)", marginTop: "auto" }}>
-              <div
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "var(--fg-2)",
-                  fontWeight: 600,
-                  marginBottom: 10,
-                }}
-              >
-                General notes
-              </div>
-              {generalComments.map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    padding: 12,
-                    background: "var(--bg-1)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-3)",
-                    marginBottom: 8,
-                    opacity: c.status === "dismissed" ? 0.45 : 1,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span className={`sev ${c.severity}`}>
-                      <span className="dot" />
-                      {c.severity}
-                    </span>
-                    <div style={{ marginLeft: "auto" }}>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        onClick={() => {
-                          onToggleStatus(c.id);
-                        }}
-                      >
-                        {c.status === "dismissed" ? (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <Markdown>{c.body}</Markdown>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {generalComments.length > 0 && (
+          <GeneralNotes comments={generalComments} onToggleStatus={onToggleStatus} />
+        )}
       </div>
     </div>
   );

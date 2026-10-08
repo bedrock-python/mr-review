@@ -1,4 +1,4 @@
-import { PolishDialog } from "./PolishDialog";
+import { Button, Dialog } from "@shared/ui";
 
 export type UnsavedChoice = "keep-editing" | "discard" | "save";
 
@@ -11,44 +11,42 @@ export const UnsavedChangesDialog = ({
   isOpen,
   onChoose,
 }: UnsavedChangesDialogProps): React.ReactElement => (
-  <PolishDialog
+  <Dialog
     isOpen={isOpen}
     onClose={() => {
       onChoose("keep-editing");
     }}
+    size="sm"
     title="Unsaved changes"
     description="The comment you are editing has changes that are not saved yet."
     // Focus goes back to the editor or the next card, never to whatever was clicked.
     shouldRestoreFocus={false}
-  >
-    <div className="flex justify-end gap-2">
-      <button
-        type="button"
-        className="btn ghost"
-        onClick={() => {
-          onChoose("keep-editing");
-        }}
-      >
-        Keep editing
-      </button>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => {
-          onChoose("discard");
-        }}
-      >
-        Discard
-      </button>
-      <button
-        type="button"
-        className="btn primary"
-        onClick={() => {
-          onChoose("save");
-        }}
-      >
-        Save
-      </button>
-    </div>
-  </PolishDialog>
+    footer={
+      <>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            onChoose("keep-editing");
+          }}
+        >
+          Keep editing
+        </Button>
+        <Button
+          onClick={() => {
+            onChoose("discard");
+          }}
+        >
+          Discard
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => {
+            onChoose("save");
+          }}
+        >
+          Save
+        </Button>
+      </>
+    }
+  />
 );

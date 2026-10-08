@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { SEVERITY_ORDER, SEV_COLOR } from "../../lib";
+import { useId, useState } from "react";
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Badge, Button, ICON_SIZE, IconButton, SegmentedControl, Textarea } from "@shared/ui";
+import { SEVERITY_OPTIONS } from "../severityOptions";
 import type { CommentFieldPatch } from "../../model";
 import type { Comment, CommentSeverity } from "@entities/review";
 
@@ -30,6 +32,8 @@ export const PinnedCommentEditor = ({
 }: PinnedCommentEditorProps): React.ReactElement => {
   const [body, setBody] = useState(comment.body);
   const [severity, setSeverity] = useState<CommentSeverity>(comment.severity);
+  const severityLabelId = useId();
+  const isDismissed = comment.status === "dismissed";
 
   const locationLabel =
     comment.file !== null
@@ -45,183 +49,87 @@ export const PinnedCommentEditor = ({
   };
 
   return (
-    <div
-      className="comment-editor"
-      style={{
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        minHeight: 0,
-        gap: 12,
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)" }}>
-            {locationLabel}
-          </span>
-          <span className="mono dim" style={{ fontSize: 11 }}>
-            {position + 1}/{total}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 2 }}>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={onPrev}
-            disabled={!canGoPrev}
-            aria-label="Previous comment"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={onNext}
-            disabled={!canGoNext}
-            aria-label="Next comment"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Severity row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div className="comment-editor flex min-h-0 flex-1 flex-col gap-(--space-3) p-(--space-4)">
+      <div className="flex items-center gap-(--space-2)">
         <span
-          className="mono"
-          style={{
-            fontSize: 10,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "var(--fg-2)",
-          }}
+          className="text-fg-1 min-w-0 truncate font-mono text-(length:--fs-meta)"
+          title={comment.file ?? undefined}
         >
-          severity
+          {locationLabel}
         </span>
-        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 4 }}>
-          {SEVERITY_ORDER.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => {
-                setSeverity(s);
-              }}
-              className={`sev ${s}`}
-              style={{
-                opacity: severity === s ? 1 : 0.4,
-                cursor: "pointer",
-                ...(severity === s
-                  ? { background: `color-mix(in oklch, ${SEV_COLOR[s]} 12%, transparent)` }
-                  : {}),
-              }}
-            >
-              <span className="dot" />
-              {s}
-            </button>
-          ))}
-        </div>
+        <span className="text-fg-2 font-mono text-(length:--fs-meta)">
+          {position + 1}/{total}
+        </span>
+        {isDismissed && <Badge>dismissed</Badge>}
+        <span className="ml-auto flex gap-(--space-1)">
+          <IconButton
+            size="sm"
+            label="Previous comment"
+            disabled={!canGoPrev}
+            icon={<ChevronUp size={ICON_SIZE.inline} aria-hidden="true" />}
+            onClick={onPrev}
+          />
+          <IconButton
+            size="sm"
+            label="Next comment"
+            disabled={!canGoNext}
+            icon={<ChevronDown size={ICON_SIZE.inline} aria-hidden="true" />}
+            onClick={onNext}
+          />
+        </span>
       </div>
 
-      {/* Textarea */}
-      <textarea
-        value={body}
-        onChange={(e) => {
-          setBody(e.target.value);
-        }}
-        style={{
-          flex: 1,
-          minHeight: 180,
-          padding: 12,
-          background: "var(--bg-0)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-3)",
-          color: "var(--fg-0)",
-          fontFamily: "var(--font-sans)",
-          fontSize: 12.5,
-          lineHeight: 1.55,
-          resize: "vertical",
-        }}
+      <div className="ui-field">
+        <span id={severityLabelId} className="ui-eyebrow">
+          Severity
+        </span>
+        <SegmentedControl
+          size="sm"
+          aria-labelledby={severityLabelId}
+          options={SEVERITY_OPTIONS}
+          value={severity}
+          onValueChange={setSeverity}
+          className="self-start"
+        />
+      </div>
+
+      <Textarea
         aria-label="Edit comment body"
+        value={body}
+        rows={8}
+        onChange={(event) => {
+          setBody(event.target.value);
+        }}
+        className="min-h-[180px] flex-1 text-(length:--fs-body)"
       />
 
-      {/* Actions */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            type="button"
-            className="btn ghost"
-            disabled={isPending || isBodyBlank}
-            title={isBodyBlank ? "The comment needs some text" : undefined}
-            onClick={handleSave}
-            style={{ color: "var(--fg-0)" }}
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              onToggleStatus(comment.id);
-            }}
-            style={{
-              color: comment.status === "dismissed" ? "var(--fg-0)" : "var(--c-critical-fg)",
-            }}
-          >
-            {comment.status === "dismissed" ? (
-              <>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                Keep
-              </>
+      <div className="flex items-center gap-(--space-2)">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={
+            isDismissed ? (
+              <Check size={ICON_SIZE.inline} aria-hidden="true" />
             ) : (
-              <>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14H6L5 6" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M9 6V4h6v2" />
-                </svg>
-                Dismiss
-              </>
-            )}
-          </button>
-        </div>
+              <X size={ICON_SIZE.inline} aria-hidden="true" />
+            )
+          }
+          onClick={() => {
+            onToggleStatus(comment.id);
+          }}
+        >
+          {isDismissed ? "Keep" : "Dismiss"}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          className="ml-auto"
+          disabled={isPending || isBodyBlank}
+          title={isBodyBlank ? "The comment needs some text" : undefined}
+          onClick={handleSave}
+        >
+          Save
+        </Button>
       </div>
     </div>
   );

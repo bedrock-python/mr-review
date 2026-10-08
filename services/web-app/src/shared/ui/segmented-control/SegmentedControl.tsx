@@ -26,7 +26,8 @@ export type SegmentedControlProps<T extends string> = {
 
 /**
  * Two to five mutually exclusive views or filters in one pill: List / Pinned / Thread,
- * Kept / Dismissed / All. A radio group: one tab stop, arrows move and select.
+ * Kept / Dismissed / All. A horizontal radio group: one tab stop, ← → (and Home/End) move and
+ * select. ↑ ↓ are left to the page, so a list's own keys still work from here.
  */
 export const SegmentedControl = <T extends string>({
   options,
@@ -36,10 +37,16 @@ export const SegmentedControl = <T extends string>({
   className,
   ...aria
 }: SegmentedControlProps<T>): React.ReactElement => {
-  const { getItemProps } = useRovingRadioGroup({ items: options, value, onValueChange });
+  const { getItemProps } = useRovingRadioGroup({
+    items: options,
+    value,
+    onValueChange,
+    orientation: "horizontal",
+  });
   return (
     <div
       role="radiogroup"
+      aria-orientation="horizontal"
       {...aria}
       className={cn("ui-segmented", size === "sm" && "ui-segmented--sm", className)}
     >

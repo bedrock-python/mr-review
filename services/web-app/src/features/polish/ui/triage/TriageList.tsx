@@ -19,10 +19,12 @@ export type TriageListProps = {
 
 // Below this many cards plain rendering is cheaper than measuring rows.
 export const VIRTUALIZE_THRESHOLD = 80;
-const GROUP_ROW_ESTIMATE_PX = 34;
-const CARD_ROW_ESTIMATE_PX = 140;
+// Measured rows plus the 8px gap under each: a group header is 30px; a card with a
+// one-line comment and its "Show code" row is 110px, longer comments and code run taller.
+const GROUP_ROW_ESTIMATE_PX = 38;
+const CARD_ROW_ESTIMATE_PX = 150;
 const VIRTUAL_OVERSCAN = 6;
-const SCROLL_AREA_CLASS = "h-full overflow-auto px-5 py-4";
+const SCROLL_AREA_CLASS = "h-full overflow-auto px-(--space-4) py-(--space-3)";
 
 const rowKey = (row: TriageRow): string =>
   row.kind === "group" ? `group:${row.group.key}` : row.comment.id;
@@ -70,7 +72,7 @@ const PlainList = ({
 
   return (
     <div className={SCROLL_AREA_CLASS} aria-label="Comments">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-(--space-2)">
         {rows.map((row) => (
           <RowContent key={rowKey(row)} row={row} focusedId={focusedId} {...rest} />
         ))}
@@ -156,7 +158,7 @@ const VirtualList = ({
               key={item.key}
               data-index={item.index}
               ref={virtualizer.measureElement}
-              className="absolute top-0 left-0 w-full pb-2"
+              className="absolute top-0 left-0 w-full pb-(--space-2)"
               style={{ transform: `translateY(${String(item.start)}px)` }}
             >
               <RowContent row={row} focusedId={focusedId} {...rest} />

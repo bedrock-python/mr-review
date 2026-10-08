@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo } from "react";
-import { Check, ChevronRight, Pencil, Trash, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronRight, Pencil, Trash2, TriangleAlert, X } from "lucide-react";
+import { SeverityBadge } from "@entities/review";
 import { cn } from "@shared/lib";
-import { Markdown } from "@shared/ui";
+import { Badge, Button, Card, ICON_SIZE, IconButton, Kbd, Markdown } from "@shared/ui";
 import { describeAnchorProblem } from "../../lib";
 import { CodeContext } from "./CodeContext";
 import { CommentEditor } from "./CommentEditor";
@@ -16,12 +17,18 @@ type CommentCardProps = {
   isContextOpen: boolean;
 };
 
+/** The icon size Badge is laid out for. */
+const BADGE_ICON_PX = 12;
+
+const LOCKED_DELETE_REASON = "This iteration was posted; comments can't be deleted";
+/** The look IconButton gives `disabled`, for one that is only aria-disabled. */
+const LOCKED_ICON_BUTTON_CLASS =
+  "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-fg-2";
+
 const locationOf = (comment: Comment): string => {
   if (comment.file === null) return "general";
   return comment.line === null ? comment.file : `${comment.file}:${String(comment.line)}`;
 };
-
-const ICON_SIZE = 13;
 
 const CommentCardBase = ({
   comment,
@@ -51,7 +58,9 @@ const CommentCardBase = ({
   );
 
   return (
-    <article
+    <Card
+      as="article"
+      padding="sm"
       id={cardDomId(id)}
       data-comment-id={id}
       tabIndex={isFocused ? 0 : -1}
@@ -61,65 +70,81 @@ const CommentCardBase = ({
         if (!isFocused) handlers.onFocus(id);
       }}
       className={cn(
-        "bg-bg-1 rounded-[var(--radius-3)] border px-3.5 py-3 transition-colors outline-none",
+        "group flex flex-col gap-(--space-2) transition-colors",
+        // A keyboard focus ring lies over the border instead of floating outside it.
+        "focus-visible:-outline-offset-1",
         isFocused
           ? "border-accent-fg shadow-[inset_3px_0_0_var(--accent)]"
-          : "border-border hover:border-border-strong"
+          : "hover:border-border-strong"
       )}
     >
-      <header className="mb-2 flex flex-wrap items-center gap-2">
-        <span className={cn("sev", comment.severity)}>
-          <span className="dot" />
-          {comment.severity}
-        </span>
+      <header className="flex min-h-(--control-sm) flex-wrap items-center gap-(--space-2)">
+        <SeverityBadge severity={comment.severity} />
         {comment.file === null ? (
-          <span className="chip dim text-[10px]">general</span>
+          <Badge variant="outline">general</Badge>
         ) : (
-          <span className="text-fg-1 font-mono text-[11px] break-all">{locationOf(comment)}</span>
-        )}
-        {anchorProblem !== null && (
-          <span className="chip text-[var(--c-major-fg)]" title={anchorProblem}>
-            <TriangleAlert size={11} aria-hidden="true" />
-            not in diff
+          <span className="text-fg-1 font-mono text-(length:--fs-meta) break-all">
+            {locationOf(comment)}
           </span>
         )}
-        {isDismissed && <span className="chip text-fg-2">dismissed</span>}
-        <div className="ml-auto flex gap-0.5">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={isDismissed ? "Keep comment" : "Dismiss comment"}
-            title={isDismissed ? "Keep (a)" : "Dismiss (d)"}
+        {anchorProblem !== null && (
+          <Badge
+            tone="warn"
+            variant="outline"
+            title={anchorProblem}
+            icon={<TriangleAlert size={BADGE_ICON_PX} aria-hidden="true" />}
+          >
+            not in diff
+          </Badge>
+        )}
+        {isDismissed && <Badge>dismissed</Badge>}
+        <div
+          className={cn(
+            "ml-auto flex gap-(--space-1) transition-opacity duration-(--dur-fast)",
+            // The focused card always shows its actions; the others on hover or keyboard focus.
+            isFocused
+              ? "opacity-100"
+              : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+          )}
+        >
+          <IconButton
+            size="sm"
+            label={isDismissed ? "Keep comment" : "Dismiss comment"}
+            shortcut={isDismissed ? "a" : "d"}
+            icon={
+              isDismissed ? (
+                <Check size={ICON_SIZE.inline} aria-hidden="true" />
+              ) : (
+                <X size={ICON_SIZE.inline} aria-hidden="true" />
+              )
+            }
             onClick={() => {
               handlers.onToggleStatus(id);
             }}
-          >
-            {isDismissed ? <Check size={ICON_SIZE} /> : <X size={ICON_SIZE} />}
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Edit comment"
-            title="Edit (e)"
+          />
+          <IconButton
+            size="sm"
+            label="Edit comment"
+            shortcut="e"
             disabled={isEditing}
+            icon={<Pencil size={ICON_SIZE.inline} aria-hidden="true" />}
             onClick={() => {
               handlers.onEdit(id);
             }}
-          >
-            <Pencil size={ICON_SIZE} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Delete comment"
-            title={isLocked ? "This iteration was posted; comments can't be deleted" : "Delete"}
-            disabled={isLocked}
+          />
+          {/* Locked: still focusable and hoverable, so its tooltip can say why it does nothing. */}
+          <IconButton
+            size="sm"
+            variant="danger"
+            label="Delete comment"
+            tooltip={isLocked ? LOCKED_DELETE_REASON : undefined}
+            aria-disabled={isLocked ? true : undefined}
+            className={cn(isLocked && LOCKED_ICON_BUTTON_CLASS)}
+            icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
             onClick={() => {
-              handlers.onDelete(id);
+              if (!isLocked) handlers.onDelete(id);
             }}
-          >
-            <Trash size={ICON_SIZE} />
-          </button>
+          />
         </div>
       </header>
 
@@ -133,36 +158,46 @@ const CommentCardBase = ({
           onRegister={handlers.onRegisterEditor}
         />
       ) : (
-        <div className={cn("text-[12.5px]", isDismissed && "opacity-55")}>
-          <Markdown>{comment.body}</Markdown>
+        <div className={cn(isDismissed && "opacity-55")}>
+          {/* The card's gap spaces the blocks; the last one's own margin would double it. */}
+          <Markdown className="[&>:last-child]:mb-0!">{comment.body}</Markdown>
         </div>
       )}
 
       {comment.file !== null && comment.line !== null && (
-        <div className="mt-1.5">
-          <button
-            type="button"
+        <div className="flex flex-col items-start gap-(--space-2)">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-(--space-2)"
             aria-expanded={isContextOpen}
+            icon={
+              <ChevronRight
+                size={ICON_SIZE.inline}
+                aria-hidden="true"
+                className={cn("transition-transform", isContextOpen && "rotate-90")}
+              />
+            }
+            iconRight={
+              <span aria-hidden="true">
+                <Kbd>c</Kbd>
+              </span>
+            }
             onClick={() => {
               handlers.onToggleContext(id);
             }}
-            className="text-fg-2 hover:text-fg-1 flex items-center gap-1 font-mono text-[10px] tracking-[0.06em] uppercase"
           >
-            <ChevronRight
-              size={11}
-              aria-hidden="true"
-              className={cn("transition-transform", isContextOpen && "rotate-90")}
-            />
-            code context
-          </button>
+            {/* One name either way; aria-expanded and the chevron tell open from closed. */}
+            Show code
+          </Button>
           {isContextOpen && (
-            <div className="border-border bg-bg-0 mt-1.5 overflow-hidden rounded-md border">
+            <div className="border-border bg-bg-0 w-full overflow-hidden rounded-(--radius-control) border">
               <CodeContext file={comment.file} line={comment.line} />
             </div>
           )}
         </div>
       )}
-    </article>
+    </Card>
   );
 };
 

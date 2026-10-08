@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useReviewDiff } from "@entities/review";
+import { Callout } from "@shared/ui";
 import { EMPTY_FILTERS, GENERAL_FILE_KEY, buildDiffIndex, isFiltering } from "../../lib";
 import { usePolishViewStore } from "../../model";
 import { NewCommentPanel } from "./NewCommentPanel";
 import { ShortcutsDialog } from "./ShortcutsDialog";
-import { TriageBulkBar } from "./TriageBulkBar";
 import { TriageEmptyState } from "./TriageEmptyState";
-import { TriageFilterBar } from "./TriageFilterBar";
 import { TriageList } from "./TriageList";
+import { TriageToolbar } from "./TriageToolbar";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 import { NEW_COMMENT_ID, TriageContext } from "./triageContext";
 import { useTriageData } from "./useTriageData";
@@ -165,44 +165,42 @@ export const TriageView = ({
   return (
     <TriageContext.Provider value={contextValue}>
       <div className="flex h-full flex-col">
-        <div className="border-border bg-bg-1 flex shrink-0 flex-col gap-2.5 border-b px-5 py-3">
-          <TriageFilterBar
-            filters={filters}
-            onFiltersChange={setFilters}
-            severityCounts={data.severityCounts}
-            fileOptions={data.fileOptions}
-            isGrouped={isGrouped}
-            onGroupedChange={setGrouped}
-            searchRef={searchRef}
-          />
-          <TriageBulkBar
-            shownCount={data.actionable.length}
-            totalCount={comments.length}
-            isFiltered={isFiltering(filters) || data.actionable.length < comments.length}
-            onKeepAll={() => {
-              actions.setStatus(actionableIds, "kept");
-            }}
-            onDismissAll={() => {
-              actions.setStatus(actionableIds, "dismissed");
-            }}
-            onSetSeverity={(severity) => {
-              actions.setSeverity(actionableIds, severity);
-            }}
-            onAdd={() => {
-              nav.startEdit(NEW_COMMENT_ID);
-            }}
-            isLocked={isLocked}
-            onShowShortcuts={() => {
-              setIsHelpOpen(true);
-            }}
-          />
-        </div>
+        <TriageToolbar
+          filters={filters}
+          onFiltersChange={setFilters}
+          severityCounts={data.severityCounts}
+          fileOptions={data.fileOptions}
+          isGrouped={isGrouped}
+          onGroupedChange={setGrouped}
+          searchRef={searchRef}
+          shownCount={data.actionable.length}
+          totalCount={comments.length}
+          isPartial={isFiltering(filters) || data.actionable.length < comments.length}
+          onKeepAll={() => {
+            actions.setStatus(actionableIds, "kept");
+          }}
+          onDismissAll={() => {
+            actions.setStatus(actionableIds, "dismissed");
+          }}
+          onSetSeverity={(severity) => {
+            actions.setSeverity(actionableIds, severity);
+          }}
+          onAdd={() => {
+            nav.startEdit(NEW_COMMENT_ID);
+          }}
+          isLocked={isLocked}
+          onShowShortcuts={() => {
+            setIsHelpOpen(true);
+          }}
+        />
 
         {isLocked && (
-          <p role="note" className="border-border bg-bg-2 text-fg-2 border-b px-5 py-2 text-[12px]">
-            This iteration was already posted: comments can still be edited, but not added or
-            deleted.
-          </p>
+          <div className="border-border shrink-0 border-b px-(--space-4) py-(--space-2)">
+            <Callout tone="info" size="sm">
+              This iteration was already posted: comments can still be edited, but not added or
+              deleted.
+            </Callout>
+          </div>
         )}
 
         {editingId === NEW_COMMENT_ID && (

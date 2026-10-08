@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { TriangleAlert } from "lucide-react";
+import { Field, ICON_SIZE, Input, Select } from "@shared/ui";
 import { describeAnchorProblem, parseLineNumber } from "../../lib";
 import { useTriageContext } from "./triageContext";
 
@@ -13,6 +14,7 @@ type AnchorFieldsProps = {
 
 const GENERAL_OPTION = "";
 
+/** Where a comment is posted: a file of the diff (and a line), or the merge request itself. */
 export const AnchorFields = ({
   file,
   lineText,
@@ -21,6 +23,7 @@ export const AnchorFields = ({
   onLineChange,
 }: AnchorFieldsProps): React.ReactElement => {
   const { diffIndex, isDiffLoading } = useTriageContext();
+  const lineErrorId = useId();
 
   // The current file stays selectable even when it is not in the diff, so opening the editor
   // never silently re-anchors a comment.
@@ -33,16 +36,18 @@ export const AnchorFields = ({
     lineError === null ? describeAnchorProblem(diffIndex, file, parseLineNumber(lineText)) : null;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-fg-2 font-mono text-[10px] tracking-[0.08em] uppercase">anchor</span>
-        <select
-          aria-label="Anchor file"
+    <>
+      <Field
+        label="Anchor file"
+        hint={isDiffLoading ? "Loading the files of the diff…" : undefined}
+        className="max-w-[360px] min-w-[200px] flex-1"
+      >
+        <Select
+          size="sm"
           value={file ?? GENERAL_OPTION}
           onChange={(event) => {
             onFileChange(event.target.value === GENERAL_OPTION ? null : event.target.value);
           }}
-          className="border-border bg-bg-0 text-fg-1 max-w-[340px] min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-[11px]"
         >
           <option value={GENERAL_OPTION}>General comment (no line)</option>
           {files.map((path) => (
@@ -50,35 +55,42 @@ export const AnchorFields = ({
               {path}
             </option>
           ))}
-        </select>
-        {file !== null && (
-          <label className="text-fg-2 flex items-center gap-1.5 font-mono text-[11px]">
-            line
-            <input
-              aria-label="Line number"
-              aria-invalid={lineError !== null}
-              inputMode="numeric"
-              value={lineText}
-              onChange={(event) => {
-                onLineChange(event.target.value);
-              }}
-              className="border-border bg-bg-0 text-fg-0 w-20 rounded-md border px-2 py-1 font-mono text-[11px] aria-[invalid=true]:border-[var(--c-critical)]"
-            />
-          </label>
-        )}
-        {isDiffLoading && <span className="text-fg-2 text-[11px]">Loading diff files…</span>}
-      </div>
+        </Select>
+      </Field>
+      {file !== null && (
+        <Field label="Line" className="w-[80px]">
+          <Input
+            size="sm"
+            isMono
+            aria-label="Line number"
+            inputMode="numeric"
+            isInvalid={lineError !== null}
+            aria-describedby={lineError === null ? undefined : lineErrorId}
+            value={lineText}
+            onChange={(event) => {
+              onLineChange(event.target.value);
+            }}
+          />
+        </Field>
+      )}
       {lineError !== null && (
-        <p role="alert" className="text-[11px] text-[var(--c-critical-fg)]">
+        <p
+          id={lineErrorId}
+          role="alert"
+          className="basis-full text-(length:--fs-meta) text-(--c-critical-fg)"
+        >
           {lineError}
         </p>
       )}
       {warning !== null && (
-        <p role="note" className="flex items-center gap-1.5 text-[11px] text-[var(--c-major-fg)]">
-          <TriangleAlert size={12} aria-hidden="true" />
+        <p
+          role="note"
+          className="flex basis-full items-center gap-(--space-2) text-(length:--fs-meta) text-(--c-major-fg)"
+        >
+          <TriangleAlert size={ICON_SIZE.inline} aria-hidden="true" />
           {warning}
         </p>
       )}
-    </div>
+    </>
   );
 };

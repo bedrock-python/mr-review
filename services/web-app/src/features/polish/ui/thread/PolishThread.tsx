@@ -1,6 +1,9 @@
-import { useMemo } from "react";
-import { Markdown } from "@shared/ui";
-import { SEV_COLOR } from "../../lib";
+import { useId, useMemo } from "react";
+import { Check, X } from "lucide-react";
+import { SeverityBadge, SeverityCounts } from "@entities/review";
+import { cn } from "@shared/lib";
+import { Badge, Card, CountBadge, ICON_SIZE, IconButton, Markdown } from "@shared/ui";
+import { GENERAL_FILE_KEY, SEV_COLOR, countBySeverity } from "../../lib";
 import type { Comment } from "@entities/review";
 
 type ThreadGroup = {
@@ -14,6 +17,98 @@ export type PolishThreadProps = {
   onToggleStatus: (id: string) => void;
 };
 
+type ThreadCommentProps = {
+  comment: Comment;
+  hasNext: boolean;
+  onToggleStatus: (id: string) => void;
+};
+
+const ThreadComment = ({
+  comment,
+  hasNext,
+  onToggleStatus,
+}: ThreadCommentProps): React.ReactElement => {
+  const isDismissed = comment.status === "dismissed";
+  return (
+    <li className={cn("flex gap-(--space-3)", isDismissed && "opacity-45")}>
+      {/* The spine: a dot in the severity's colour, a line down to the next comment's dot. */}
+      <div className="flex flex-col items-center pt-(--space-3)" aria-hidden="true">
+        <span
+          className="size-(--space-2) shrink-0 rounded-full"
+          style={{ background: SEV_COLOR[comment.severity] }}
+        />
+        {hasNext && (
+          <span className="bg-border-strong mt-(--space-2) -mb-(--space-2) w-px flex-1" />
+        )}
+      </div>
+      <Card
+        padding="sm"
+        className={cn("flex min-w-0 flex-1 flex-col gap-(--space-2)", hasNext && "mb-(--space-3)")}
+      >
+        <div className="flex min-h-(--control-sm) items-center gap-(--space-2)">
+          <SeverityBadge severity={comment.severity} />
+          {comment.line !== null && (
+            <span className="text-fg-2 font-mono text-(length:--fs-meta)">line {comment.line}</span>
+          )}
+          {isDismissed && <Badge>dismissed</Badge>}
+          <IconButton
+            size="sm"
+            className="ml-auto"
+            label={isDismissed ? "Keep comment" : "Dismiss comment"}
+            icon={
+              isDismissed ? (
+                <Check size={ICON_SIZE.inline} aria-hidden="true" />
+              ) : (
+                <X size={ICON_SIZE.inline} aria-hidden="true" />
+              )
+            }
+            onClick={() => {
+              onToggleStatus(comment.id);
+            }}
+          />
+        </div>
+        <Markdown className="[&>:last-child]:mb-0!">{comment.body}</Markdown>
+      </Card>
+    </li>
+  );
+};
+
+type ThreadFileProps = {
+  group: ThreadGroup;
+  onToggleStatus: (id: string) => void;
+};
+
+const ThreadFile = ({ group, onToggleStatus }: ThreadFileProps): React.ReactElement => {
+  const headingId = useId();
+  const counts = useMemo(() => countBySeverity(group.comments), [group.comments]);
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-(--space-2)">
+      <header className="flex min-w-0 items-center gap-(--space-2)">
+        <h3
+          id={headingId}
+          className="text-fg-0 min-w-0 truncate font-mono text-(length:--fs-meta) font-medium"
+          title={group.label}
+        >
+          {group.label}
+        </h3>
+        <CountBadge count={group.comments.length} />
+        <SeverityCounts counts={counts} isCompact />
+      </header>
+      <ol className="m-0 list-none p-0">
+        {group.comments.map((comment, index) => (
+          <ThreadComment
+            key={comment.id}
+            comment={comment}
+            hasNext={index < group.comments.length - 1}
+            onToggleStatus={onToggleStatus}
+          />
+        ))}
+      </ol>
+    </section>
+  );
+};
+
+/** The comments as they will read on the merge request: one thread per file. */
 export const PolishThread = ({
   comments,
   onToggleStatus,
@@ -21,7 +116,7 @@ export const PolishThread = ({
   const groups = useMemo((): ThreadGroup[] => {
     const map = new Map<string, Comment[]>();
     for (const c of comments) {
-      const key = c.file ?? "__general__";
+      const key = c.file ?? GENERAL_FILE_KEY;
       const existing = map.get(key);
       if (existing) {
         existing.push(c);
@@ -31,139 +126,17 @@ export const PolishThread = ({
     }
     return Array.from(map.entries()).map(([key, groupComments]) => ({
       key,
-      label: key === "__general__" ? "General Notes" : key,
+      label: key === GENERAL_FILE_KEY ? "General notes" : key,
       comments: groupComments,
     }));
   }, [comments]);
 
   return (
-    <div style={{ padding: "20px 24px", overflow: "auto", height: "100%" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column" }}>
-        {groups.flatMap((group) =>
-          group.comments.map((c, i) => (
-            <div
-              key={c.id}
-              style={{
-                display: "flex",
-                gap: 14,
-                paddingBottom: 14,
-                opacity: c.status === "dismissed" ? 0.45 : 1,
-              }}
-            >
-              {/* Spine */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  paddingTop: 6,
-                }}
-              >
-                <div
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: "50%",
-                    flexShrink: 0,
-                    background: SEV_COLOR[c.severity],
-                  }}
-                />
-                {i < group.comments.length - 1 && (
-                  <div style={{ flex: 1, width: 1, background: "var(--border)", marginTop: 6 }} />
-                )}
-              </div>
-
-              {/* Bubble */}
-              <div
-                style={{
-                  flex: 1,
-                  background: "var(--bg-1)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-3)",
-                  padding: 12,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                    flexWrap: "wrap" as const,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      color: "var(--accent-fg)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      fontFamily: "var(--font-display)",
-                    }}
-                  >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                    </svg>
-                    Mr. Reviewer
-                  </span>
-                  <span className={`sev ${c.severity}`}>
-                    <span className="dot" />
-                    {c.severity}
-                  </span>
-                  {c.file !== null && (
-                    <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
-                      {c.file.split("/").pop()}:{c.line}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    style={{ marginLeft: "auto" }}
-                    onClick={() => {
-                      onToggleStatus(c.id);
-                    }}
-                    title={c.status === "dismissed" ? "Keep" : "Dismiss"}
-                  >
-                    {c.status === "dismissed" ? (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                <Markdown>{c.body}</Markdown>
-              </div>
-            </div>
-          ))
-        )}
+    <div className="h-full overflow-auto px-(--space-6) py-(--space-5)">
+      <div className="mx-auto flex max-w-[720px] flex-col gap-(--space-6)">
+        {groups.map((group) => (
+          <ThreadFile key={group.key} group={group} onToggleStatus={onToggleStatus} />
+        ))}
       </div>
     </div>
   );
