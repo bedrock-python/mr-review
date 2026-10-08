@@ -2,8 +2,9 @@ import { ExternalLink } from "lucide-react";
 import { SeverityBadge } from "@entities/review";
 import { ICON_SIZE, Markdown, StatusBadge } from "@shared/ui";
 import { toPlainText } from "../lib/plainText";
-import { MONO_META } from "./postStyles";
-import type { Comment, CommentPost } from "@entities/review";
+import { formatPostBody, noteLocation } from "../lib/postBody";
+import { MONO_META, TRUNCATE } from "./postStyles";
+import type { Comment, CommentPost, SeverityLabel } from "@entities/review";
 import type { Status } from "@shared/ui";
 
 type Outcome = { status: Status; label: string };
@@ -16,7 +17,9 @@ const outcomeOf = (post: CommentPost | null | undefined, isCompleted: boolean): 
   }
   if (post.outcome === "inline") return { status: "success", label: "posted inline" };
   if (post.outcome === "general_note") return { status: "success", label: "general note" };
+  // The same tones as the failure list: held back or unanswered is a warning, refused is not.
   if (post.failure_kind === "ambiguous") return { status: "warning", label: "unconfirmed" };
+  if (post.failure_kind === "blocked") return { status: "warning", label: "blocked" };
   return { status: "danger", label: "failed" };
 };
 
@@ -47,6 +50,8 @@ export type PostCommentRowProps = {
   /** Show what became of it, with the body cut to two lines. */
   isStatusShown: boolean;
   isCompleted: boolean;
+  /** The dry run shows the body with the label the post will put on it. */
+  severityLabel: SeverityLabel;
 };
 
 /** One comment as it goes to the MR: severity, line and body, and later what became of it. */
@@ -54,14 +59,22 @@ export const PostCommentRow = ({
   comment,
   isStatusShown,
   isCompleted,
+  severityLabel,
 }: PostCommentRowProps): React.ReactElement => {
   const outcome = outcomeOf(comment.post, isCompleted);
   const url = comment.post?.url ?? null;
+  const location = noteLocation(comment);
   return (
     <li style={ROW}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
         <SeverityBadge severity={comment.severity} />
         {comment.line !== null && <span style={MONO_META}>line {comment.line}</span>}
+        {/* In the dry run the posted body itself is headed with the path. */}
+        {isStatusShown && location !== null && (
+          <span style={{ ...MONO_META, ...TRUNCATE }} title={location}>
+            {location}
+          </span>
+        )}
         {isStatusShown && (
           <span
             style={{
@@ -90,7 +103,7 @@ export const PostCommentRow = ({
       {isStatusShown ? (
         <p style={EXCERPT}>{toPlainText(comment.body)}</p>
       ) : (
-        <Markdown>{comment.body}</Markdown>
+        <Markdown>{formatPostBody(comment, severityLabel, location)}</Markdown>
       )}
     </li>
   );

@@ -69,6 +69,21 @@ const OpenMrLink = ({
   );
 };
 
+/**
+ * How much is on the MR. A completed iteration has every comment there, including those posted
+ * before per-comment records were kept (they count as neither inline nor general).
+ */
+const describeLanded = (summary: PostSummary, targetLabel: string): string => {
+  const kept = summary.kept.length;
+  if (summary.state === "posted") {
+    return kept === 1
+      ? `1 comment on ${targetLabel}`
+      : `All ${String(kept)} comments on ${targetLabel}`;
+  }
+  const landed = summary.inline + summary.generalNotes;
+  return `${String(landed)} of ${plural(kept)} on ${targetLabel}`;
+};
+
 export type PostResultFooterProps = {
   summary: PostSummary;
   targetLabel: string;
@@ -90,7 +105,6 @@ export const PostResultFooter = ({
 }: PostResultFooterProps): React.ReactElement => {
   const [isConfirming, setIsConfirming] = useState(false);
   const retryable = summary.failed.length + summary.unsent;
-  const landed = summary.inline + summary.generalNotes;
 
   const handleRetry = (): void => {
     // Comments that may already be on the MR are sent again only once that is confirmed.
@@ -102,7 +116,7 @@ export const PostResultFooter = ({
     <>
       <StageFooter
         aria-label="Post actions"
-        summary={`${String(landed)} of ${plural(summary.kept.length)} on ${targetLabel}`}
+        summary={describeLanded(summary, targetLabel)}
         secondaryActions={
           <>
             <Button

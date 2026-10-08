@@ -4,14 +4,15 @@ import { groupByFile } from "../lib/groupByFile";
 import { PostCommentRow } from "./PostCommentRow";
 import { TRUNCATE } from "./postStyles";
 import type { FileGroup } from "../lib/groupByFile";
-import type { Comment } from "@entities/review";
+import type { PostCommentRowProps } from "./PostCommentRow";
+import type { Comment, SeverityLabel } from "@entities/review";
 
 export type PostPreviewMode = "dryrun" | "status";
 
 const HEADER: Record<PostPreviewMode | "json", { title: string; description: string }> = {
   dryrun: {
     title: "Dry run",
-    description: "What goes to the MR, file by file. Nothing is sent until you post.",
+    description: "What goes to the MR, as it will read there. Nothing is sent until you post.",
   },
   json: { title: "JSON", description: "The payload that Save as JSON downloads." },
   status: { title: "On the MR", description: "What became of each comment." },
@@ -34,12 +35,10 @@ const GROUP_HEADER: React.CSSProperties = {
 
 const Group = ({
   group,
-  isStatusShown,
-  isCompleted,
+  rowProps,
 }: {
   group: FileGroup;
-  isStatusShown: boolean;
-  isCompleted: boolean;
+  rowProps: Omit<PostCommentRowProps, "comment">;
 }): React.ReactElement => {
   const name = group.file ?? "General notes";
   const Icon = group.file === null ? MessageSquare : FileCode;
@@ -62,12 +61,7 @@ const Group = ({
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {group.comments.map((comment) => (
-          <PostCommentRow
-            key={comment.id}
-            comment={comment}
-            isStatusShown={isStatusShown}
-            isCompleted={isCompleted}
-          />
+          <PostCommentRow key={comment.id} comment={comment} {...rowProps} />
         ))}
       </ul>
     </section>
@@ -116,6 +110,7 @@ export type PostPreviewProps = {
   onSaveAsJson: () => void;
   /** The iteration is done: a comment without a record was posted, not skipped. */
   isCompleted: boolean;
+  severityLabel: SeverityLabel;
 };
 
 /** The right-hand column: the dry run file by file, the raw JSON, or what became of each comment. */
@@ -127,8 +122,10 @@ export const PostPreview = ({
   onToggleJson,
   onSaveAsJson,
   isCompleted,
+  severityLabel,
 }: PostPreviewProps): React.ReactElement => {
   const isJson = mode === "dryrun" && isJsonShown;
+  const rowProps = { isStatusShown: mode === "status", isCompleted, severityLabel };
   const header = HEADER[isJson ? "json" : mode];
   const count = comments.length;
 
@@ -157,6 +154,7 @@ export const PostPreview = ({
 
       {isJson ? (
         <pre
+          role="region"
           aria-label="Payload as JSON"
           tabIndex={0}
           style={{
@@ -184,12 +182,7 @@ export const PostPreview = ({
             />
           ) : (
             groupByFile(comments).map((group) => (
-              <Group
-                key={group.file ?? ""}
-                group={group}
-                isStatusShown={mode === "status"}
-                isCompleted={isCompleted}
-              />
+              <Group key={group.file ?? ""} group={group} rowProps={rowProps} />
             ))
           )}
         </div>

@@ -29,14 +29,19 @@ describe("groupByFile", () => {
     expect(groups.at(-1)?.comments.map((c) => c.id)).toEqual(["note"]);
   });
 
-  it("orders a file's comments by line, a comment on the whole file first", () => {
-    const [group] = groupByFile([
-      comment("l30", "a.py", 30),
-      comment("whole", "a.py", null),
-      comment("l3", "a.py", 3),
-    ]);
+  it("orders a file's comments by line", () => {
+    const [group] = groupByFile([comment("l30", "a.py", 30), comment("l3", "a.py", 3)]);
 
-    expect(group?.comments.map((c) => c.id)).toEqual(["whole", "l3", "l30"]);
+    expect(group?.comments.map((c) => c.id)).toEqual(["l3", "l30"]);
+  });
+
+  it("counts a comment on a whole file as a general note, as the server posts it", () => {
+    const groups = groupByFile([comment("l3", "a.py", 3), comment("whole", "a.py", null)]);
+
+    expect(groups.map((g) => [g.file, g.comments.map((c) => c.id)])).toEqual([
+      ["a.py", ["l3"]],
+      [null, ["whole"]],
+    ]);
   });
 
   it("has no general notes group when every comment is on a file", () => {

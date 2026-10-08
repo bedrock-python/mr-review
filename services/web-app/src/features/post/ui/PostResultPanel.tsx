@@ -98,12 +98,15 @@ const ResultTiles = ({ summary }: { summary: PostSummary }): React.ReactElement 
 export type PostResultPanelProps = PostOptionsProps & {
   summary: PostSummary;
   mrLabel: string;
+  /** The heading takes the focus after a post, so it does not fall to the page. */
+  headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
 /** What the last post did, read from the server: survives a reload. */
 export const PostResultPanel = ({
   summary,
   mrLabel,
+  headingRef,
   ...options
 }: PostResultPanelProps): React.ReactElement => {
   const state = summary.state === "ready" ? "failed" : summary.state;
@@ -114,6 +117,8 @@ export const PostResultPanel = ({
     <aside aria-label="Post result" style={ASIDE}>
       <div>
         <h2
+          ref={headingRef}
+          tabIndex={-1}
           style={{ ...STAGE_TITLE, display: "flex", alignItems: "center", gap: "var(--space-2)" }}
         >
           <look.Icon

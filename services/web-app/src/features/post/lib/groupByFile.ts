@@ -1,20 +1,20 @@
 import type { Comment } from "@entities/review";
 
-/** The comments on one file, or the general notes (`file` null). */
+/** The inline comments on one file, or the general notes (`file` null). */
 export type FileGroup = { file: string | null; comments: Comment[] };
 
-const byLine = (a: Comment, b: Comment): number =>
-  (a.line ?? Number.NEGATIVE_INFINITY) - (b.line ?? Number.NEGATIVE_INFINITY);
+const byLine = (a: Comment, b: Comment): number => (a.line ?? 0) - (b.line ?? 0);
 
 /**
  * The comments as the MR will read them: one group per file in the order the files first
- * appear, comments by line within a file (a file-level one first), general notes last.
+ * appear, comments by line within a file, then the general notes. A comment on a whole file
+ * (a path, no line) is posted as a general note, so it is one here too.
  */
 export const groupByFile = (comments: readonly Comment[]): FileGroup[] => {
   const files = new Map<string, Comment[]>();
   const notes: Comment[] = [];
   for (const comment of comments) {
-    if (comment.file === null) {
+    if (comment.file === null || comment.line === null) {
       notes.push(comment);
       continue;
     }

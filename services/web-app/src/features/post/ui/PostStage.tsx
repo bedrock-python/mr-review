@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
@@ -34,6 +34,9 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
   const [isJsonShown, setIsJsonShown] = useState(false);
   const [fallbackToGeneralNote, setFallbackToGeneralNote] = useState(true);
   const [severityLabel, setSeverityLabel] = useSeverityLabel();
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Once a post lands, the button that sent it is gone or idle: focus goes to the result.
+  const shouldFocusResult = useRef(false);
 
   const summary = iteration ? summarizePost(iteration) : null;
   const kept = summary?.kept ?? [];
@@ -48,6 +51,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
   };
 
   const handlePost = (resendAmbiguous = false): void => {
+    shouldFocusResult.current = true;
     postReview.mutate(
       { iterationId: iteration?.id ?? null, fallbackToGeneralNote, severityLabel, resendAmbiguous },
       {
@@ -56,6 +60,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
           toast[kind](message);
         },
         onError: (err) => {
+          shouldFocusResult.current = false;
           toast.error("Failed to post comments", { description: err.message });
         },
       }
@@ -76,6 +81,12 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
   );
 
   const isAttempted = summary !== null && summary.state !== "ready";
+
+  useEffect(() => {
+    if (!shouldFocusResult.current || !isAttempted || postReview.isPending) return;
+    shouldFocusResult.current = false;
+    resultHeadingRef.current?.focus();
+  }, [isAttempted, postReview.isPending, summary]);
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -87,7 +98,12 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
         }}
       >
         {isAttempted ? (
-          <PostResultPanel summary={summary} mrLabel={mrLabel} {...options} />
+          <PostResultPanel
+            summary={summary}
+            mrLabel={mrLabel}
+            headingRef={resultHeadingRef}
+            {...options}
+          />
         ) : (
           <PostConfirmPanel
             kept={kept}
@@ -111,6 +127,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
             downloadJson(json, `review-${review.id}.json`);
           }}
           isCompleted={(iteration?.completed_at ?? null) !== null}
+          severityLabel={severityLabel}
         />
       </div>
       {isAttempted ? (
