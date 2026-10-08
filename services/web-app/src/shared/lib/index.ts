@@ -18,3 +18,4 @@ export type { EventStreamMessage, EventStreamParser } from "./readEventStream";
 export { readStorageItem, writeStorageItem } from "./safeStorage";
 export { useStickToBottom } from "./useStickToBottom";
 export type { StickToBottom } from "./useStickToBottom";
+export { useReturnFocus } from "./useReturnFocus";

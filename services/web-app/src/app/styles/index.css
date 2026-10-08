@@ -459,6 +459,29 @@
     background: var(--bg-hover);
     color: var(--fg-0);
   }
+  /* a disabled button must look it, and not react to hover */
+  .btn:disabled,
+  .btn:disabled:hover {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: none;
+    background: var(--bg-2);
+    border-color: var(--border);
+  }
+  .btn.primary:disabled,
+  .btn.primary:disabled:hover {
+    background: var(--accent);
+    border-color: transparent;
+  }
+  .btn.ghost:disabled,
+  .btn.ghost:disabled:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 
   .icon-btn {
     width: 28px;
@@ -541,12 +564,48 @@
       0 0 0 3.5px var(--accent);
   }
 
+  /* side sheets (review history, iterations) slide in from the right */
+  .side-sheet[data-state="open"] {
+    animation: side-sheet-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .side-sheet[data-state="closed"] {
+    animation: side-sheet-out 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .side-sheet-overlay[data-state="open"] {
+    animation: side-sheet-fade-in 0.2s ease-out;
+  }
+  .side-sheet-overlay[data-state="closed"] {
+    animation: side-sheet-fade-out 0.18s ease-in;
+  }
+
+  /* history rows: the delete button shows on hover and on keyboard focus */
+  .history-row:hover {
+    background: var(--bg-hover);
+  }
+  .history-row .history-row-delete {
+    opacity: 0;
+  }
+  .history-row:hover .history-row-delete,
+  .history-row:focus-within .history-row-delete {
+    opacity: 1;
+  }
+  .history-row .history-row-delete:hover {
+    color: var(--c-critical);
+    background: color-mix(in oklch, var(--c-critical) 15%, transparent);
+  }
+  .history-row-open:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
   /* comment editor swaps per comment — a short fade makes the switch legible */
   .comment-editor {
     animation: fadeSlideIn 0.13s ease-out;
   }
   @media (prefers-reduced-motion: reduce) {
-    .comment-editor {
+    .comment-editor,
+    .side-sheet,
+    .side-sheet-overlay {
       animation: none;
     }
     .icon-btn:not(:disabled):active {
@@ -591,5 +650,38 @@
   [data-theme="phosphor"] .sev {
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+}
+
+@keyframes side-sheet-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes side-sheet-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes side-sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes side-sheet-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
