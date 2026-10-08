@@ -1,40 +1,22 @@
 import { useMemo, useRef, useState } from "react";
-import { History, Search, SearchX } from "lucide-react";
+import { History, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useAppStore } from "@app/store";
 import { getReviewMRIid, useDeleteReview, useReviews } from "@entities/review";
 import { useHosts } from "@entities/host";
-import {
-  Button,
-  Chip,
-  CountBadge,
-  Drawer,
-  EmptyState,
-  ErrorState,
-  Eyebrow,
-  ICON_SIZE,
-  Input,
-} from "@shared/ui";
+import { Button, CountBadge, Drawer, EmptyState, ErrorState, Eyebrow, ICON_SIZE } from "@shared/ui";
 import {
   countReviewsByStage,
   filterReviews,
   getReviewTargetLabel,
   groupReviewsByHost,
 } from "../lib/historyList";
-import { STAGE_META, TRUNCATE } from "./historyStyles";
+import { TRUNCATE } from "./historyStyles";
 import { HistorySkeleton } from "./HistorySkeleton";
+import { HistoryToolbar } from "./HistoryToolbar";
 import { ReviewItem } from "./ReviewItem";
 import type { Review, ReviewStage } from "@entities/review";
-
-const TOOLBAR: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "var(--space-2)",
-  flexShrink: 0,
-  padding: "var(--space-3) var(--space-4)",
-  borderBottom: "1px solid var(--border)",
-};
 
 const GROUP_HEADER: React.CSSProperties = {
   position: "sticky",
@@ -110,49 +92,14 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
 
   return (
     <>
-      <div style={TOOLBAR}>
-        <Input
-          ref={searchRef}
-          type="search"
-          aria-label="Search reviews"
-          placeholder="Search by host, repository or MR…"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-          }}
-          leadingIcon={<Search size={ICON_SIZE.inline} />}
-        />
-        {stageCounts.size > 1 && (
-          <div
-            role="group"
-            aria-label="Filter by stage"
-            style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-1)" }}
-          >
-            <Chip
-              isSelected={stageFilter === null}
-              onClick={() => {
-                setStageFilter(null);
-              }}
-            >
-              All
-            </Chip>
-            {[...stageCounts.entries()].map(([stage, count]) => (
-              <Chip
-                key={stage}
-                tone={STAGE_META[stage].tone}
-                hasDot
-                count={count}
-                isSelected={stageFilter === stage}
-                onSelectedChange={(isSelected) => {
-                  setStageFilter(isSelected ? stage : null);
-                }}
-              >
-                {STAGE_META[stage].label}
-              </Chip>
-            ))}
-          </div>
-        )}
-      </div>
+      <HistoryToolbar
+        searchRef={searchRef}
+        search={search}
+        onSearchChange={setSearch}
+        stageCounts={stageCounts}
+        stageFilter={stageFilter}
+        onStageFilterChange={setStageFilter}
+      />
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {reviewsQuery.isPending && <HistorySkeleton />}

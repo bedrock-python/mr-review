@@ -74,6 +74,39 @@ const Group = ({
   );
 };
 
+const PayloadActions = ({
+  isJsonShown,
+  onToggleJson,
+  onSaveAsJson,
+}: {
+  isJsonShown: boolean;
+  onToggleJson: () => void;
+  onSaveAsJson: () => void;
+}): React.ReactElement => (
+  <>
+    <Button
+      size="sm"
+      icon={
+        isJsonShown ? (
+          <ListTree size={ICON_SIZE.inline} aria-hidden="true" />
+        ) : (
+          <Braces size={ICON_SIZE.inline} aria-hidden="true" />
+        )
+      }
+      onClick={onToggleJson}
+    >
+      {isJsonShown ? "View dry run" : "View JSON"}
+    </Button>
+    <Button
+      size="sm"
+      icon={<Download size={ICON_SIZE.inline} aria-hidden="true" />}
+      onClick={onSaveAsJson}
+    >
+      Save as JSON
+    </Button>
+  </>
+);
+
 export type PostPreviewProps = {
   mode: PostPreviewMode;
   comments: Comment[];
@@ -111,34 +144,15 @@ export const PostPreview = ({
         countLabel={`${String(count)} ${count === 1 ? "comment" : "comments"}`}
         description={header.description}
         style={{ flexShrink: 0, padding: "var(--space-4) var(--space-4) var(--space-3)" }}
-        {...(mode === "dryrun"
-          ? {
-              actions: (
-                <>
-                  <Button
-                    size="sm"
-                    icon={
-                      isJsonShown ? (
-                        <ListTree size={ICON_SIZE.inline} aria-hidden="true" />
-                      ) : (
-                        <Braces size={ICON_SIZE.inline} aria-hidden="true" />
-                      )
-                    }
-                    onClick={onToggleJson}
-                  >
-                    {isJsonShown ? "View dry run" : "View JSON"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    icon={<Download size={ICON_SIZE.inline} aria-hidden="true" />}
-                    onClick={onSaveAsJson}
-                  >
-                    Save as JSON
-                  </Button>
-                </>
-              ),
-            }
-          : {})}
+        actions={
+          mode === "dryrun" ? (
+            <PayloadActions
+              isJsonShown={isJsonShown}
+              onToggleJson={onToggleJson}
+              onSaveAsJson={onSaveAsJson}
+            />
+          ) : undefined
+        }
       />
 
       {isJson ? (
