@@ -77,6 +77,8 @@ API container, so the UI and the API share one origin and CORS never comes into 
 |----------|---------|-------------|
 | `API_UPSTREAM` | `http://api:8000` | Where nginx forwards `/api/`, resolved inside the Docker network. `scheme://host:port`, no path |
 | `API_BASE_URL` | empty | Where the **browser** sends API calls. Empty means the UI's own origin, through the proxy above. Set it only to serve the API from another origin, which must then allow the UI's origin in `MR_REVIEW__CORS__ALLOW_ORIGINS` |
+| `HSTS_MAX_AGE` | empty | Seconds for a `Strict-Transport-Security` header; empty sends none. Better set by the proxy that terminates TLS |
+| `HSTS_INCLUDE_SUBDOMAINS` | `false` | `true` adds `includeSubDomains` — only when every subdomain of the host is HTTPS |
 
 ## Where data is stored
 
@@ -123,7 +125,8 @@ When deploying on a server rather than a local machine:
 
 - Use an **absolute path** for `DATA_DIR` (e.g. `/opt/mr-review/data`) to avoid path
   resolution issues.
-- Put **nginx or Caddy** in front for HTTPS termination, and leave `MR_REVIEW_BIND` at
+- Put **nginx or Caddy** in front for HTTPS termination, and let it send HSTS — it knows
+  which hosts are HTTPS; the containers send none by default. Leave `MR_REVIEW_BIND` at
   `127.0.0.1` so the proxy is the only way in. There is no authentication in mr-review
   itself, so the port must not be reachable by anyone you would not hand the tokens to.
   Point the proxy at the all-in-one port or at the standard deployment's web port; the

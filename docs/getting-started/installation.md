@@ -115,6 +115,37 @@ docker compose pull
 docker compose up -d
 ```
 
+### Upgrading from api 0.2.1 / web-app 0.2.2 or earlier
+
+Four things changed that an existing installation can notice. Each one, with what it
+looks like and how to get the old behaviour back:
+
+1. **The ports are published on `127.0.0.1`.** Once you take the new compose file, a
+   deployment you opened from another machine stops answering there. To publish it on the
+   network again, set `MR_REVIEW_BIND=0.0.0.0` in `.env` — after reading
+   [the warning](#opening-it-from-another-machine).
+2. **The web-app image calls the API on its own origin.** Its `API_BASE_URL` used to
+   default to `http://localhost:8000`; now it is empty, and nginx in the container forwards
+   `/api/` to `API_UPSTREAM` (`http://api:8000`). The shipped standard compose file is
+   updated for this. A web-app container run on its own next to an API on the host's port
+   8000 now answers `/api/` with 502. Either point the browser back at that API with
+   `-e API_BASE_URL=http://localhost:8000`, as before (the API's
+   `MR_REVIEW__CORS__ALLOW_ORIGINS` must still list the UI's origin), or keep the
+   same-origin setup and point the proxy at it with
+   `-e API_UPSTREAM=http://host.docker.internal:8000` (on Linux, also
+   `--add-host=host.docker.internal:host-gateway`).
+3. **The API containers start as root and drop to `1000:1000`.** Older images ran as a
+   system user (uid 100); the first start gives the existing data directory to `1000:1000`
+   (or `PUID:PGID`) by itself. Two setups need a change — see
+   [File ownership](#file-ownership): a container run with `cap_drop: [ALL]` stops with a
+   message until it gets `cap_add: [CHOWN, SETUID, SETGID]` or runs as `user: "1000:1000"`,
+   and one run with `user:` needs every file in the directory to belong to that user.
+4. **No HSTS header by default.** The web-app image used to send
+   `Strict-Transport-Security` with `includeSubDomains` whenever `APP_ENV` was
+   `production`, which is its default. HSTS belongs to whatever terminates TLS in front of
+   it; to send it from this container anyway, set `HSTS_MAX_AGE=31536000` on the `web`
+   service, and `HSTS_INCLUDE_SUBDOMAINS=true` only if every subdomain is HTTPS as well.
+
 ## Stopping
 
 ```bash
@@ -149,11 +180,32 @@ owned by root. Files the application writes are readable by that user only (mode
 
 If you start the container as a non-root user yourself — `user:` in the compose file,
 `--user` with `docker run`, `runAsUser` in Kubernetes — it changes no ownership, and stops
-with a message naming the fix if the data directory is not writable by that user:
+with a message naming the fix if anything in the data directory is not readable and
+writable by that user:
 
 ```bash
 sudo chown -R 1000:1000 ./data   # the uid:gid the container runs as
 ```
+
+Fixing the ownership and dropping to the user need the `CHOWN`, `SETUID` and `SETGID`
+capabilities, which Docker grants by default. A hardened compose file that drops them all
+has to add those three back, or start the container as the user instead:
+
+```yaml
+services:
+  mr-review:
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]   # or, in place of this line: user: "1000:1000"
+```
+
+Without `SETUID`/`SETGID` the container stops with a message rather than run the
+application as root. Without only `CHOWN` it skips the ownership fix and starts if the
+directory already belongs to `PUID:PGID`.
+
+**Rootless Docker or Podman** maps the container's root to your own user on the host, and
+uid 1000 inside to some subordinate uid you cannot edit files as. There, `PUID=0` and
+`PGID=0` are what keep the data directory owned by you — the application still has no
+more rights on the host than your own account.
 
 ## For developers
 

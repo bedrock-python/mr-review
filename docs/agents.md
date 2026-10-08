@@ -189,8 +189,14 @@ Read by the entrypoint of the `api` and `all-in-one` images before the applicati
 | `PGID` | `1000` | Its group |
 
 Started as a non-root user instead (`user:`, `--user`, `runAsUser`), the entrypoint ignores
-both, changes no ownership, and exits with a message if the data directory is not writable.
-Whatever the application writes there is created mode `600`.
+both, changes no ownership, and exits with a message if any file or directory in the data
+directory (`lost+found` aside) is not readable and writable by that user. Whatever the
+application writes there is created mode `600`.
+
+Starting as root needs the `CHOWN`, `SETUID` and `SETGID` capabilities, which Docker grants
+by default. With `cap_drop: [ALL]`, add those three back with `cap_add`, or set `user:`.
+Without `SETUID`/`SETGID` the container exits with a message instead of running the
+application as root; without only `CHOWN` it skips the ownership fix.
 
 ### Web-app container environment variables
 
@@ -203,7 +209,9 @@ config at start-up. These have no `MR_REVIEW__` prefix.
 | `API_BASE_URL` | `""` | Where the **browser** sends API calls. Empty is the UI's own origin, through `API_UPSTREAM`. An origin, without `/api` — the UI appends `/api/v1/...` |
 | `API_URL` | the origin of `API_BASE_URL` | Extra origin allowed by the CSP `connect-src`; empty when `API_BASE_URL` is |
 | `NGINX_RESOLVER` | the container's nameservers | DNS server nginx resolves `API_UPSTREAM` through — Docker's `127.0.0.11` on a compose network |
-| `APP_ENV` | `production` | `production`, `staging` and `pre` also turn on an HSTS header |
+| `HSTS_MAX_AGE` | `""` | Seconds for a `Strict-Transport-Security` header; empty sends none. HSTS belongs to the proxy that terminates TLS |
+| `HSTS_INCLUDE_SUBDOMAINS` | `false` | `true` adds `includeSubDomains` to it |
+| `APP_ENV` | `production` | Written into `config.js` for the UI. It no longer turns on HSTS |
 | `APP_VERSION` | `unknown` | Shown in the UI |
 | `VITE_USE_MOCKS` | `false` | |
 
@@ -375,13 +383,32 @@ wall-clock time before the model is called at all.
     the SPA fallback in the all-in-one image, so it returns 200 whatever the state of the
     application, and 404s in the API-only image.
 19. **The API containers start as root and drop to `PUID:PGID`.** That is how a
-    root-owned bind mount becomes writable. Run them with `user:` instead and the data
-    directory must already be writable by that user — the container exits at start with
-    a `chown` hint if it is not. `PUID=0` keeps the application running as root; do not.
+    root-owned bind mount becomes writable, and it needs the `CHOWN`, `SETUID` and
+    `SETGID` capabilities: a compose file with `cap_drop: [ALL]` must `cap_add` those
+    three or set `user:`, or the container exits at start. With `user:` everything in the
+    data directory must already belong to that user — the container exits with a `chown`
+    hint if it does not. `PUID=0` keeps the application running as root: do not, except
+    under rootless Docker or Podman, where container root is the invoking user on the
+    host and `PUID=0`/`PGID=0` is what keeps the files owned by that user.
 20. **`API_UPSTREAM` must resolve as written.** nginx looks it up per request through
     `NGINX_RESOLVER` and applies no `resolv.conf` search domains: a compose service name
     works, a Kubernetes short name does not — use
     `http://<service>.<namespace>.svc.cluster.local:8000` there.
+
+## Upgrading from earlier images
+
+What changed after api 0.2.1 / web-app 0.2.2 that an existing deployment can notice, and
+the setting that brings the old behaviour back:
+
+| Change | Symptom after upgrading | Old behaviour back |
+|---|---|---|
+| Compose ports publish on `127.0.0.1` | Unreachable from other machines | `MR_REVIEW_BIND=0.0.0.0` in `.env` (rule 1 first) |
+| web-app `API_BASE_URL` defaults to `""` and nginx proxies `/api/` to `http://api:8000` | A web-app container run alone next to an API on host port 8000 answers `/api/` with 502 | `API_BASE_URL=http://localhost:8000` (the API's CORS must list the UI's origin), or `API_UPSTREAM` set to an address the container can reach |
+| API images start as root, `chown` the data directory, drop to `1000:1000` | `cap_drop: [ALL]` → exits at start; `user:` with files it cannot read → exits at start | `cap_add: [CHOWN, SETUID, SETGID]`, or `user:` with `chown -R` on the host directory |
+| HSTS is opt-in | No `Strict-Transport-Security` from the web container | `HSTS_MAX_AGE=31536000`, plus `HSTS_INCLUDE_SUBDOMAINS=true` for the old `includeSubDomains` |
+
+The data written by older images (uid 100) is taken over automatically on the first
+start as root.
 
 ## Common mistakes
 
@@ -489,7 +516,7 @@ Fetch a page when the task is the one named beside it.
 | Page | Read it when |
 |---|---|
 | [Home](index.md) | a one-screen description of what the tool is for |
-| [Installation](getting-started/installation.md) | picking all-in-one or standard, the `docker run` one-liner, opening it to a network, updating, data persistence and file ownership |
+| [Installation](getting-started/installation.md) | picking all-in-one or standard, the `docker run` one-liner, opening it to a network, updating and what an upgrade changes, data persistence and file ownership |
 | [Quick start](getting-started/quickstart.md) | adding the first provider and host through the UI |
 | [Configuration](getting-started/configuration.md) | the environment variables as a user meets them, reverse proxy and TLS notes |
 | [Review pipeline](features/pipeline.md) | what each stage does from the UI's side |
