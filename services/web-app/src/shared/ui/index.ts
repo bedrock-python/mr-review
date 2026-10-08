@@ -46,6 +46,8 @@ export { Dialog } from "./dialog";
 export type { DialogProps } from "./dialog";
 export { Drawer } from "./drawer";
 export type { DrawerProps } from "./drawer";
+export { Toaster, toasterThemeFor } from "./toaster";
+export type { ToasterProps } from "./toaster";
 export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,
