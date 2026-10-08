@@ -1,9 +1,8 @@
 import { toast } from "sonner";
 import { ExternalLink, GitBranch, History, RefreshCw } from "lucide-react";
 import { formatBranchRange } from "@entities/mr";
-import { copyText } from "@shared/lib";
+import { copyText, formatAgeAgo } from "@shared/lib";
 import { Button, CountBadge, ICON_SIZE, StatusBadge, Tooltip, buttonClassName } from "@shared/ui";
-import { formatAge } from "../lib/formatAge";
 import { truncateMiddle } from "../lib/truncateMiddle";
 import { MetaDivider } from "./MRHeaderStates";
 import type { MR } from "@entities/mr";
@@ -141,7 +140,7 @@ export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
         </span>
         <span className="text-fg-1">{mr.author}</span>
         <time dateTime={mr.created_at} title={new Date(mr.created_at).toLocaleString()}>
-          {formatAge(mr.created_at)}
+          {formatAgeAgo(mr.created_at)}
         </time>
       </span>
       <BranchChip mr={mr} />

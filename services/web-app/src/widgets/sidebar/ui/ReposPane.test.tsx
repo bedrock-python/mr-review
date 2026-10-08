@@ -1,4 +1,4 @@
-import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -90,7 +90,7 @@ afterAll(() => {
 });
 
 // Page 1 holds 50 listed repositories plus the externally pinned one.
-const FIRST_PAGE_STATUS = "Showing 51 · scroll for more";
+const FIRST_PAGE_STATUS = "Showing 51 · more below";
 
 /** Waits for the first page and for the host (favourites come from it). */
 const waitForFirstPage = async (): Promise<void> => {
@@ -163,7 +163,7 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     scrollToEnd(getVirtualScrollContainer(screen.getByRole("list", { name: "Repository list" })));
 
-    expect(await screen.findByText("Showing 101 · scroll for more")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 101 · more below")).toBeInTheDocument();
     expect(repoRequests().map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
   });
 
@@ -199,14 +199,41 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     scrollToEnd(getVirtualScrollContainer(screen.getByRole("list", { name: "Repository list" })));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load more repositories");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load more repositories: upstream"
+    );
     expect(screen.getByText(FIRST_PAGE_STATUS)).toBeInTheDocument();
 
     server.resetHandlers();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText("Showing 101 · scroll for more")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 101 · more below")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded list and says why a refresh failed, with a retry", async () => {
+    const { queryClient } = renderWithQueryClient(<ReposPane />);
+    await waitForFirstPage();
+    server.use(
+      http.get(REPOS_URL, () =>
+        HttpResponse.json({ detail: "GitLab answered 502 Bad Gateway" }, { status: 502 })
+      )
+    );
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ["mrs", "repos"] });
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not refresh the repositories");
+    expect(alert).toHaveTextContent("GitLab answered 502 Bad Gateway");
+    expect(rowLabels()).toContain("api-1");
+
+    server.resetHandlers();
+    await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
   });
 
   it("says connected only once the host has answered", async () => {

@@ -1,7 +1,6 @@
 import { getDiffStats } from "@entities/mr";
-import { ROW_FOCUS_ATTR, cn } from "@shared/lib";
+import { ROW_FOCUS_ATTR, cn, formatAge } from "@shared/lib";
 import { StatusBadge } from "@shared/ui";
-import { formatAge } from "../lib/formatAge";
 import type { MR, PipelineStatus } from "@entities/mr";
 
 const PIPELINE_DOT: Record<Exclude<PipelineStatus, "none">, { color: string; label: string }> = {

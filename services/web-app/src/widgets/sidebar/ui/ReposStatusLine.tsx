@@ -4,14 +4,14 @@ export type ReposStatusLineProps = {
   isFetchingNextPage: boolean;
 };
 
-/** "Showing 37 · scroll for more" while pages remain; null once all repositories are here. */
+/** "Showing 37 · more below" while pages remain; null once all repositories are here. */
 const formatReposStatus = ({
   loadedCount,
   hasNextPage,
   isFetchingNextPage,
 }: ReposStatusLineProps): string | null => {
   if (isFetchingNextPage) return `Showing ${String(loadedCount)} · loading more…`;
-  if (hasNextPage) return `Showing ${String(loadedCount)} · scroll for more`;
+  if (hasNextPage) return `Showing ${String(loadedCount)} · more below`;
   return null;
 };
 

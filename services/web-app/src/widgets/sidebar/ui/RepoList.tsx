@@ -1,8 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { Book, SearchX } from "lucide-react";
-import { ApiError } from "@shared/api";
 import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList, Skeleton } from "@shared/ui";
-import { getVcsErrorMessage } from "@shared/lib";
+import { describeLoadError, formatLoadError } from "@shared/lib";
 import {
   REPO_ROW_HEIGHT,
   getRepoRowHeight,
@@ -16,7 +15,6 @@ import type { RepoListRow } from "../lib/repoTree";
 
 const SKELETON_ROWS = 8;
 const SKELETON_NAME_WIDTHS: readonly string[] = ["58%", "42%", "66%", "50%"];
-const HTTP_UNAUTHORIZED = 401;
 
 const ReposSkeleton = (): React.ReactElement => (
   <div aria-label="Loading repositories" role="status">
@@ -44,17 +42,8 @@ const LoadError = ({
   error: Error | null;
   onRetry: () => void;
 }): React.ReactElement => {
-  const isAuthError = error instanceof ApiError && error.status === HTTP_UNAUTHORIZED;
-  return (
-    <ErrorState
-      size="sm"
-      title={isAuthError ? "Authentication failed" : "Could not load repositories"}
-      message={
-        isAuthError ? "The host rejected the access token. Update it in Settings." : error?.message
-      }
-      onRetry={onRetry}
-    />
-  );
+  const { title, message } = describeLoadError(error, "repositories");
+  return <ErrorState size="sm" title={title} message={message} onRetry={onRetry} />;
 };
 
 export type RepoListProps = {
@@ -141,7 +130,7 @@ export const RepoList = ({
     isFetchNextPageError: reposQuery.isFetchNextPageError,
     isIdle: !isFetching && !isPlaceholderData,
     fetchNextPage: loadNextPage,
-    errorMessage: `${getVcsErrorMessage(error)} more repositories`,
+    errorMessage: formatLoadError(error, "more repositories"),
     pausedMessage: "No new repositories shown in the last pages — some may be in collapsed groups",
   };
 

@@ -2,8 +2,12 @@ import { useCallback, useState } from "react";
 import { Book } from "lucide-react";
 import { useNav } from "@app/navigation";
 import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList } from "@shared/ui";
-import { getVcsErrorMessage, useDebouncedSearch, useStableCallback } from "@shared/lib";
-import { describeLoadError } from "../lib/describeLoadError";
+import {
+  describeLoadError,
+  formatLoadError,
+  useDebouncedSearch,
+  useStableCallback,
+} from "@shared/lib";
 import {
   DEFAULT_READINESS,
   DEFAULT_SCOPE,
@@ -105,7 +109,7 @@ export const MRList = (): React.ReactElement => {
     isFetchNextPageError: list.isFetchNextPageError,
     isIdle: !list.isFetching && !list.isPlaceholderData,
     fetchNextPage: list.fetchNextPage,
-    errorMessage: `${getVcsErrorMessage(list.error)} more merge requests`,
+    errorMessage: formatLoadError(list.error, "more merge requests"),
     pausedMessage: getPausedMessage({ isFiltered, isInbox, scope }),
   };
 

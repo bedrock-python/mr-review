@@ -145,7 +145,10 @@ describe("MRHeader", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     );
     renderWithQueryClient(<MRHeader />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load merge request !95");
+    const alert = await screen.findByRole("alert");
+    // What failed, and the host's own words: no toast says it any more.
+    expect(alert).toHaveTextContent("Could not load merge request !95");
+    expect(alert).toHaveTextContent("upstream");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(await screen.findByRole("heading", { name: MOCK_MR.title })).toBeInTheDocument();
@@ -185,6 +188,11 @@ describe("MRHeader", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
       expect(mocks.toastError).toHaveBeenCalledWith("Sync failed", expect.anything());
     });
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    // The loaded merge request stays, and the header says it could not be refreshed.
+    expect(screen.getByRole("heading", { name: MOCK_MR.title })).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not refresh merge request !95");
+    expect(alert).toHaveTextContent("upstream");
   });
 
   it("cuts a long branch name in the middle and copies it whole", async () => {

@@ -11,23 +11,14 @@ export type MRHeaderFrameProps = {
   topRow: React.ReactNode;
   /** The second row: the title, or its placeholder or error. */
   children: React.ReactNode;
-  role?: "status";
-  "aria-label"?: string;
 };
 
 /**
  * The workspace header: a meta row and the title. The stage bar under it is its bottom row
  * and draws the border, so the three read as one block.
  */
-export const MRHeaderFrame = ({
-  topRow,
-  children,
-  ...aria
-}: MRHeaderFrameProps): React.ReactElement => (
-  <div
-    {...aria}
-    className="bg-bg-1 flex shrink-0 flex-col gap-(--space-1) px-(--space-4) pt-(--space-2) pb-(--space-1)"
-  >
+export const MRHeaderFrame = ({ topRow, children }: MRHeaderFrameProps): React.ReactElement => (
+  <div className="bg-bg-1 flex shrink-0 flex-col gap-(--space-1) px-(--space-4) pt-(--space-2) pb-(--space-1)">
     <div className="flex min-h-(--control-sm) flex-wrap items-center gap-x-(--space-3) gap-y-(--space-1)">
       {topRow}
     </div>
@@ -100,35 +91,50 @@ export const MRMetaSkeleton = (): React.ReactElement => (
   <Skeleton width="20%" height="var(--fs-meta)" />
 );
 
-/** The title's placeholder while the MR loads, in its footprint. */
-export const MRTitleSkeleton = (): React.ReactElement => (
-  <Skeleton width="55%" height="var(--fs-page)" radius="control" />
+/** The title's placeholder while the MR loads: the one status that says so. */
+export const MRTitleSkeleton = ({ label }: { label: string }): React.ReactElement => (
+  <div role="status" aria-label={label}>
+    <Skeleton width="55%" height="var(--fs-page)" radius="control" />
+  </div>
 );
 
 export type MRHeaderErrorProps = {
-  message: string;
+  /** What failed: "Could not load merge request !12". */
+  title: string;
+  /** The server's own words, shown as they are. */
+  message: string | undefined;
   isRetrying: boolean;
   onRetry: () => void;
 };
 
-/** Compact failure row in place of the title; the breadcrumbs above say what failed. */
+/**
+ * Compact failure row: in place of the title when the merge request could not be loaded,
+ * under it when a refresh failed. The breadcrumbs above say which one.
+ */
 export const MRHeaderError = ({
+  title,
   message,
   isRetrying,
   onRetry,
 }: MRHeaderErrorProps): React.ReactElement => (
   <div
     role="alert"
-    className="text-fg-1 flex min-h-(--control-md) items-center gap-(--space-2) text-(length:--fs-control)"
+    className="text-fg-1 flex min-h-(--control-md) min-w-0 items-center gap-(--space-2) text-(length:--fs-control)"
   >
-    <CircleAlert size={ICON_SIZE.inline} aria-hidden="true" className="text-(--c-danger-fg)" />
-    <span>{message}</span>
+    <CircleAlert
+      size={ICON_SIZE.inline}
+      aria-hidden="true"
+      className="shrink-0 text-(--c-danger-fg)"
+    />
+    <span className="shrink-0">{title}</span>
+    {message !== undefined && <span className="text-fg-2 min-w-0 break-words">{message}</span>}
     <Button
       variant="ghost"
       size="sm"
       icon={<RotateCw size={ICON_SIZE.inline} aria-hidden="true" />}
       isLoading={isRetrying}
       onClick={onRetry}
+      className="shrink-0"
     >
       Retry
     </Button>

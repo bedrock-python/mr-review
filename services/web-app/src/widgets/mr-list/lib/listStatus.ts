@@ -6,9 +6,11 @@ export type ListStatusParams = {
   isFetchingNextPage: boolean;
 };
 
+// "More below", not "scroll for more": auto-loading may have paused on pages that showed
+// nothing, and then the rest comes from the "Load more" row at the end, not from scrolling.
 const describeNextPage = (hasNextPage: boolean, isFetchingNextPage: boolean): string | null => {
   if (isFetchingNextPage) return "loading more…";
-  return hasNextPage ? "scroll for more" : null;
+  return hasNextPage ? "more below" : null;
 };
 
 /**

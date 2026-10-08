@@ -12,6 +12,7 @@ import { HostStatus } from "./HostStatus";
 import { InboxEntry } from "./InboxEntry";
 import { RepoList } from "./RepoList";
 import { ReposPaneHeader } from "./ReposPaneHeader";
+import { ReposRefreshError } from "./ReposRefreshError";
 import { ReposStatusLine } from "./ReposStatusLine";
 import { VersionBadge } from "./VersionBadge";
 
@@ -89,6 +90,12 @@ export const ReposPane = (): React.ReactElement => {
     search.isPending ||
     (activeQuery !== undefined && reposQuery.isFetching && !reposQuery.isFetchingNextPage);
   const isListVisible = selectedHostId !== null && !isTyping;
+  // A refresh that failed over loaded repositories (a failed next page has its own row).
+  const hasRefreshFailed =
+    reposQuery.isError &&
+    reposQuery.data !== undefined &&
+    !reposQuery.isFetchNextPageError &&
+    !reposQuery.isFetching;
   const remainingChars = MIN_REPO_QUERY_LENGTH - committedQuery.length;
 
   return (
@@ -126,6 +133,15 @@ export const ReposPane = (): React.ReactElement => {
         >
           Type {String(remainingChars)} more character{remainingChars !== 1 ? "s" : ""} to search
         </p>
+      )}
+
+      {isListVisible && hasRefreshFailed && (
+        <ReposRefreshError
+          message={reposQuery.error.message}
+          onRetry={() => {
+            void reposQuery.refetch();
+          }}
+        />
       )}
 
       {isListVisible && (

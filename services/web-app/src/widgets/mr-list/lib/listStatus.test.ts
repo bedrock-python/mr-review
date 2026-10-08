@@ -19,7 +19,7 @@ describe("formatListStatus", () => {
   it("invites to scroll while more pages are available", () => {
     expect(
       formatListStatus({ loadedCount: 37, hasNextPage: true, isFetchingNextPage: false })
-    ).toBe("Showing 37 · scroll for more");
+    ).toBe("Showing 37 · more below");
     expect(formatListStatus({ loadedCount: 37, hasNextPage: true, isFetchingNextPage: true })).toBe(
       "Showing 37 · loading more…"
     );
@@ -41,6 +41,6 @@ describe("formatListStatus", () => {
         hasNextPage: true,
         isFetchingNextPage: false,
       })
-    ).toBe("7 of 52 shown · scroll for more");
+    ).toBe("7 of 52 shown · more below");
   });
 });

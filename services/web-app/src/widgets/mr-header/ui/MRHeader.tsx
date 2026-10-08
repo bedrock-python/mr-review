@@ -3,7 +3,7 @@ import { useNav } from "@app/navigation";
 import { useMR, useCachedRepo, getRepoNameFromPath } from "@entities/mr";
 import { useHosts } from "@entities/host";
 import { useReview } from "@entities/review";
-import { getVcsErrorMessage } from "@shared/lib";
+import { describeLoadError } from "@shared/lib";
 import { useSyncMR } from "../model/useSyncMR";
 import { MRHeaderActions, MRHeaderMeta } from "./MRHeaderParts";
 import {
@@ -28,8 +28,6 @@ const buildMRUrl = (
   if (host.type === "github") return `${base}/${repoPath}/pull/${String(mrIid)}`;
   return `${base}/${repoPath}/-/merge_requests/${String(mrIid)}`;
 };
-
-const LOADING_ARIA = { role: "status", "aria-label": "Loading merge request" } as const;
 
 /**
  * One frame for the loading, failed and loaded merge request, so the navigator toggle and
@@ -63,6 +61,11 @@ export const MRHeader = (): React.ReactElement | null => {
     });
   };
 
+  const mrLabel = `merge request !${String(selectedMRIid)}`;
+  const retry = (): void => {
+    void mrQuery.refetch();
+  };
+
   const renderTitle = (): React.ReactNode => {
     if (mr !== undefined) {
       return (
@@ -72,22 +75,35 @@ export const MRHeader = (): React.ReactElement | null => {
       );
     }
     if (mrQuery.isError) {
+      const { title, message } = describeLoadError(mrQuery.error, mrLabel);
       return (
         <MRHeaderError
-          message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
+          title={title}
+          message={message}
           isRetrying={mrQuery.isFetching}
-          onRetry={() => {
-            void mrQuery.refetch();
-          }}
+          onRetry={retry}
         />
       );
     }
-    return <MRTitleSkeleton />;
+    return <MRTitleSkeleton label="Loading merge request" />;
+  };
+
+  // A refresh that failed over a loaded merge request: the header stays, this says it is old.
+  const renderRefreshError = (): React.ReactNode => {
+    if (mr === undefined || !mrQuery.isError || mrQuery.isFetching) return null;
+    const { message } = describeLoadError(mrQuery.error, mrLabel);
+    return (
+      <MRHeaderError
+        title={`Could not refresh ${mrLabel}`}
+        message={message}
+        isRetrying={mrQuery.isFetching}
+        onRetry={retry}
+      />
+    );
   };
 
   return (
     <MRHeaderFrame
-      {...(isLoading ? LOADING_ARIA : {})}
       topRow={
         <>
           <NavigatorToggle isNavCollapsed={navCollapsed} onToggleNav={toggleNav} />
@@ -112,6 +128,7 @@ export const MRHeader = (): React.ReactElement | null => {
       }
     >
       {renderTitle()}
+      {renderRefreshError()}
     </MRHeaderFrame>
   );
 };

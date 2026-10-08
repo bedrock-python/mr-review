@@ -93,7 +93,7 @@ const waitForStatus = async (text: string): Promise<void> => {
 describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("offers the state, not the relationship, and requests open MRs", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     const state = screen.getByRole("radiogroup", { name: "State" });
     expect(within(state).getByRole("radio", { name: "Open" })).toHaveAttribute(
@@ -111,7 +111,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("maps the state to the server state", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(screen.getByRole("radio", { name: "Merged" }));
 
@@ -126,7 +126,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("sends the search as a debounced server-side q", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.type(screen.getByRole("searchbox", { name: "Search merge requests" }), "cache");
 
@@ -141,7 +141,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("sorts the loaded MRs by title on the client", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Sort by" }), "title");
 
@@ -156,7 +156,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("filters drafts on the client, keeps loading while the list is short", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
     const menu = screen.getByRole("dialog", { name: "Filter merge requests" });
@@ -176,7 +176,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("closes the filter menu on Escape and goes back to its button", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
     const button = screen.getByRole("button", { name: "Filter merge requests" });
 
     await userEvent.click(button);
@@ -202,12 +202,12 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
     await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
 
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
   });
 
   it("offers to clear a search that matches nothing", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.type(
       screen.getByRole("searchbox", { name: "Search merge requests" }),
@@ -221,17 +221,17 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("loads the next page when scrolled to the end", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     scrollToEnd(getVirtualScrollContainer(screen.getByRole("list")));
 
-    await waitForStatus("Showing 60 · scroll for more");
+    await waitForStatus("Showing 60 · more below");
     expect(listRequests().map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
   });
 
   it("moves focus through the rows with the arrow keys", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
     const first = getAt(rowButtons(), 0);
     first.focus();
 
@@ -242,7 +242,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("opens the clicked MR", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(getAt(rowButtons(), 0));
 
@@ -257,7 +257,7 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
 
   it("maps the relationship to the server scope", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
     expect(lastListRequest()?.searchParams.get("scope")).toBe("all");
     expect(screen.queryByRole("radiogroup", { name: "State" })).not.toBeInTheDocument();
 
@@ -355,7 +355,7 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
 
   it("navigates to the MR's own repository", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("Showing 30 · scroll for more");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(getAt(rowButtons(), 0));
 
