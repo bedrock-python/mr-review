@@ -190,6 +190,26 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("says connected only once the host has answered", async () => {
+    renderWithQueryClient(<ReposPane />);
+
+    await waitForFirstPage();
+
+    expect(screen.getByText("connected")).toBeInTheDocument();
+  });
+
+  it("says the host cannot be reached when the repository list fails", async () => {
+    server.use(
+      http.get(REPOS_URL, () =>
+        HttpResponse.json({ detail: "connection refused" }, { status: 400 })
+      )
+    );
+    renderWithQueryClient(<ReposPane />);
+
+    expect(await screen.findByText("can't reach host")).toBeInTheDocument();
+    expect(screen.queryByText("connected")).not.toBeInTheDocument();
+  });
+
   it("searches on the server after a pause, never below two characters", async () => {
     renderWithQueryClient(<ReposPane />);
     await waitForFirstPage();
