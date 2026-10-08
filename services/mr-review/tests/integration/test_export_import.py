@@ -14,6 +14,7 @@ from mr_review.core.export_import import encryption
 from mr_review.core.export_import.entities import (
     ExportData,
     ExportRequest,
+    ImportPreview,
     ImportRequest,
     MergeStrategy,
     PackagedAIProvider,
@@ -21,13 +22,16 @@ from mr_review.core.export_import.entities import (
 )
 from mr_review.core.export_import.errors import DamagedPackageError, PassphraseRequiredError, WrongPassphraseError
 from mr_review.core.hosts.entities import Host
-from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationStage, Review
+from mr_review.core.review_presets.entities import ReviewPreset
+from mr_review.core.reviews.entities import BriefConfig, BriefPreset, CommentPost, IterationStage, Review
 from mr_review.core.reviews.sources import BranchDiffSource
 from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
 from mr_review.infra.repositories.host import FileHostRepository
 from mr_review.infra.repositories.review import FileReviewRepository
+from mr_review.infra.repositories.review_preset import FileReviewPresetRepository
 from mr_review.use_cases.export_data import ExportDataUseCase
 from mr_review.use_cases.import_data import ImportDataUseCase
+from mr_review.use_cases.preview_import import PreviewImportUseCase
 from pydantic import SecretStr, ValidationError
 
 from tests.factories.entities import make_comment, make_iteration, make_review
@@ -43,20 +47,35 @@ class Store:
     hosts: FileHostRepository
     providers: FileAIProviderRepository
     reviews: FileReviewRepository
+    presets: FileReviewPresetRepository
 
     @classmethod
     def at(cls, path: Path) -> Store:
-        return cls(FileHostRepository(path), FileAIProviderRepository(path), FileReviewRepository(path))
+        return cls(
+            FileHostRepository(path),
+            FileAIProviderRepository(path),
+            FileReviewRepository(path),
+            FileReviewPresetRepository(path),
+        )
 
     async def export(self, **kwargs: object) -> ExportData:
-        return await ExportDataUseCase(self.hosts, self.providers, self.reviews).execute(ExportRequest(**kwargs))
+        use_case = ExportDataUseCase(self.hosts, self.providers, self.reviews, self.presets)
+        return await use_case.execute(ExportRequest(**kwargs))
 
     async def import_(self, data: ExportData, strategy: MergeStrategy = "skip", password: SecretStr | None = None):
         request = ImportRequest(data=data, merge_strategy=strategy, decryption_password=password)
-        return await ImportDataUseCase(self.hosts, self.providers, self.reviews).execute(request)
+        return await ImportDataUseCase(self.hosts, self.providers, self.reviews, self.presets).execute(request)
 
-    async def snapshot(self) -> tuple[list[Host], list[AIProvider], list[Review]]:
-        return await self.hosts.list_all(), await self.providers.list_all(), await self.reviews.list_all_uncapped()
+    async def preview(self, data: ExportData) -> ImportPreview:
+        return await PreviewImportUseCase(self.hosts, self.providers, self.reviews, self.presets).execute(data)
+
+    async def snapshot(self) -> tuple[list[Host], list[AIProvider], list[ReviewPreset], list[Review]]:
+        return (
+            await self.hosts.list_all(),
+            await self.providers.list_all(),
+            await self.presets.list_all(),
+            await self.reviews.list_all_uncapped(),
+        )
 
 
 @pytest.fixture
@@ -108,7 +127,7 @@ async def test__import__same_file_twice__never_duplicates(source: Store, target:
     for strategy in ("skip", "merge", "replace", "skip"):
         await target.import_(package, strategy)
 
-    hosts, providers, reviews = await target.snapshot()
+    hosts, providers, _, reviews = await target.snapshot()
     assert (len(hosts), len(providers), len(reviews)) == (1, 1, 1)
 
 
@@ -144,7 +163,7 @@ async def test__import_replace__right_passphrase__keeps_ids_so_reviews_keep_thei
 
     result = await target.import_(package, "replace", _PASSPHRASE)
 
-    hosts, providers, reviews = await target.snapshot()
+    hosts, providers, _, reviews = await target.snapshot()
     assert [h.id for h in hosts] == [host.id]
     assert hosts[0].name == "gl"
     assert hosts[0].token.get_secret_value() == "glpat-SECRET"
@@ -222,7 +241,7 @@ async def test__import_without_secrets__into_an_empty_store__creates_records_and
 
     result = await target.import_(package)
 
-    hosts, providers, _ = await target.snapshot()
+    hosts, providers, _, _ = await target.snapshot()
     assert hosts[0].token.get_secret_value() == ""
     assert providers[0].api_key.get_secret_value() == ""
     assert len(result.warnings) == 2
@@ -340,7 +359,7 @@ async def test__import__version_1_encrypted_file__is_still_accepted(source: Stor
 
     with pytest.raises(WrongPassphraseError):
         await target.import_(legacy, "skip", SecretStr("not pw"))
-    assert await target.snapshot() == ([], [], [])
+    assert await target.snapshot() == ([], [], [], [])
 
     await target.import_(legacy, "skip", SecretStr("pw"))
 
@@ -364,7 +383,7 @@ async def test__import__damaged_secret__rejects_the_whole_file(source: Store, ta
     with pytest.raises(DamagedPackageError):
         await target.import_(package, "skip", _PASSPHRASE)
 
-    assert await target.snapshot() == ([], [], [])
+    assert await target.snapshot() == ([], [], [], [])
 
 
 def test__packaged_records__mirror_the_entities_field_for_field() -> None:
@@ -406,3 +425,115 @@ async def test__import__review_timestamps_and_sources__are_kept(source: Store, t
     await target.import_(await source.export())
 
     assert await target.reviews.get_by_id(review.id) == review
+
+
+async def _preset(store: Store, name: str) -> ReviewPreset:
+    return await store.presets.create(name, "Public API only", "Check exported names.", {"min_severity": "major"})
+
+
+async def test__review_presets__round_trip__keep_ids_timestamps_and_brief_overrides(
+    source: Store, target: Store
+) -> None:
+    preset = await _preset(source, "API")
+    host, _, review = await _populate(source)
+    uses_preset = BriefConfig(preset=BriefPreset.security, custom_preset_id=preset.id, max_comments=5)
+    await source.reviews.update_with(
+        review.id,
+        lambda r: r.model_copy(
+            update={"iterations": [r.iterations[0].model_copy(update={"brief_config": uses_preset})]}
+        ),
+    )
+
+    result = await target.import_(await source.export())
+
+    assert await target.presets.list_all() == [preset]
+    assert result.review_presets_imported == 1
+    assert not [warning for warning in result.warnings if "preset" in warning]
+    stored = await target.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].brief_config == uses_preset
+
+
+async def test__review_presets__same_file_twice__never_duplicate(source: Store, target: Store) -> None:
+    await _preset(source, "API")
+    package = await source.export()
+
+    for strategy in ("skip", "merge", "replace"):
+        result = await target.import_(package, strategy)
+        assert len(await target.presets.list_all()) == 1
+
+    assert result.review_presets_skipped == 1
+
+
+async def test__review_presets__name_taken_by_another_preset__imported_under_a_free_name(
+    source: Store, target: Store
+) -> None:
+    incoming = await _preset(source, "API")
+    local = await _preset(target, "api")
+
+    result = await target.import_(await source.export())
+
+    names = {preset.id: preset.name for preset in await target.presets.list_all()}
+    assert names == {local.id: "api", incoming.id: "API (imported)"}
+    assert any("imported as 'API (imported)'" in warning for warning in result.warnings)
+
+
+async def test__review_presets__merge_keeps_the_newer_version__replace_takes_the_file(
+    source: Store, target: Store
+) -> None:
+    preset = await _preset(source, "API")
+    await target.import_(await source.export())
+    newer_local = await target.presets.update(preset.id, description="edited here later")
+
+    await target.import_(await source.export(), "merge")
+    assert await target.presets.get_by_id(preset.id) == newer_local
+
+    await target.import_(await source.export(), "replace")
+    replaced = await target.presets.get_by_id(preset.id)
+    assert replaced is not None
+    assert (replaced.description, replaced.created_at) == ("Public API only", preset.created_at)
+
+
+async def test__reviews_naming_a_preset_that_is_nowhere__are_flagged_in_preview_and_import(
+    source: Store, target: Store
+) -> None:
+    preset = await _preset(source, "API")
+    _, _, review = await _populate(source)
+    await source.reviews.update_with(
+        review.id,
+        lambda r: r.model_copy(
+            update={
+                "iterations": [
+                    r.iterations[0].model_copy(update={"brief_config": BriefConfig(custom_preset_id=preset.id)})
+                ]
+            }
+        ),
+    )
+    without_presets = await source.export(include_review_presets=False)
+
+    preview = await target.preview(without_presets)
+    result = await target.import_(without_presets)
+
+    assert (preview.review_presets.total, preview.reviews_without_preset) == (0, 1)
+    assert any("saved review preset that is not here" in warning for warning in result.warnings)
+    full_preview = await target.preview(await source.export())
+    assert (full_preview.review_presets.total, full_preview.reviews_without_preset) == (1, 0)
+
+
+async def test__export_then_import__keeps_raw_answers_post_records_and_every_brief_field(
+    source: Store, target: Store
+) -> None:
+    _, _, review = await _populate(source)
+    posted = make_comment(body="on the MR").model_copy(
+        update={"post": CommentPost(outcome="inline", at=review.created_at, note_id="n-1", url="https://x/1")}
+    )
+    brief = BriefConfig(min_severity="major", max_comments=7, exclude_paths=["dist/**"])
+    iteration = review.iterations[0].model_copy(
+        update={"raw_response": "```json\n[]\n```", "comments": [posted], "brief_config": brief}
+    )
+    edited = await source.reviews.update_with(review.id, lambda r: r.model_copy(update={"iterations": [iteration]}))
+    assert edited is not None
+
+    await target.import_(await source.export())
+
+    assert await target.reviews.get_by_id(review.id) == edited

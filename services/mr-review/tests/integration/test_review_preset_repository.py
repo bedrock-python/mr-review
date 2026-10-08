@@ -99,3 +99,21 @@ async def test__preset_repo__hand_edited_file__bad_entries_skipped_bad_overrides
     assert [p.id for p in presets] == [good_id]
     assert presets[0].brief_config == {"output_language": "German"}
     assert presets[0].created_at.tzinfo is not None
+
+
+async def test__preset_repo__upsert_with__stores_as_given_and_checks_the_name(data_dir: Path) -> None:
+    repo = FileReviewPresetRepository(data_dir)
+    taken = await repo.create("API", "", "", {})
+    other = await repo.create("Docs", "", "", {})
+    incoming = other.model_copy(update={"id": uuid4(), "name": "Imported"})
+
+    stored = await repo.upsert_with(incoming.id, lambda _current: incoming)
+    with pytest.raises(ReviewPresetNameTakenError):
+        await repo.upsert_with(
+            other.id, lambda current: current.model_copy(update={"name": "api"}) if current else None
+        )
+
+    assert stored == incoming
+    assert await repo.get_by_id(incoming.id) == incoming
+    assert await repo.get_by_id(other.id) == other
+    assert await repo.get_by_id(taken.id) == taken

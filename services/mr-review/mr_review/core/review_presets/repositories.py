@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
@@ -38,6 +39,17 @@ class ReviewPresetRepository(Protocol):
         """Change the given fields of the stored preset; ``None`` leaves a field as it is.
 
         Raises ``ReviewPresetNotFoundError`` or ``ReviewPresetNameTakenError``.
+        """
+        ...
+
+    async def upsert_with(
+        self, preset_id: UUID, change: Callable[[ReviewPreset | None], ReviewPreset | None]
+    ) -> ReviewPreset | None:
+        """Atomically apply ``change`` to the stored preset (``None`` when there is none) and
+        store what it returns as-is, timestamps included.
+
+        Returning ``None`` or the object it was given writes nothing. Raises
+        ``ReviewPresetNameTakenError`` when the result's name belongs to another preset.
         """
         ...
 

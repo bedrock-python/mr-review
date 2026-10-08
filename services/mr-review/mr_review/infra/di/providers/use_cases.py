@@ -396,11 +396,13 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
     ) -> ExportDataUseCase:
         return ExportDataUseCase(
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             review_repo=review_repo,
+            preset_repo=preset_repo,
         )
 
     @provide
@@ -409,11 +411,13 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
     ) -> ImportDataUseCase:
         return ImportDataUseCase(
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             review_repo=review_repo,
+            preset_repo=preset_repo,
         )
 
     @provide
@@ -422,9 +426,11 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
     ) -> PreviewImportUseCase:
         return PreviewImportUseCase(
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             review_repo=review_repo,
+            preset_repo=preset_repo,
         )

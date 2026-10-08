@@ -21,11 +21,12 @@ from mr_review.core.export_import.entities import (
 )
 from mr_review.core.hosts.entities import Host
 from mr_review.core.hosts.repositories import HostRepository
+from mr_review.core.review_presets.repositories import ReviewPresetRepository
 from mr_review.core.reviews.repositories import ReviewRepository
 
 
 class ExportDataUseCase:
-    """Export hosts, AI providers and reviews as one package.
+    """Export hosts, AI providers, review presets and reviews as one package.
 
     Secrets are encrypted under the request's password, included in plain text only when
     the request explicitly asks for it, and left out otherwise. Every review is exported,
@@ -37,14 +38,17 @@ class ExportDataUseCase:
         host_repo: HostRepository,
         ai_provider_repo: AIProviderRepository,
         review_repo: ReviewRepository,
+        preset_repo: ReviewPresetRepository,
     ) -> None:
         self._host_repo = host_repo
         self._ai_provider_repo = ai_provider_repo
         self._review_repo = review_repo
+        self._preset_repo = preset_repo
 
     async def execute(self, request: ExportRequest) -> ExportData:
         hosts = await self._host_repo.list_all() if request.include_hosts else []
         providers = await self._ai_provider_repo.list_all() if request.include_ai_providers else []
+        presets = await self._preset_repo.list_all() if request.include_review_presets else []
         reviews = await self._review_repo.list_all_uncapped() if request.include_reviews else []
 
         # Key derivation is deliberately slow; keep it off the event loop.
@@ -60,6 +64,7 @@ class ExportDataUseCase:
             encryption=encryption,
             hosts=packaged_hosts,
             ai_providers=packaged_providers,
+            review_presets=presets,
             reviews=reviews,
         )
 

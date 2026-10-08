@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, m
 
 from mr_review.core.ai_providers.entities import AIProviderType
 from mr_review.core.hosts.entities import HostType
+from mr_review.core.review_presets.entities import ReviewPreset
 from mr_review.core.reviews.entities import Review
 
 PACKAGE_VERSION = "2.0"
@@ -103,6 +104,7 @@ class ExportData(BaseModel):
     encryption: EncryptionParams | None = None
     hosts: list[PackagedHost] = Field(default_factory=list)
     ai_providers: list[PackagedAIProvider] = Field(default_factory=list)
+    review_presets: list[ReviewPreset] = Field(default_factory=list)
     reviews: list[Review] = Field(default_factory=list)
 
     @field_validator("version")
@@ -138,6 +140,7 @@ class ExportRequest(BaseModel):
 
     include_hosts: bool = True
     include_ai_providers: bool = True
+    include_review_presets: bool = True
     include_reviews: bool = True
     encryption_password: SecretStr | None = None
     include_plain_secrets: bool = False
@@ -169,6 +172,9 @@ class ImportResult(BaseModel):
     ai_providers_imported: int = 0
     ai_providers_updated: int = 0
     ai_providers_skipped: int = 0
+    review_presets_imported: int = 0
+    review_presets_updated: int = 0
+    review_presets_skipped: int = 0
     reviews_imported: int = 0
     reviews_updated: int = 0
     reviews_skipped: int = 0
@@ -192,7 +198,11 @@ class ImportPreview(BaseModel):
     secrets: SecretsMode
     hosts: ImportPreviewCounts
     ai_providers: ImportPreviewCounts
+    review_presets: ImportPreviewCounts
     reviews: ImportPreviewCounts
     reviews_without_host: int = Field(
         description="Reviews whose host is neither stored here nor part of the package",
+    )
+    reviews_without_preset: int = Field(
+        description="Reviews whose brief names a saved preset that is neither stored here nor part of the package",
     )
