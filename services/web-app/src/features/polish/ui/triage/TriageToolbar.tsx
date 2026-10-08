@@ -11,7 +11,7 @@ import {
   Tooltip,
 } from "@shared/ui";
 import { cn } from "@shared/lib";
-import { EMPTY_FILTERS, isFiltering, useFittingLayout } from "../../lib";
+import { EMPTY_FILTERS, SEVERITY_ORDER, isFiltering, useFittingLayout } from "../../lib";
 import { BulkMenu } from "./BulkMenu";
 import { FileFilter, FiltersPopover, GroupToggle, StatusFilter } from "./ListFilters";
 import { SeverityChips } from "./SeverityChips";
@@ -67,8 +67,17 @@ export const TriageToolbar = ({
   onShowShortcuts,
 }: TriageToolbarProps): React.ReactElement => {
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const layout = useFittingLayout(toolbarRef, TOOLBAR_LAYOUTS);
   const isFiltered = isFiltering(filters);
+  // What changes the row's width: counts, the "N of M shown ×" slot, the Filters badge.
+  const contentKey = [
+    SEVERITY_ORDER.map((severity) => severityCounts[severity]).join(","),
+    isPartial ? `${String(shownCount)}/${String(totalCount)}` : "",
+    isFiltered,
+    filters.status,
+    filters.file !== null,
+    isGrouped,
+  ].join("|");
+  const layout = useFittingLayout(toolbarRef, TOOLBAR_LAYOUTS, contentKey);
   const update = (patch: Partial<CommentFilters>): void => {
     onFiltersChange({ ...filters, ...patch });
   };
@@ -111,7 +120,9 @@ export const TriageToolbar = ({
             </span>
           ) : undefined
         }
-        className="max-w-[320px] min-w-[120px] flex-[4_1_0%]"
+        // Never narrower than the placeholder with the icon, the "/" key cap and the padding
+        // around them, in the theme's own type: the row takes a tighter layout first.
+        className="max-w-[320px] min-w-[calc(9ch_+_2_*_var(--control-sm)_+_var(--space-4))] flex-[4_1_0%]"
         onChange={(event) => {
           update({ search: event.target.value });
         }}
@@ -141,26 +152,26 @@ export const TriageToolbar = ({
 
       <ToolbarSpacer />
 
-      {/* Room for "99 of 99 shown ×" is kept while nothing is filtered: the row's layout is
-          chosen with it, so the first filter never reshuffles the controls. */}
-      <span className="flex shrink-0 items-center gap-(--space-1)">
-        <span
-          className="text-fg-2 min-w-[14ch] text-right font-mono text-(length:--fs-meta) whitespace-nowrap"
-          aria-live="polite"
-        >
-          {isPartial ? `${String(shownCount)} of ${String(totalCount)} shown` : ""}
-        </span>
+      {/* Always in the page so the count is announced; takes no room while nothing is hidden. */}
+      <span
+        className={cn(
+          "text-fg-2 shrink-0 font-mono text-(length:--fs-meta) whitespace-nowrap",
+          !isPartial && "ui-visually-hidden"
+        )}
+        aria-live="polite"
+      >
+        {isPartial ? `${String(shownCount)} of ${String(totalCount)} shown` : ""}
+      </span>
+      {isFiltered && (
         <IconButton
           size="sm"
           label="Clear filters"
-          className={cn(!isFiltered && "invisible")}
-          disabled={!isFiltered}
           icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
           onClick={() => {
             onFiltersChange(EMPTY_FILTERS);
           }}
         />
-      </span>
+      )}
       <BulkMenu
         scope={isPartial ? "shown" : "all"}
         count={shownCount}
