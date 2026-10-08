@@ -7,4 +7,8 @@ export type { DebouncedSearch } from "./useDebouncedSearch";
 export { useStableCallback } from "./useStableCallback";
 export { useAutoLoadMore, MAX_BARREN_AUTO_PAGES } from "./useAutoLoadMore";
 export type { UseAutoLoadMoreParams, UseAutoLoadMoreResult } from "./useAutoLoadMore";
-export { useVirtualListKeyboardNav, ROW_FOCUS_ATTR } from "./useVirtualListKeyboardNav";
+export {
+  useVirtualListKeyboardNav,
+  findNextFocusableIndex,
+  ROW_FOCUS_ATTR,
+} from "./useVirtualListKeyboardNav";

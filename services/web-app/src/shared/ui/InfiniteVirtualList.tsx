@@ -38,6 +38,8 @@ export type InfiniteVirtualListProps<TRow> = {
    */
   shouldAnchorScroll?: boolean;
   renderRow: (row: TRow) => React.ReactNode;
+  /** Rows the arrow keys may land on; rows rendering no focus target must return false. */
+  isRowFocusable?: (row: TRow) => boolean;
   ariaLabel: string;
   /** Identity of the list view; a change scrolls back to the top and resets auto-loading. */
   resetKey: string;
@@ -86,6 +88,7 @@ export const InfiniteVirtualList = <TRow,>({
   shouldMeasureRows = false,
   shouldAnchorScroll = false,
   renderRow,
+  isRowFocusable,
   ariaLabel,
   resetKey,
   pagination,
@@ -137,7 +140,14 @@ export const InfiniteVirtualList = <TRow,>({
     loadMore: fetchNextPage,
   });
 
-  const handleKeyDown = useVirtualListKeyboardNav(virtualizer, rows.length);
+  const isIndexFocusable = useCallback(
+    (index: number): boolean => {
+      const row = rows[index];
+      return row !== undefined && (isRowFocusable?.(row) ?? true);
+    },
+    [rows, isRowFocusable]
+  );
+  const handleKeyDown = useVirtualListKeyboardNav(virtualizer, rows.length, isIndexFocusable);
 
   useLayoutEffect(() => {
     const element = scrollRef.current;

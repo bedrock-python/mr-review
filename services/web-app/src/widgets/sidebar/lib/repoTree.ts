@@ -31,6 +31,10 @@ export const getRepoRowKey = (row: RepoListRow): string => row.key;
 
 export const getRepoRowHeight = (row: RepoListRow): number => REPO_ROW_HEIGHT[row.kind];
 
+/** Section labels and dividers are decoration: keyboard navigation steps over them. */
+export const isRepoRowFocusable = (row: RepoListRow): boolean =>
+  row.kind === "repo" || row.kind === "namespace";
+
 /** Groups repositories by namespace, keeping first-seen order at every level. */
 export const buildRepoTree = (repos: readonly Repo[]): RepoTreeNode[] => {
   const root: RepoTreeNode[] = [];

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { InfiniteVirtualList, ListMessage, Skeleton } from "@shared/ui";
 import { getVcsErrorMessage } from "@shared/lib";
-import { getRepoRowHeight, getRepoRowKey } from "../lib/repoTree";
+import { getRepoRowHeight, getRepoRowKey, isRepoRowFocusable } from "../lib/repoTree";
 import { DividerRow, NamespaceRow, RepoRow, SectionLabelRow } from "./RepoRows";
 import type { InfiniteListResult, RepoPage } from "@entities/mr";
 import type { ListPagination } from "@shared/ui";
@@ -128,6 +128,7 @@ export const RepoList = ({
       estimateRowSize={getRepoRowHeight}
       shouldAnchorScroll
       renderRow={renderRow}
+      isRowFocusable={isRepoRowFocusable}
       ariaLabel="Repository list"
       resetKey={resetKey}
       pagination={pagination}

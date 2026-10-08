@@ -1,4 +1,4 @@
-import { configure, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -98,7 +98,44 @@ const waitForFirstPage = async (): Promise<void> => {
   expect(await screen.findByText("Favourites")).toBeInTheDocument();
 };
 
+/** Index of the virtual row holding the focused element. */
+const focusedRowIndex = (): string | undefined =>
+  (document.activeElement as HTMLElement | null)?.closest<HTMLElement>("[data-index]")?.dataset
+    .index;
+
+const focusRowAt = (index: number): HTMLElement => {
+  const list = screen.getByRole("list", { name: "Repository list" });
+  const target = list.querySelector<HTMLElement>(
+    `[data-index="${String(index)}"] [data-row-focus]`
+  );
+  if (!target) throw new Error(`row ${String(index)} has nothing to focus`);
+  target.focus();
+  return target;
+};
+
 describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
+  it("arrow keys step over the favourites label and divider", async () => {
+    renderWithQueryClient(<ReposPane />);
+    await waitForFirstPage();
+    // Rows: 0 "Favourites" label, 1-3 favourites, 4 divider, 5 first namespace…
+    const lastFavourite = focusRowAt(3);
+
+    fireEvent.keyDown(lastFavourite, { key: "ArrowDown" });
+    await waitFor(() => {
+      expect(focusedRowIndex()).toBe("5");
+    });
+
+    fireEvent.keyDown(document.activeElement ?? lastFavourite, { key: "ArrowUp" });
+    await waitFor(() => {
+      expect(focusedRowIndex()).toBe("3");
+    });
+
+    fireEvent.keyDown(document.activeElement ?? lastFavourite, { key: "Home" });
+    await waitFor(() => {
+      expect(focusedRowIndex()).toBe("1");
+    });
+  });
+
   it("keeps every favourite on top, including pins on pages not loaded yet", async () => {
     renderWithQueryClient(<ReposPane />);
     await waitForFirstPage();
