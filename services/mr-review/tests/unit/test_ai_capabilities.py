@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from mr_review.core.ai.capabilities import resolve_capabilities
+from mr_review.core.ai_providers.entities import AIProviderType
 
 pytestmark = pytest.mark.unit
 
@@ -155,6 +156,89 @@ def test__openai_chat_models__temperature_and_no_reasoning(model: str, max_outpu
 def test__openai_legacy__no_structured_output() -> None:
     assert not resolve_capabilities("openai", "gpt-4-turbo").structured_output
     assert not resolve_capabilities("openai", "gpt-3.5-turbo").structured_output
+
+
+@pytest.mark.parametrize("model", ["chatgpt-4o-latest", "gpt-4o-2024-05-13"])
+def test__openai_gpt_4o_variants_without_json_schema__structured_output_not_offered(model: str) -> None:
+    """Regression: the gpt-4o rule turned structured output on for ids that reject json_schema."""
+    caps = resolve_capabilities("openai", model)
+
+    assert not caps.structured_output
+    assert not caps.structured_output_default
+
+
+def test__openai_unknown_id__structured_output_offered_but_off() -> None:
+    """Regression: an unknown id (often another vendor behind the openai type) got strict json_schema."""
+    caps = resolve_capabilities("openai", "gpt-oss-120b")
+
+    assert caps.structured_output
+    assert not caps.structured_output_default
+
+
+@pytest.mark.parametrize(
+    ("provider_type", "model", "base_url"),
+    [
+        ("openai", "gpt-4o", "https://api.deepseek.com/v1"),
+        ("openai", "gpt-5", "http://litellm:4000"),
+        ("claude", "claude-opus-5-5", "https://llm-gateway.example.com/anthropic"),
+    ],
+)
+def test__non_vendor_base_url__structured_output_off_by_default(
+    provider_type: AIProviderType, model: str, base_url: str
+) -> None:
+    """Regression: a provider pointed at another endpoint got structured output on every dispatch."""
+    caps = resolve_capabilities(provider_type, model, base_url=base_url)
+
+    assert caps.structured_output
+    assert not caps.structured_output_default
+
+
+@pytest.mark.parametrize(
+    ("provider_type", "model", "base_url"),
+    [
+        ("openai", "gpt-4o", ""),
+        ("openai", "gpt-4o", "https://api.openai.com/v1/"),
+        ("claude", "claude-opus-5-5", "https://api.anthropic.com"),
+    ],
+)
+def test__vendor_base_url__structured_output_stays_on(provider_type: AIProviderType, model: str, base_url: str) -> None:
+    assert resolve_capabilities(provider_type, model, base_url=base_url).structured_output_default
+
+
+@pytest.mark.parametrize(
+    ("model", "efforts", "default"),
+    [
+        ("gpt-5.1-chat-latest", ("medium",), "medium"),
+        ("gpt-5.2-chat-latest", ("medium",), "medium"),
+        ("gpt-5.2-pro", ("medium", "high", "xhigh"), None),
+        ("gpt-5.5", ("none", "low", "medium", "high", "xhigh"), "medium"),
+        ("gpt-5.2", ("none", "low", "medium", "high", "xhigh"), "none"),
+    ],
+)
+def test__openai_gpt_5_variants__their_own_effort_levels(
+    model: str, efforts: tuple[str, ...], default: str | None
+) -> None:
+    """Regression: chat and pro snapshots fell under the generic gpt-5.x levels they reject."""
+    caps = resolve_capabilities("openai", model)
+
+    assert caps.effort_levels == efforts
+    assert caps.default_effort == default
+
+
+@pytest.mark.parametrize("model", ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-sonnet-4-0"])
+def test__claude_4_0__structured_output_not_offered(model: str) -> None:
+    """Regression: Sonnet 4 and Opus 4 were offered structured output they do not support."""
+    caps = resolve_capabilities("claude", model)
+
+    assert not caps.structured_output
+    assert not caps.structured_output_default
+
+
+def test__claude_sonnet_4_5__structured_output_offered_off_by_default() -> None:
+    caps = resolve_capabilities("claude", "claude-sonnet-4-5")
+
+    assert caps.structured_output
+    assert not caps.structured_output_default
 
 
 def test__openai_fine_tune__resolved_by_its_base_model() -> None:

@@ -22,4 +22,4 @@ class GetModelCapabilitiesUseCase:
         resolved = (model or "").strip() or (provider.models[0] if provider.models else "")
         if not resolved:
             raise ModelNotSpecifiedError(f"AI provider '{provider.name}' has no models configured — name a model")
-        return resolve_capabilities(provider.type, resolved)
+        return resolve_capabilities(provider.type, resolved, base_url=provider.base_url)

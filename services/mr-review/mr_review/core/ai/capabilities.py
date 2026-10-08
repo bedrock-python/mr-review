@@ -7,6 +7,10 @@ does not know, including a newer version of a known family, is treated as a curr
 model: adaptive thinking tuned by effort, no sampling parameters. OpenAI models are recognised by
 prefix. ``openai_compat`` endpoints serve anything, so every control is offered there and sent
 as asked.
+
+Structured output is on by default only where it is documented for the model *and* the provider
+talks to the vendor's own endpoint: a ``claude`` or ``openai`` provider pointed elsewhere by its
+``base_url`` (a gateway, DeepSeek, Groq…) may reject it, so there it is offered but off.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from typing import Final, Literal
+from urllib.parse import urlsplit
 
 from mr_review.core.ai.entities import ModelCapabilities, ReasoningEffort, ReasoningMode, ThinkingSupport
 from mr_review.core.ai_providers.entities import AIProviderType
@@ -91,9 +96,11 @@ _CLAUDE_4_6: Final = _claude(
 )
 # Before 4.6: a fixed thinking budget (``budget_tokens``), no effort.
 _CLAUDE_BUDGET_64K: Final = _claude(max_output=64_000)  # Opus 4.5, Haiku 4.5
-_CLAUDE_BUDGET_64K_UNLISTED: Final = _claude(max_output=64_000, structured_default=False)  # Sonnet 4.5, Sonnet 4
+_CLAUDE_SONNET_4_5: Final = _claude(max_output=64_000, structured_default=False)
 _CLAUDE_BUDGET_32K: Final = _claude(max_output=32_000)  # Opus 4.1
-_CLAUDE_BUDGET_32K_UNLISTED: Final = _claude(max_output=32_000, structured_default=False)  # Opus 4
+# Claude 4.0 predates structured output.
+_CLAUDE_SONNET_4: Final = _claude(max_output=64_000, structured=False)
+_CLAUDE_OPUS_4: Final = _claude(max_output=32_000, structured=False)
 _CLAUDE_SONNET_3_7: Final = _claude(max_output=64_000, structured=False)
 _CLAUDE_3_5: Final = _claude(max_output=8192, thinking="none", structured=False)
 _CLAUDE_3: Final = _claude(max_output=4096, thinking="none", structured=False)
@@ -108,13 +115,14 @@ _CLAUDE_FAMILIES: Final[dict[str, tuple[tuple[tuple[int, int], ModelCapabilities
         ((4, 6), _CLAUDE_4_6),
         ((4, 5), _CLAUDE_BUDGET_64K),
         ((4, 1), _CLAUDE_BUDGET_32K),
-        ((4, 0), _CLAUDE_BUDGET_32K_UNLISTED),
+        ((4, 0), _CLAUDE_OPUS_4),
         ((0, 0), _CLAUDE_3),
     ),
     "sonnet": (
         ((5, 0), _CLAUDE_CURRENT),
         ((4, 6), _CLAUDE_4_6),
-        ((4, 0), _CLAUDE_BUDGET_64K_UNLISTED),
+        ((4, 5), _CLAUDE_SONNET_4_5),
+        ((4, 0), _CLAUDE_SONNET_4),
         ((3, 7), _CLAUDE_SONNET_3_7),
         ((3, 5), _CLAUDE_3_5),
         ((0, 0), _CLAUDE_3),
@@ -165,6 +173,7 @@ def _openai(
     default_effort: ReasoningEffort | None = None,
     max_output: int | None = None,
     structured: bool = True,
+    structured_default: bool = True,
 ) -> ModelCapabilities:
     """An OpenAI profile: ``efforts`` set means a reasoning model, which takes no temperature."""
     reasoning = efforts is not None
@@ -180,7 +189,7 @@ def _openai(
         max_temperature=2.0,
         max_output_tokens=max_output,
         structured_output=structured,
-        structured_output_default=structured,
+        structured_output_default=structured and structured_default,
     )
 
 
@@ -189,10 +198,21 @@ _OPENAI_MODELS: Final[tuple[tuple[re.Pattern[str], ModelCapabilities], ...]] = (
     (re.compile(r"o1-(mini|preview)"), _openai(efforts=(), structured=False)),
     (re.compile(r"o\d"), _openai(efforts=_OPENAI_O_SERIES_EFFORTS, default_effort="medium", max_output=100_000)),
     (re.compile(r"gpt-5-chat"), _openai(max_output=16_384)),
+    # The chat snapshots of 5.1+ document no effort levels: offer only the default, medium.
+    (re.compile(r"gpt-5\.\d+-chat"), _openai(efforts=("medium",), default_effort="medium", max_output=16_384)),
     (re.compile(r"gpt-5-pro"), _openai(efforts=("high",), default_effort="high", max_output=128_000)),
+    # Responses API only, and no word on structured output: offered, off.
+    (
+        re.compile(r"gpt-5\.\d+-pro"),
+        _openai(efforts=("medium", "high", "xhigh"), max_output=128_000, structured_default=False),
+    ),
     (
         re.compile(r"gpt-5\.1"),
         _openai(efforts=("none", "low", "medium", "high"), default_effort="none", max_output=128_000),
+    ),
+    (
+        re.compile(r"gpt-5\.5"),
+        _openai(efforts=("none", "low", "medium", "high", "xhigh"), default_effort="medium", max_output=128_000),
     ),
     (
         re.compile(r"gpt-5\.\d"),
@@ -203,11 +223,18 @@ _OPENAI_MODELS: Final[tuple[tuple[re.Pattern[str], ModelCapabilities], ...]] = (
         _openai(efforts=("minimal", "low", "medium", "high"), default_effort="medium", max_output=128_000),
     ),
     (re.compile(r"gpt-4\.1"), _openai(max_output=32_768)),
-    (re.compile(r"(chatgpt-)?gpt-4o"), _openai(max_output=16_384)),
+    # The first gpt-4o snapshot and the ChatGPT alias reject json_schema response formats.
+    (re.compile(r"chatgpt-4o"), _openai(max_output=16_384, structured=False)),
+    (re.compile(r"gpt-4o-2024-05-13"), _openai(max_output=4096, structured=False)),
+    (re.compile(r"gpt-4o"), _openai(max_output=16_384)),
     (re.compile(r"gpt-4|gpt-3\.5"), _openai(max_output=4096, structured=False)),
 )
 # An unknown OpenAI id is taken for a current reasoning model; low/medium/high is what every one accepts.
-_OPENAI_CURRENT: Final = _openai(efforts=_OPENAI_O_SERIES_EFFORTS)
+# It may as well be another vendor's model behind the OpenAI type, so structured output starts off.
+_OPENAI_CURRENT: Final = _openai(efforts=_OPENAI_O_SERIES_EFFORTS, structured_default=False)
+
+# The vendors' own API hosts; any other ``base_url`` is a gateway or another vendor.
+_VENDOR_HOSTS: Final[dict[str, str]] = {"claude": "api.anthropic.com", "openai": "api.openai.com"}
 
 
 def _openai_capabilities(model: str) -> ModelCapabilities:
@@ -235,10 +262,23 @@ def _compat_capabilities(model: str) -> ModelCapabilities:
     )
 
 
-def resolve_capabilities(provider_type: AIProviderType, model: str) -> ModelCapabilities:
-    """The controls ``model`` accepts on a provider of ``provider_type``."""
+def is_vendor_endpoint(provider_type: AIProviderType, base_url: str) -> bool:
+    """Whether ``base_url`` is the vendor's own API: blank, or the vendor's host."""
+    url = base_url.strip()
+    if not url:
+        return True
+    host = urlsplit(url if "://" in url else f"https://{url}").hostname
+    return host is not None and host == _VENDOR_HOSTS.get(provider_type)
+
+
+def resolve_capabilities(provider_type: AIProviderType, model: str, *, base_url: str = "") -> ModelCapabilities:
+    """The controls ``model`` accepts on a provider of ``provider_type`` reached at ``base_url``."""
     if provider_type == "claude":
-        return _claude_capabilities(model)
-    if provider_type == "openai":
-        return _openai_capabilities(model)
-    return _compat_capabilities(model)
+        caps = _claude_capabilities(model)
+    elif provider_type == "openai":
+        caps = _openai_capabilities(model)
+    else:
+        return _compat_capabilities(model)
+    if caps.structured_output_default and not is_vendor_endpoint(provider_type, base_url):
+        return replace(caps, structured_output_default=False)
+    return caps

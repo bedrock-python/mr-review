@@ -103,7 +103,8 @@ def _make_ai_dispatcher_factory(fence_registry: AIFenceRegistry) -> AIDispatcher
     ) -> AsyncIterator[AIStreamItem]:
         if not options.model:
             raise AIProviderError("No model selected — pick one in the dispatch settings")
-        plan = plan_generation(resolve_capabilities(ai_provider.type, options.model), options)
+        caps = resolve_capabilities(ai_provider.type, options.model, base_url=ai_provider.base_url)
+        plan = plan_generation(caps, options)
         backend = _build_ai_backend(ai_provider)
         return _fenced_stream(fence_registry, ai_provider, backend.dispatch(prompt, plan))
 
