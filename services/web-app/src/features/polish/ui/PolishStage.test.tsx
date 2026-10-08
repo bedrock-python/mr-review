@@ -1360,6 +1360,23 @@ describe("PolishStage list — toolbar", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     expect(focusedId()).toBe("c2");
   });
 
+  it("cancels an edit with one Esc while a tooltip is open", async () => {
+    const user = userEvent.setup();
+    renderStage(two());
+
+    await user.keyboard("e");
+    const deleteButton = within(card("c1")).getByRole("button", { name: "Delete comment" });
+    // Back out of the editor with the keyboard, so the button's tooltip opens on focus.
+    for (let step = 0; step < 10 && document.activeElement !== deleteButton; step += 1) {
+      await user.keyboard("{Shift>}{Tab}{/Shift}");
+    }
+    expect(deleteButton).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: "Comment body" })).not.toBeInTheDocument();
+  });
+
   it("moves between comments with ↑ ↓ after a click on the view or status control", async () => {
     const user = userEvent.setup();
     renderStage(two());

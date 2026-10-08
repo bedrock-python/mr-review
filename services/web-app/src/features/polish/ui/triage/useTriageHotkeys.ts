@@ -27,6 +27,16 @@ const SEVERITY_BY_KEY: Partial<Record<string, CommentSeverity>> = {
 const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]';
 const OPEN_LAYER_SELECTOR =
   '[aria-modal="true"], [role="dialog"][data-state="open"], [role="menu"][data-state="open"]';
+const TOOLTIP_SELECTOR = '[role="tooltip"]';
+
+/**
+ * An open tooltip closes on Esc and marks the key handled, before these keys see it (Radix
+ * listens in the capture phase). A tooltip is only a hint, not a layer the user is in, so
+ * that Esc must still cancel an edit. Menus, popovers and dialogs are caught by the layer
+ * checks below either way.
+ */
+const isTooltipEscape = (event: KeyboardEvent): boolean =>
+  event.key === "Escape" && document.querySelector(TOOLTIP_SELECTOR) !== null;
 
 /**
  * The keys listen on the whole document, so they must stand down while any other layer has
@@ -35,7 +45,7 @@ const OPEN_LAYER_SELECTOR =
  * for a key a control already handled: ← → in a segmented control, ↓ on a menu button.
  */
 const isForAnotherLayer = (event: KeyboardEvent): boolean =>
-  event.defaultPrevented ||
+  (event.defaultPrevented && !isTooltipEscape(event)) ||
   (event.target instanceof Element && event.target.closest(LAYER_SELECTOR) !== null) ||
   document.querySelector(OPEN_LAYER_SELECTOR) !== null;
 
