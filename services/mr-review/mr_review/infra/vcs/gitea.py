@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -19,6 +20,12 @@ from mr_review.infra.vcs._pagination import (
     optional_str,
 )
 from mr_review.infra.vcs._tree import files_under
+
+# Gitea's own default and ceiling for tree pages; the cap keeps a giant monorepo from paging forever.
+_TREE_PAGE_SIZE = 1000
+GITEA_MAX_TREE_PAGES = 100
+
+logger = logging.getLogger(__name__)
 
 # The pulls API filters by open/closed only; merged vs. closed is told apart per item.
 _UPSTREAM_STATE: dict[MRStateFilter, str] = {
@@ -262,15 +269,25 @@ class GiteaProvider:
         return files_under(await self.list_tree(repo_path, ref), dir_path)
 
     async def list_tree(self, repo_path: str, ref: str = "HEAD") -> list[str]:
-        """Every file path at ``ref`` from one recursive git-tree request."""
+        """Every file path at ``ref``. Gitea pages recursive trees and flags more pages with ``truncated``."""
         owner, repo = _split_repo_path(repo_path)
         url = f"{self._base_url}/api/v1/repos/{owner}/{repo}/git/trees/{ref}"
-        response = await self._client.get(url, headers=self._headers, params={"recursive": "true"})
-        if response.status_code == 404:
-            return []
-        response.raise_for_status()
-        data: dict[str, Any] = response.json()
-        return [str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob"]
+        paths: list[str] = []
+        for page in range(1, GITEA_MAX_TREE_PAGES + 1):
+            response = await self._client.get(
+                url,
+                headers=self._headers,
+                params={"recursive": "true", "page": page, "per_page": _TREE_PAGE_SIZE},
+            )
+            if response.status_code == httpx.codes.NOT_FOUND:
+                return []
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+            paths.extend(str(item["path"]) for item in data.get("tree", []) if item.get("type") == "blob")
+            if not data.get("truncated"):
+                return paths
+        logger.warning("Gitea tree for %s@%s exceeds %d pages; listing the first ones", repo_path, ref, page)
+        return paths
 
     async def get_commits(
         self, repo_path: str, file_path: str, ref: str = "HEAD", limit: int = 10

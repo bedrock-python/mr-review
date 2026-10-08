@@ -378,7 +378,7 @@ deleting a host drops its cache, and `POST /api/v1/hosts/{id}/cache/invalidate` 
 — for one repository with `?repo_path=`, which is what to call after a push the cache has not seen
 yet. GitHub and Gitea can only list a directory by returning the repository's whole tree, so that
 tree is fetched once per repository and commit and every directory the context collectors ask for is
-answered from it.
+answered from it. Gitea hands the tree out 1000 entries a page; up to 100 pages are read.
 
 ### What goes into the prompt
 

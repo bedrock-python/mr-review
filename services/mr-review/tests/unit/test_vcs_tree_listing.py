@@ -9,7 +9,7 @@ import pytest
 from mr_review.infra.vcs._tree import WholeTreeListing
 from mr_review.infra.vcs.bitbucket import BitbucketProvider
 from mr_review.infra.vcs.cache import CachedVCSProvider
-from mr_review.infra.vcs.gitea import GiteaProvider
+from mr_review.infra.vcs.gitea import GITEA_MAX_TREE_PAGES, GiteaProvider
 from mr_review.infra.vcs.github import GitHubProvider
 from mr_review.infra.vcs.gitlab import GitLabProvider
 
@@ -100,3 +100,36 @@ async def test__github__repo_invalidation__drops_the_cached_tree() -> None:
     await provider.list_directory("acme/api", "src", "main")
 
     assert len(transport.requests) == 2
+
+
+async def test__gitea__tree_spanning_several_pages__is_read_to_the_end() -> None:
+    """Gitea pages git trees (1000 entries by default) and flags more with ``truncated``."""
+
+    def tree(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        entries = [{"path": f"src/p{page}_{i}.py", "type": "blob"} for i in range(2)]
+        return json_response({"tree": entries, "truncated": page < 3, "page": page})
+
+    transport = RoutedTransport({"/api/v1/repos/acme/api/git/trees/main": tree})
+    provider = GiteaProvider(client=transport.client(), base_url="https://gitea.example.com", token="t")
+
+    paths = await provider.list_tree("acme/api", "main")
+
+    assert paths == [f"src/p{page}_{i}.py" for page in (1, 2, 3) for i in range(2)]
+    assert [r.url.params["page"] for r in transport.requests] == ["1", "2", "3"]
+    assert all(r.url.params["recursive"] == "true" for r in transport.requests)
+
+
+async def test__gitea__endless_tree__stops_at_the_page_cap() -> None:
+    transport = RoutedTransport(
+        {
+            "/api/v1/repos/acme/api/git/trees/main": json_response(
+                {"tree": [{"path": "a", "type": "blob"}], "truncated": True}
+            )
+        }
+    )
+    provider = GiteaProvider(client=transport.client(), base_url="https://gitea.example.com", token="t")
+
+    await provider.list_tree("acme/api", "main")
+
+    assert len(transport.requests) == GITEA_MAX_TREE_PAGES
