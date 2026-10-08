@@ -151,6 +151,10 @@ export const mrHandlers = [
 
     const { hostId } = parseRoute(url, INBOX_URL);
     const items = hostId === MOCK_HOST_ID ? getMockInbox(scope) : [];
-    return HttpResponse.json(paginate(items, paging.page, paging.perPage));
+    // The mock inbox serves whole repositories, so none is ever cut short.
+    return HttpResponse.json({
+      ...paginate(items, paging.page, paging.perPage),
+      truncated_repos: [],
+    });
   }),
 ];

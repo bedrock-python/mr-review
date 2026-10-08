@@ -41,6 +41,8 @@ Behaviour worth knowing when testing the UI against mocks:
 - `scope=review_requested` mimics GitHub search results: empty
   `source_branch` / `target_branch` and no diff stats.
 - `page < 1` or `per_page` outside `1..100` answer 422, like the backend.
+- The inbox envelope also carries `truncated_repos` (repositories the backend's
+  `scope=all` cut to their newest MRs); the mock never truncates, so it is `[]`.
 
 Routes are RegExps so they match any origin and repository paths with slashes.
 
