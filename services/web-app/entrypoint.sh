@@ -34,12 +34,25 @@ case "$API_BASE_URL" in
 esac
 export API_URL="${API_URL:-$API_ORIGIN}"
 
-# HSTS header for production-like environments
-if [ "$APP_ENV" = "production" ] || [ "$APP_ENV" = "staging" ] || [ "$APP_ENV" = "pre" ]; then
-  export HSTS_HEADER='add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'
-else
-  export HSTS_HEADER=""
-fi
+# HSTS is off unless asked for. This container speaks plain HTTP; the header
+# belongs to whatever terminates TLS in front of it, which knows whether every
+# subdomain of the host is HTTPS too. HSTS_MAX_AGE (seconds) turns it on here;
+# HSTS_INCLUDE_SUBDOMAINS=true extends it to every subdomain.
+HSTS_MAX_AGE="${HSTS_MAX_AGE:-}"
+case "$HSTS_MAX_AGE" in
+  '') export HSTS_HEADER="" ;;
+  *[!0-9]*)
+    echo "HSTS_MAX_AGE must be a number of seconds, got '$HSTS_MAX_AGE'" >&2
+    exit 1
+    ;;
+  *)
+    hsts_value="max-age=$HSTS_MAX_AGE"
+    if [ "${HSTS_INCLUDE_SUBDOMAINS:-false}" = "true" ]; then
+      hsts_value="$hsts_value; includeSubDomains"
+    fi
+    export HSTS_HEADER="add_header Strict-Transport-Security \"$hsts_value\" always;"
+    ;;
+esac
 
 # Where nginx proxies /api/ to, resolved inside the container network — never
 # by the browser. scheme://host:port with no path: nginx appends the request

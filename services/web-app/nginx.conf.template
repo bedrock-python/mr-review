@@ -88,6 +88,17 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $forwarded_proto;
 
+            # The server-level security headers are added to API responses as
+            # well, and nginx appends rather than replaces: drop any the API
+            # sends itself, so a response never carries two conflicting policies.
+            proxy_hide_header Content-Security-Policy;
+            proxy_hide_header Strict-Transport-Security;
+            proxy_hide_header X-Frame-Options;
+            proxy_hide_header X-Content-Type-Options;
+            proxy_hide_header X-XSS-Protection;
+            proxy_hide_header Referrer-Policy;
+            proxy_hide_header Permissions-Policy;
+
             # POST /api/v1/reviews/{id}/dispatch streams the review as
             # Server-Sent Events for as long as the model takes: every event
             # goes to the browser as it arrives, and an idle gap is not a
