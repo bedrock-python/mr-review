@@ -11,6 +11,11 @@ export type TooltipProps = {
   shortcut?: string;
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
+  /**
+   * Never opens. Lets a caller switch the hint on and off without changing the element tree,
+   * so the trigger keeps its focus.
+   */
+  isDisabled?: boolean;
   /** One focusable element; it receives the trigger props (the ref included). */
   children: React.ReactElement;
 };
@@ -24,10 +29,11 @@ export const Tooltip = ({
   shortcut,
   side = "top",
   align = "center",
+  isDisabled = false,
   children,
 }: TooltipProps): React.ReactElement => (
   <TooltipPrimitive.Provider delayDuration={OPEN_DELAY_MS}>
-    <TooltipPrimitive.Root>
+    <TooltipPrimitive.Root {...(isDisabled ? { open: false } : {})}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content

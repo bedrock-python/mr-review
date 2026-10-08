@@ -51,6 +51,20 @@ describe("Tooltip", () => {
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent("?");
   });
+
+  it("never opens while disabled", async () => {
+    const user = userEvent.setup();
+    render(
+      <Tooltip content="Finish Polish first" isDisabled>
+        <button type="button">Post</button>
+      </Tooltip>
+    );
+
+    await user.tab();
+
+    expect(screen.getByRole("button", { name: "Post" })).toHaveFocus();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
 });
 
 describe("Kbd", () => {

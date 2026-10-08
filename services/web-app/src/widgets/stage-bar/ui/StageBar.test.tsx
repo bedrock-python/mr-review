@@ -393,6 +393,19 @@ describe(
       expect(tab("Polish")).toHaveAttribute("aria-disabled", "true");
     });
 
+    it("says what to finish first on a locked stage", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(reviewApi, "get").mockResolvedValue(review([iteration({ stage: "brief" })]));
+      renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=dispatch&it=${IT_1}`);
+      const dispatch = await screen.findByRole("tab", { name: /Dispatch/, selected: true });
+
+      dispatch.focus();
+      await user.keyboard("{ArrowRight}");
+
+      expect(tab("Polish")).toHaveFocus();
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Brief first");
+    });
+
     it("moves focus between stages with the arrow keys", async () => {
       const user = userEvent.setup();
       vi.spyOn(reviewApi, "get").mockResolvedValue(review([iteration({ stage: "polish" })]));
