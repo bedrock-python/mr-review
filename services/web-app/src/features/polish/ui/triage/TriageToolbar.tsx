@@ -18,10 +18,12 @@ import type { FileFilterOption } from "./ListFilters";
 import type { CommentFilters, SeverityCounts } from "../../lib";
 import type { CommentSeverity } from "@entities/review";
 
-/** From this toolbar width down, the file filter and grouping move into "Filters". */
-export const TOOLBAR_WIDE_MIN_PX = 1200;
-/** From this width down, the status filter joins them and "New comment" loses its text. */
-export const TOOLBAR_MEDIUM_MIN_PX = 1000;
+// Measured widths of the row with every filter set (the widest it gets), so typing a search
+// never reshuffles the controls. Below the narrowest layout's width the row wraps.
+/** Below this toolbar width the file filter and grouping move into "Filters". */
+export const TOOLBAR_WIDE_MIN_PX = 1300;
+/** Below this width the status filter joins them and "New comment" keeps only its icon. */
+export const TOOLBAR_MEDIUM_MIN_PX = 1180;
 
 type ToolbarLayout = "wide" | "medium" | "narrow";
 
@@ -92,7 +94,8 @@ export const TriageToolbar = ({
   const group = { isGrouped, onChange: onGroupedChange };
 
   return (
-    <Toolbar ref={toolbarRef} size="sm">
+    // Wraps only where even the narrow layout does not fit (the merge request list open beside).
+    <Toolbar ref={toolbarRef} size="sm" className="flex-wrap gap-y-(--space-2) py-(--space-1)">
       <Input
         ref={searchRef}
         size="sm"
@@ -108,7 +111,7 @@ export const TriageToolbar = ({
             </span>
           ) : undefined
         }
-        className="max-w-80 min-w-36 flex-1"
+        className="max-w-[320px] min-w-[144px] flex-1"
         onChange={(event) => {
           update({ search: event.target.value });
         }}
@@ -128,33 +131,33 @@ export const TriageToolbar = ({
       />
       {layout !== "narrow" && <StatusFilter value={status.value} onChange={status.onChange} />}
       {layout === "wide" ? (
-        <span className="flex shrink-0 items-center gap-1">
-          <FileFilter {...file} className="w-48" />
+        <span className="flex shrink-0 items-center gap-(--space-1)">
+          <FileFilter {...file} className="w-[200px]" />
           <GroupToggle {...group} />
         </span>
       ) : (
         <FiltersPopover status={layout === "narrow" ? status : null} file={file} group={group} />
       )}
-      {isFiltering(filters) && (
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
-          onClick={() => {
-            onFiltersChange(EMPTY_FILTERS);
-          }}
-        >
-          Clear filters
-        </Button>
-      )}
 
       <ToolbarSpacer />
 
-      <span
-        className="text-fg-2 shrink-0 font-mono text-(length:--fs-meta) whitespace-nowrap"
-        aria-live="polite"
-      >
-        {isPartial ? `${String(shownCount)} of ${String(totalCount)} shown` : ""}
+      <span className="flex shrink-0 items-center gap-(--space-1)">
+        <span
+          className="text-fg-2 font-mono text-(length:--fs-meta) whitespace-nowrap"
+          aria-live="polite"
+        >
+          {isPartial ? `${String(shownCount)} of ${String(totalCount)} shown` : ""}
+        </span>
+        {isFiltering(filters) && (
+          <IconButton
+            size="sm"
+            label="Clear filters"
+            icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
+            onClick={() => {
+              onFiltersChange(EMPTY_FILTERS);
+            }}
+          />
+        )}
       </span>
       <BulkMenu
         scope={isPartial ? "shown" : "all"}
