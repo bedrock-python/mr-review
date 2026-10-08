@@ -1,56 +1,24 @@
-import { useState } from "react";
+import { CircleCheck, CircleX, TriangleAlert } from "lucide-react";
+import { Card, ICON_SIZE, StatusBadge } from "@shared/ui";
 import { formatPostedAt } from "../lib/postSummary";
+import { FailedCommentList } from "./PostFailures";
+import { PostOptions } from "./PostParts";
+import { ASIDE, STAGE_SUBTITLE, STAGE_TITLE } from "./postStyles";
 import type { PostState, PostSummary } from "../lib/postSummary";
-import { FailedCommentList, ResendConfirm } from "./PostFailures";
-import { ButtonSpinner, PostOptions, Stat } from "./PostParts";
 import type { PostOptionsProps } from "./PostParts";
+import type { Status } from "@shared/ui";
+import type { LucideIcon } from "lucide-react";
 
-const STATE_LOOK: Record<Exclude<PostState, "ready">, { color: string; title: string }> = {
-  posted: { color: "var(--c-add-fg)", title: "Posted to" },
-  partial: { color: "var(--c-minor-fg)", title: "Partly posted to" },
-  failed: { color: "var(--c-critical-fg)", title: "Nothing was posted to" },
+type AttemptedState = Exclude<PostState, "ready">;
+
+const STATE_LOOK: Record<AttemptedState, { title: string; color: string; Icon: LucideIcon }> = {
+  posted: { title: "Posted to", color: "var(--c-success-fg)", Icon: CircleCheck },
+  partial: { title: "Partly posted to", color: "var(--c-warn-fg)", Icon: TriangleAlert },
+  failed: { title: "Nothing was posted to", color: "var(--c-danger-fg)", Icon: CircleX },
 };
 
-const StateIcon = ({ state }: { state: Exclude<PostState, "ready"> }): React.ReactElement => (
-  <div
-    style={{
-      width: 64,
-      height: 64,
-      borderRadius: "50%",
-      background: `color-mix(in oklch, ${STATE_LOOK[state].color} 18%, var(--bg-2))`,
-      color: STATE_LOOK[state].color,
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-    aria-hidden="true"
-  >
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-    >
-      {state === "posted" && <polyline points="20 6 9 17 4 12" />}
-      {state === "partial" && (
-        <>
-          <line x1="12" y1="7" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12" y2="17.5" />
-        </>
-      )}
-      {state === "failed" && (
-        <>
-          <line x1="6" y1="6" x2="18" y2="18" />
-          <line x1="18" y1="6" x2="6" y2="18" />
-        </>
-      )}
-    </svg>
-  </div>
-);
-
-const subtitle = (summary: PostSummary): string => {
+/** What the subtitle says: when it was posted, or how much of it is on the MR. */
+const describeProgress = (summary: PostSummary): string => {
   const landed = summary.inline + summary.generalNotes;
   const at = summary.postedAt !== null ? formatPostedAt(summary.postedAt) : null;
   if (summary.state === "posted")
@@ -59,117 +27,117 @@ const subtitle = (summary: PostSummary): string => {
   return at !== null && landed > 0 ? `${progress} Last posted at ${at}.` : progress;
 };
 
+type Tile = { label: string; value: number; status: Status };
+
+const tilesOf = (summary: PostSummary): Tile[] => {
+  const failed = summary.failed.length;
+  return [
+    { label: "Inline", value: summary.inline, status: summary.inline > 0 ? "success" : "neutral" },
+    {
+      label: "General",
+      value: summary.generalNotes,
+      status: summary.generalNotes > 0 ? "success" : "neutral",
+    },
+    { label: "Failed", value: failed, status: failed > 0 ? "danger" : "neutral" },
+    ...(summary.unsent > 0
+      ? [{ label: "Not sent", value: summary.unsent, status: "neutral" as const }]
+      : []),
+    ...(summary.unrecorded > 0
+      ? [{ label: "No details", value: summary.unrecorded, status: "neutral" as const }]
+      : []),
+  ];
+};
+
+const DANGER_TILE: React.CSSProperties = {
+  borderColor: "var(--c-critical-line)",
+  background: "var(--c-critical-tint)",
+};
+
+const TILE_VALUE: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-page)",
+  fontWeight: "var(--fw-semibold)",
+  lineHeight: "var(--lh-tight)",
+  fontVariantNumeric: "tabular-nums",
+};
+
+/** One number per outcome; Failed turns red once anything failed. */
+const ResultTiles = ({ summary }: { summary: PostSummary }): React.ReactElement => (
+  <ul
+    aria-label="Post counts"
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gap: "var(--space-2)",
+      margin: 0,
+      padding: 0,
+      listStyle: "none",
+    }}
+  >
+    {tilesOf(summary).map((tile) => (
+      <Card
+        key={tile.label}
+        as="li"
+        padding="sm"
+        style={tile.status === "danger" ? DANGER_TILE : undefined}
+      >
+        <div
+          style={{
+            ...TILE_VALUE,
+            color: tile.status === "danger" ? "var(--c-danger-fg)" : "var(--fg-0)",
+          }}
+        >
+          {tile.value}
+        </div>
+        <StatusBadge status={tile.status} label={tile.label} />
+      </Card>
+    ))}
+  </ul>
+);
+
 export type PostResultPanelProps = PostOptionsProps & {
   summary: PostSummary;
   mrLabel: string;
-  mrUrl: string | null;
-  isPosting: boolean;
-  // resendAmbiguous: also send the comments that may already be on the MR (confirmed by the user).
-  onRetry: (resendAmbiguous: boolean) => void;
-  onReviewNext: () => void;
+  /** The heading takes the focus after a post, so it does not fall to the page. */
+  headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
-/** What the last post did, read from the server: survives a reload, offers to retry what failed. */
+/** What the last post did, read from the server: survives a reload. */
 export const PostResultPanel = ({
   summary,
   mrLabel,
-  mrUrl,
-  isPosting,
-  onRetry,
-  onReviewNext,
+  headingRef,
   ...options
 }: PostResultPanelProps): React.ReactElement => {
-  const [isConfirming, setIsConfirming] = useState(false);
   const state = summary.state === "ready" ? "failed" : summary.state;
-  const retryable = summary.failed.length + summary.unsent;
+  const look = STATE_LOOK[state];
+  const isRetryable = summary.failed.length + summary.unsent > 0;
 
   return (
-    <div style={{ overflow: "auto", borderRight: "1px solid var(--border)", padding: 24 }}>
-      <div style={{ textAlign: "center" }}>
-        <StateIcon state={state} />
-        <div
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 22,
-            fontWeight: 600,
-            marginTop: 14,
-            color: "var(--fg-0)",
-          }}
+    <aside aria-label="Post result" style={ASIDE}>
+      <div>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          style={{ ...STAGE_TITLE, display: "flex", alignItems: "center", gap: "var(--space-2)" }}
         >
-          {STATE_LOOK[state].title} {mrLabel}
-        </div>
-        <div className="dim" style={{ fontSize: 13, marginTop: 6 }}>
-          {subtitle(summary)}
-        </div>
+          <look.Icon
+            size={ICON_SIZE.button}
+            aria-hidden="true"
+            style={{ flexShrink: 0, color: look.color }}
+          />
+          <span>
+            {look.title} {mrLabel}
+          </span>
+        </h2>
+        <p style={STAGE_SUBTITLE}>{describeProgress(summary)}</p>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-        <Stat label="Inline" value={summary.inline} />
-        <Stat label="General" value={summary.generalNotes} />
-        <Stat label="Failed" value={summary.failed.length} />
-        {summary.unsent > 0 && <Stat label="Not sent" value={summary.unsent} />}
-        {summary.unrecorded > 0 && <Stat label="No details" value={summary.unrecorded} />}
-      </div>
+      <ResultTiles summary={summary} />
 
       {summary.failed.length > 0 && <FailedCommentList comments={summary.failed} />}
 
-      {retryable > 0 && (
-        <div style={{ margin: "18px -24px 0" }}>
-          <PostOptions {...options} />
-        </div>
-      )}
-
-      {isConfirming && (
-        <ResendConfirm
-          count={summary.ambiguous.length}
-          onConfirm={() => {
-            setIsConfirming(false);
-            onRetry(true);
-          }}
-          onCancel={() => {
-            setIsConfirming(false);
-          }}
-        />
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginTop: 18,
-          justifyContent: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        {retryable > 0 && (
-          <button
-            type="button"
-            className="btn primary"
-            disabled={isPosting || isConfirming}
-            onClick={() => {
-              // Comments that may already be on the MR are sent again only once that is confirmed.
-              if (summary.ambiguous.length > 0) setIsConfirming(true);
-              else onRetry(false);
-            }}
-          >
-            {isPosting && <ButtonSpinner />}
-            {isPosting ? "Posting…" : `Retry failed (${String(retryable)})`}
-          </button>
-        )}
-        <button
-          type="button"
-          className={retryable > 0 ? "btn" : "btn primary"}
-          disabled={mrUrl === null}
-          onClick={() => {
-            if (mrUrl !== null) window.open(mrUrl, "_blank", "noopener,noreferrer");
-          }}
-        >
-          Open MR in browser →
-        </button>
-        <button type="button" className="btn" onClick={onReviewNext}>
-          Review next MR
-        </button>
-      </div>
-    </div>
+      {isRetryable && <PostOptions {...options} />}
+    </aside>
   );
 };

@@ -95,7 +95,7 @@ const renderPanel = (url = "/") => {
 
 const openPanel = async (user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> => {
   await user.click(screen.getByRole("button", { name: "History" }));
-  return screen.findByRole("dialog", { name: "Review History" });
+  return screen.findByRole("dialog", { name: "Review history" });
 };
 
 describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
@@ -186,6 +186,21 @@ describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(within(dialog).queryByRole("button", { name: /^service.*!12/ })).not.toBeInTheDocument();
   });
 
+  it("says when nothing matches and clears the filters on request", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(reviewApi, "list").mockResolvedValue(REVIEWS);
+    renderPanel();
+    const dialog = await openPanel(user);
+    await within(dialog).findByRole("button", { name: /^service.*!12/ });
+
+    await user.type(within(dialog).getByRole("searchbox", { name: "Search reviews" }), "nothing");
+
+    expect(within(dialog).getByText("No matching reviews")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Clear filters" }));
+    expect(within(dialog).getByRole("searchbox", { name: "Search reviews" })).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: /^service.*!12/ })).toBeInTheDocument();
+  });
+
   it("keeps hosts that share a name in separate groups", async () => {
     const user = userEvent.setup();
     vi.spyOn(reviewApi, "list").mockResolvedValue(REVIEWS);
@@ -228,6 +243,9 @@ describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     expect(remove).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: /^service.*!12/ })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Delete review of group/service !12" })
+    ).toHaveFocus();
   });
 
   it("deletes after confirmation and leaves the page of the deleted review", async () => {
@@ -255,6 +273,83 @@ describe("HistoryPanel", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
       expect(
         within(dialog).queryByRole("button", { name: /^service.*!12/ })
       ).not.toBeInTheDocument();
+    });
+  });
+
+  it("sends one DELETE however often Delete is pressed, then focuses the next row", async () => {
+    const user = userEvent.setup();
+    // The refetch after the delete never answers: the row must go without waiting for it.
+    vi.spyOn(reviewApi, "list")
+      .mockResolvedValueOnce(REVIEWS)
+      .mockReturnValue(new Promise(() => undefined));
+    let finishDelete: () => void = () => undefined;
+    const remove = vi.spyOn(reviewApi, "delete").mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = resolve;
+        })
+    );
+    renderPanel();
+    const dialog = await openPanel(user);
+    await within(dialog).findByRole("button", { name: /^service.*!12/ });
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete review of group/service !12" })
+    );
+    const confirmDelete = within(dialog).getByRole("button", { name: "Delete" });
+    await user.click(confirmDelete);
+    await user.click(confirmDelete);
+    expect(remove).toHaveBeenCalledTimes(1);
+
+    finishDelete();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    const again = within(dialog).queryByRole("button", { name: "Delete" });
+    if (again) await user.click(again);
+
+    // Rows show newest first, grouped by host: service, then library on the same host.
+    await waitFor(() => {
+      expect(within(dialog).getByRole("button", { name: /^library/ })).toHaveFocus();
+    });
+    expect(within(dialog).queryByRole("button", { name: /^service.*!12/ })).not.toBeInTheDocument();
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts focus in the search box when the last review is deleted", async () => {
+    const user = userEvent.setup();
+    const last = REVIEWS.slice(2);
+    vi.spyOn(reviewApi, "list").mockResolvedValueOnce(last).mockResolvedValue([]);
+    vi.spyOn(reviewApi, "delete").mockResolvedValue();
+    renderPanel();
+    const dialog = await openPanel(user);
+    await within(dialog).findByRole("button", { name: /^api.*!7/ });
+
+    await user.click(within(dialog).getByRole("button", { name: "Delete review of team/api !7" }));
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole("searchbox", { name: "Search reviews" })).toHaveFocus();
+    });
+  });
+
+  it("closes on the first Esc while a row's trash button has the focus", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(reviewApi, "list").mockResolvedValue(REVIEWS);
+    renderPanel();
+    const dialog = await openPanel(user);
+    await within(dialog).findByRole("button", { name: /^service.*!12/ });
+
+    const trash = within(dialog).getByRole("button", {
+      name: "Delete review of group/service !12",
+    });
+    // Tab to it, as a keyboard user would; a tooltip opened by that focus used to take the Esc.
+    for (let presses = 0; presses < 20 && document.activeElement !== trash; presses += 1) {
+      await user.tab();
+    }
+    expect(trash).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });
 

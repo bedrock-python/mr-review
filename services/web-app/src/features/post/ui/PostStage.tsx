@@ -1,27 +1,19 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview, usePostReview } from "@entities/review";
-import type { Iteration, Review } from "@entities/review";
 import { useMR } from "@entities/mr";
 import { useHosts } from "@entities/host";
-import { StageLoading } from "@shared/ui";
+import { EmptyState, StageLoading } from "@shared/ui";
 import { describePostResult, summarizePost } from "../lib/postSummary";
 import { useSeverityLabel } from "../model/useSeverityLabel";
 import { PostConfirmPanel } from "./PostConfirmPanel";
+import { PostReadyFooter, PostResultFooter } from "./PostFooter";
 import { PostPreview } from "./PostPreview";
 import { PostResultPanel } from "./PostResultPanel";
-
-const CENTERED: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100%",
-  gap: 10,
-  color: "var(--fg-2)",
-  fontSize: 13,
-};
+import { ASIDE_WIDTH_PX } from "./postStyles";
+import type { Iteration, Review } from "@entities/review";
 
 const downloadJson = (json: string, name: string): void => {
   const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
@@ -35,17 +27,21 @@ const downloadJson = (json: string, name: string): void => {
 type PostWorkspaceProps = { review: Review; iteration: Iteration | null };
 
 const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactElement => {
-  const { selectedHostId, selectedRepoPath, selectedMRIid, clearMR } = useNav();
+  const { selectedHostId, selectedRepoPath, selectedMRIid, clearMR, goToStage } = useNav();
   const { data: mr } = useMR(selectedHostId, selectedRepoPath, selectedMRIid);
   const { data: hosts } = useHosts();
   const postReview = usePostReview(review.id);
-  const [isDryRun, setIsDryRun] = useState(false);
+  const [isJsonShown, setIsJsonShown] = useState(false);
   const [fallbackToGeneralNote, setFallbackToGeneralNote] = useState(true);
   const [severityLabel, setSeverityLabel] = useSeverityLabel();
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  // Once a post lands, the button that sent it is gone or idle: focus goes to the result.
+  const shouldFocusResult = useRef(false);
 
   const summary = iteration ? summarizePost(iteration) : null;
   const kept = summary?.kept ?? [];
   const mrLabel = `!${String(review.mr_iid)}`;
+  const targetLabel = `${review.repo_path} ${mrLabel}`;
   const host = hosts?.find((h) => h.id === review.host_id);
   const options = {
     fallbackToGeneralNote,
@@ -55,6 +51,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
   };
 
   const handlePost = (resendAmbiguous = false): void => {
+    shouldFocusResult.current = true;
     postReview.mutate(
       { iterationId: iteration?.id ?? null, fallbackToGeneralNote, severityLabel, resendAmbiguous },
       {
@@ -63,6 +60,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
           toast[kind](message);
         },
         onError: (err) => {
+          shouldFocusResult.current = false;
           toast.error("Failed to post comments", { description: err.message });
         },
       }
@@ -71,7 +69,7 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
 
   const json = JSON.stringify(
     {
-      target: `${review.repo_path} ${mrLabel}`,
+      target: targetLabel,
       comments: kept.map((c) => ({
         ...(c.file !== null ? { file: c.file, line: c.line } : {}),
         severity: c.severity,
@@ -83,49 +81,74 @@ const PostWorkspace = ({ review, iteration }: PostWorkspaceProps): React.ReactEl
   );
 
   const isAttempted = summary !== null && summary.state !== "ready";
+
+  useEffect(() => {
+    if (!shouldFocusResult.current || !isAttempted || postReview.isPending) return;
+    shouldFocusResult.current = false;
+    resultHeadingRef.current?.focus();
+  }, [isAttempted, postReview.isPending, summary]);
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 400px",
-        height: "100%",
-        overflow: "hidden",
-      }}
-    >
-      {isAttempted ? (
-        <PostResultPanel
-          summary={summary}
-          mrLabel={mrLabel}
-          mrUrl={mr !== undefined && mr.web_url !== "" ? mr.web_url : null}
-          isPosting={postReview.isPending}
-          onRetry={handlePost}
-          onReviewNext={clearMR}
-          {...options}
-        />
-      ) : (
-        <PostConfirmPanel
-          kept={kept}
-          targetLabel={`${review.repo_path} ${mrLabel}`}
-          hostLabel={host ? host.name : null}
-          isPosting={postReview.isPending}
-          isDryRun={isDryRun}
-          onToggleDryRun={() => {
-            setIsDryRun((value) => !value);
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `${String(ASIDE_WIDTH_PX)}px minmax(0, 1fr)`,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {isAttempted ? (
+          <PostResultPanel
+            summary={summary}
+            mrLabel={mrLabel}
+            headingRef={resultHeadingRef}
+            {...options}
+          />
+        ) : (
+          <PostConfirmPanel
+            kept={kept}
+            targetLabel={targetLabel}
+            hostLabel={host ? host.name : null}
+            onBackToPolish={() => {
+              goToStage({ stage: "polish" });
+            }}
+            {...options}
+          />
+        )}
+        <PostPreview
+          mode={isAttempted ? "status" : "dryrun"}
+          comments={kept}
+          json={json}
+          isJsonShown={isJsonShown}
+          onToggleJson={() => {
+            setIsJsonShown((value) => !value);
           }}
           onSaveAsJson={() => {
             downloadJson(json, `review-${review.id}.json`);
           }}
+          isCompleted={(iteration?.completed_at ?? null) !== null}
+          severityLabel={severityLabel}
+        />
+      </div>
+      {isAttempted ? (
+        <PostResultFooter
+          summary={summary}
+          targetLabel={targetLabel}
+          mrUrl={mr !== undefined && mr.web_url !== "" ? mr.web_url : null}
+          isPosting={postReview.isPending}
+          onRetry={handlePost}
+          onReviewNext={clearMR}
+        />
+      ) : (
+        <PostReadyFooter
+          keptCount={kept.length}
+          targetLabel={targetLabel}
+          isPosting={postReview.isPending}
           onPost={() => {
             handlePost();
           }}
-          {...options}
         />
       )}
-      <PostPreview
-        mode={isAttempted ? "status" : isDryRun ? "dryrun" : "json"}
-        comments={kept}
-        json={json}
-      />
     </div>
   );
 };
@@ -136,7 +159,13 @@ export const PostStage = (): React.ReactElement => {
   const { data: review, isLoading } = useReview(activeReviewId);
 
   if (activeReviewId === null) {
-    return <div style={CENTERED}>No active review. Go back to Pick to select a merge request.</div>;
+    return (
+      <EmptyState
+        isFill
+        title="No active review"
+        description="Go back to Pick to select a merge request."
+      />
+    );
   }
 
   if (isLoading || review === undefined) {

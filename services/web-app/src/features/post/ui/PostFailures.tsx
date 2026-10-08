@@ -1,82 +1,111 @@
+import { useId } from "react";
+import { Ban, CircleQuestionMark, CircleX, MapPinOff } from "lucide-react";
+import { Button, Card, Dialog, ICON_SIZE, SectionHeader } from "@shared/ui";
+import { MONO_META, SECTION } from "./postStyles";
 import type { Comment, PostFailureKind } from "@entities/review";
+import type { LucideIcon } from "lucide-react";
 
-const KIND_LOOK: Record<PostFailureKind, { label: string; color: string }> = {
-  position_rejected: { label: "Not anchored", color: "var(--c-critical-fg)" },
-  rejected: { label: "Refused", color: "var(--c-critical-fg)" },
-  ambiguous: { label: "May already be on the MR", color: "var(--c-minor-fg)" },
-  blocked: { label: "Blocked", color: "var(--c-major-fg)" },
+type KindLook = { label: string; tone: "danger" | "warn"; Icon: LucideIcon };
+
+const FAILURE_KIND_LOOK: Record<PostFailureKind, KindLook> = {
+  position_rejected: { label: "Not anchored", tone: "danger", Icon: MapPinOff },
+  rejected: { label: "Refused", tone: "danger", Icon: CircleX },
+  ambiguous: { label: "May already be on the MR", tone: "warn", Icon: CircleQuestionMark },
+  blocked: { label: "Blocked", tone: "warn", Icon: Ban },
+};
+
+const ROW: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--space-1)",
+  padding: "var(--space-2) var(--space-3)",
+  fontSize: "var(--fs-control)",
+};
+
+// Under the kind, past its icon.
+const DETAIL: React.CSSProperties = {
+  margin: 0,
+  paddingLeft: "calc(var(--icon-inline) + var(--space-2))",
+  lineHeight: "var(--lh-body)",
+  overflowWrap: "anywhere",
 };
 
 const location = (c: Comment): string =>
-  c.file === null ? "general note" : `${c.file}${c.line !== null ? `:${String(c.line)}` : ""}`;
+  c.file === null ? "General note" : `${c.file}${c.line !== null ? `:${String(c.line)}` : ""}`;
 
 /** Each failed comment with what kind of failure it was and the host's reason. */
-export const FailedCommentList = ({ comments }: { comments: Comment[] }): React.ReactElement => (
-  <ul aria-label="Failed comments" style={{ listStyle: "none", margin: "18px 0 0", padding: 0 }}>
-    {comments.map((c) => {
-      const look = KIND_LOOK[c.post?.failure_kind ?? "rejected"];
-      return (
-        <li
-          key={c.id}
-          style={{
-            padding: "8px 10px",
-            marginBottom: 6,
-            background: `color-mix(in oklch, ${look.color} 8%, var(--bg-1))`,
-            border: `1px solid color-mix(in oklch, ${look.color} 30%, transparent)`,
-            borderRadius: "var(--radius-3)",
-            fontSize: 12,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)" }}>
-              {location(c)}
-            </span>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: look.color }}>{look.label}</span>
-          </div>
-          <div style={{ color: "var(--fg-1)", marginTop: 2 }}>{c.post?.reason ?? "Failed"}</div>
-        </li>
-      );
-    })}
-  </ul>
-);
+export const FailedCommentList = ({ comments }: { comments: Comment[] }): React.ReactElement => {
+  const titleId = useId();
+  return (
+    <section style={SECTION}>
+      <SectionHeader
+        id={titleId}
+        title="Failed comments"
+        count={comments.length}
+        countLabel={`${String(comments.length)} failed`}
+      />
+      <Card padding="none">
+        <ul aria-labelledby={titleId} style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {comments.map((c, index) => {
+            const look = FAILURE_KIND_LOOK[c.post?.failure_kind ?? "rejected"];
+            return (
+              <li
+                key={c.id}
+                style={{ ...ROW, borderTop: index > 0 ? "1px solid var(--border)" : undefined }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
+                    fontWeight: "var(--fw-semibold)",
+                    color: `var(--c-${look.tone}-fg)`,
+                  }}
+                >
+                  <look.Icon size={ICON_SIZE.inline} aria-hidden="true" style={{ flexShrink: 0 }} />
+                  <span>{look.label}</span>
+                </div>
+                <p style={{ ...DETAIL, ...MONO_META }}>{location(c)}</p>
+                <p style={{ ...DETAIL, color: "var(--fg-1)" }}>{c.post?.reason ?? "Failed"}</p>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+    </section>
+  );
+};
 
 export type ResendConfirmProps = {
+  isOpen: boolean;
   count: number;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-/** Asked before comments that may already be on the MR are sent again. */
+/** Asked before comments that may already be on the MR are sent again. Cancel has the focus. */
 export const ResendConfirm = ({
+  isOpen,
   count,
   onConfirm,
   onCancel,
-}: ResendConfirmProps): React.ReactElement => (
-  <div
-    role="alertdialog"
-    aria-label="Post comments that may already be on the MR?"
-    style={{
-      marginTop: 18,
-      padding: "12px 14px",
-      background: "color-mix(in oklch, var(--c-minor) 10%, var(--bg-1))",
-      border: "1px solid color-mix(in oklch, var(--c-minor) 40%, transparent)",
-      borderRadius: "var(--radius-3)",
-      fontSize: 12.5,
-      color: "var(--fg-1)",
-    }}
-  >
-    <div>
-      {count === 1 ? "1 comment" : `${String(count)} comments`} may already be on the MR: the host
-      did not answer in time. Check the MR first — posting {count === 1 ? "it" : "them"} again can
-      duplicate {count === 1 ? "it" : "them"}.
-    </div>
-    <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
-      <button type="button" className="btn" onClick={onCancel}>
-        Cancel
-      </button>
-      <button type="button" className="btn primary" onClick={onConfirm}>
-        Post them again
-      </button>
-    </div>
-  </div>
-);
+}: ResendConfirmProps): React.ReactElement => {
+  const them = count === 1 ? "it" : "them";
+  return (
+    <Dialog
+      isOpen={isOpen}
+      onClose={onCancel}
+      size="sm"
+      title={`Send ${them} again?`}
+      description={`${count === 1 ? "1 comment" : `${String(count)} comments`} may already be on the MR: the host did not answer in time. Check the MR first — posting ${them} again can duplicate ${them}.`}
+      footer={
+        <>
+          <Button onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" onClick={onConfirm}>
+            Post {them} again
+          </Button>
+        </>
+      }
+    />
+  );
+};

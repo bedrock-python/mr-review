@@ -416,31 +416,31 @@
 
   /* One focus style for the whole app. Inline `outline: none` defeats it — don't. */
   :where(
-      a,
-      button,
-      summary,
-      [tabindex],
-      [role="button"],
-      [role="tab"],
-      [role="option"],
-      [role="radio"],
-      [role="checkbox"],
-      [role="switch"],
-      [role="menuitem"],
-      input[type="checkbox"],
-      input[type="radio"],
-      input[type="range"]
-    ):focus-visible {
+    a,
+    button,
+    summary,
+    [tabindex],
+    [role="button"],
+    [role="tab"],
+    [role="option"],
+    [role="radio"],
+    [role="checkbox"],
+    [role="switch"],
+    [role="menuitem"],
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="range"]
+  ):focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
   /* Text fields: a 2px ring laid over the border, plus a soft halo. An outline, not a border
      colour: inline borders and border utilities cannot hide it. */
   :where(
-      input:not([type="checkbox"], [type="radio"], [type="range"]),
-      textarea,
-      select
-    ):focus-visible {
+    input:not([type="checkbox"], [type="radio"], [type="range"]),
+    textarea,
+    select
+  ):focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -1px;
     box-shadow: 0 0 0 4px var(--focus-ring-soft);
@@ -758,25 +758,6 @@
     box-shadow:
       0 0 0 2px var(--bg-0),
       0 0 0 3.5px var(--focus-ring);
-  }
-
-  /* history rows: the delete button shows on hover and on keyboard focus */
-  .history-row:hover {
-    background: var(--bg-hover);
-  }
-  .history-row .history-row-delete {
-    opacity: 0;
-  }
-  .history-row:hover .history-row-delete,
-  .history-row:focus-within .history-row-delete {
-    opacity: 1;
-  }
-  .history-row .history-row-delete:hover {
-    color: var(--c-critical);
-    background: color-mix(in oklch, var(--c-critical) 15%, transparent);
-  }
-  .history-row-open:focus-visible {
-    outline-offset: -2px;
   }
 
   /* comment editor swaps per comment — a short fade makes the switch legible */

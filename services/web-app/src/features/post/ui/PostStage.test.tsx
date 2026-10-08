@@ -175,15 +175,61 @@ describe("PostStage", () => {
     expect(screen.getByText("2 comments")).toBeInTheDocument();
   });
 
-  it("marks the dry-run toggle as pressed with separate class names", async () => {
+  it("previews the comments file by file, and the JSON payload on request", async () => {
     renderStage(makeReview(unposted()));
 
-    const toggle = await screen.findByRole("button", { name: "Dry-run preview" });
-    await userEvent.click(toggle);
+    const preview = await screen.findByRole("region", { name: "Preview" });
+    const file = within(preview).getByRole("region", { name: "src/app.py" });
+    expect(file).toHaveTextContent(`body of ${A}`);
+    const notes = within(preview).getByRole("region", { name: "General notes" });
+    expect(notes).toHaveTextContent(`body of ${B}`);
 
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    expect(toggle).toHaveClass("btn", "ghost", "active");
-    expect(screen.getByText("dry-run · no changes will be made")).toBeInTheDocument();
+    await userEvent.click(within(preview).getByRole("button", { name: "View JSON" }));
+
+    expect(within(preview).getByText(/"target": "group\/repo !7"/)).toBeInTheDocument();
+    await userEvent.click(within(preview).getByRole("button", { name: "View dry run" }));
+    expect(within(preview).getByRole("region", { name: "src/app.py" })).toBeInTheDocument();
+  });
+
+  it("dry-runs each comment as it will be posted, with its label and a file note's path", async () => {
+    renderStage(
+      makeReview([
+        makeComment(A),
+        makeComment(B, { file: "docs/guide.md", line: null, severity: "minor" }),
+      ])
+    );
+
+    const preview = await screen.findByRole("region", { name: "Preview" });
+    // The Markdown renderer may still be loading: then the raw text stands in.
+    expect(within(preview).getByRole("region", { name: "src/app.py" })).toHaveTextContent(
+      /Major(\*\*)? · body of/
+    );
+    // A comment on a whole file goes out as a general note headed with the path, as the server
+    // posts it; the summary counts it as a general note too.
+    const notes = within(preview).getByRole("region", { name: "General notes" });
+    expect(notes).toHaveTextContent(/Minor(\*\*)? · `?docs\/guide\.md`?/);
+    expect(
+      within(preview).queryByRole("region", { name: "docs/guide.md" })
+    ).not.toBeInTheDocument();
+    const count = (term: string): string | null | undefined =>
+      screen.getByText(term, { selector: "dt" }).nextElementSibling?.textContent;
+    expect([count("Inline comments"), count("General notes")]).toEqual(["1", "1"]);
+
+    await userEvent.selectOptions(screen.getByRole("combobox"), "tag");
+    expect(within(preview).getByRole("region", { name: "src/app.py" })).toHaveTextContent(
+      `[major] body of ${A}`
+    );
+  });
+
+  it("offers the way back to Polish instead of posting nothing", async () => {
+    renderStage(makeReview([makeComment(A, { status: "dismissed" })]));
+
+    const callout = (await screen.findByText("Nothing to post")).closest("[role=note]");
+    expect(callout).not.toBeNull();
+    expect(
+      within(callout as HTMLElement).getByRole("button", { name: "Back to Polish" })
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Post 0 comments/ })).toBeDisabled();
   });
 
   it("posts with the chosen options, waits long enough, and shows what landed", async () => {
@@ -194,6 +240,9 @@ describe("PostStage", () => {
     await userEvent.click(screen.getByRole("button", { name: /Post 2 comments/ }));
 
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Posted to !7" })).toHaveFocus();
+    });
     expect(sentBody()).toEqual({
       iteration_id: ITERATION_ID,
       fallback_to_general_note: true,
@@ -214,10 +263,38 @@ describe("PostStage", () => {
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Post / })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Retry failed/ })).not.toBeInTheDocument();
+    const counts = screen.getByRole("list", { name: "Post counts" });
     const stat = (label: string): string | null =>
-      screen.getByText(label).previousElementSibling?.textContent ?? null;
+      within(counts).getByText(label).previousElementSibling?.textContent ?? null;
     expect([stat("Inline"), stat("General"), stat("Failed")]).toEqual(["1", "1", "0"]);
-    expect(screen.getByRole("button", { name: /Open MR in browser/ })).toBeEnabled();
+    expect(screen.getByRole("link", { name: /Open MR in browser/ })).toHaveAttribute(
+      "href",
+      "https://gitlab.example.com/group/repo/-/merge_requests/7"
+    );
+  });
+
+  it("counts every comment of an iteration posted before records were kept", async () => {
+    renderStage(makeReview(unposted(), POSTED_AT));
+
+    expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
+    const footer = screen.getByRole("region", { name: "Post actions" });
+    expect(footer).toHaveTextContent("All 2 comments on group/repo !7");
+    expect(footer).not.toHaveTextContent(/0 of 2/);
+  });
+
+  it("shows a held-back comment as blocked in the list as well as in the failures", async () => {
+    const blocked: CommentPost = {
+      ...failed,
+      reason: "Not sent: a pending review of yours is open",
+      failure_kind: "blocked",
+    };
+    renderStage(makeReview([makeComment(A, { post: inline }), makeComment(B, { post: blocked })]));
+
+    const failures = await screen.findByRole("list", { name: "Failed comments" });
+    expect(within(failures).getByText("Blocked")).toBeInTheDocument();
+    const preview = screen.getByRole("region", { name: "Preview" });
+    expect(within(preview).getByText("blocked")).toBeInTheDocument();
+    expect(within(preview).queryByText("failed")).not.toBeInTheDocument();
   });
 
   it("reports a partial post with the reason and retries only on request", async () => {
@@ -236,6 +313,9 @@ describe("PostStage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry failed (1)" }));
 
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Posted to !7" })).toHaveFocus();
+    });
     expect(http.history.post).toHaveLength(1);
     expect(sentBody()).toMatchObject({ resend_ambiguous: false });
   });
@@ -250,16 +330,19 @@ describe("PostStage", () => {
     expect(within(failures).getByText("May already be on the MR")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Retry failed (1)" }));
-    const confirm = screen.getByRole("alertdialog");
+    const confirm = screen.getByRole("dialog", { name: "Send it again?" });
     expect(within(confirm).getByText(/may already be on the MR/)).toBeInTheDocument();
+    expect(within(confirm).getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(http.history.post).toHaveLength(0);
 
     await userEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     expect(http.history.post).toHaveLength(0);
 
     await userEvent.click(screen.getByRole("button", { name: "Retry failed (1)" }));
-    await userEvent.click(screen.getByRole("button", { name: "Post them again" }));
+    await userEvent.click(screen.getByRole("button", { name: "Post it again" }));
 
     expect(await screen.findByText("Posted to !7")).toBeInTheDocument();
     expect(sentBody()).toMatchObject({ resend_ambiguous: true });
