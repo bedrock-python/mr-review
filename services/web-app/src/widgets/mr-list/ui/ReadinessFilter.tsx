@@ -14,7 +14,7 @@ export type ReadinessFilterProps = {
 
 /**
  * The filter menu of the list: drafts only, ready only, or everything. A small non-modal
- * popover under its button; Esc, a click outside or Tab away closes it.
+ * popover under its button; Esc, a press outside it or Tab away closes it.
  */
 export const ReadinessFilter = ({
   value,
@@ -49,10 +49,12 @@ export const ReadinessFilter = ({
     triggerRef.current?.focus();
   };
 
+  // Tab away closes it: focus moved to a known element outside. A blur with no new focus
+  // target is not a reason: pressing on a label's text blurs its radio before the click
+  // checks it, and in WebKit a click on a radio never focuses it at all.
   const handleBlur = (event: React.FocusEvent<HTMLDivElement>): void => {
-    if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) {
-      return;
-    }
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || rootRef.current?.contains(next)) return;
     setIsOpen(false);
   };
 

@@ -174,6 +174,33 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
     expect(listRequests().every((url) => url.searchParams.get("state") === "opened")).toBe(true);
   });
 
+  it("applies the filter when the text of an option is clicked", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
+    const menu = screen.getByRole("dialog", { name: "Filter merge requests" });
+    // Pressing on the label's text blurs the focused radio with nowhere to go: the menu must
+    // stay open for the click to land.
+    await userEvent.click(within(menu).getByText("Drafts only"));
+
+    expect(within(menu).getByRole("radio", { name: "Drafts only" })).toBeChecked();
+    const open = getMockMRs(MOCK_BUSY_REPO).filter((mr) => mr.status === "opened");
+    const drafts = open.filter((mr) => mr.draft);
+    await waitForStatus(`${String(drafts.length)} of ${String(open.length)} shown`);
+  });
+
+  it("closes the filter menu on a press outside it", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
+    expect(screen.getByRole("dialog", { name: "Filter merge requests" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("searchbox", { name: "Search merge requests" }));
+
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+  });
+
   it("closes the filter menu on Escape and goes back to its button", async () => {
     renderWithQueryClient(<MRList />);
     await waitForStatus("Showing 30 · more below");
