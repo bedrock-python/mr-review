@@ -97,9 +97,9 @@ export const CommentEditor = ({
       role="group"
       aria-label={mode === "create" ? "New comment" : "Edit comment"}
       onKeyDown={handleKeyDown}
-      className="flex flex-col gap-3"
+      className="flex flex-col gap-(--space-3)"
     >
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+      <div className="flex flex-wrap items-start gap-x-(--space-4) gap-y-(--space-2)">
         <div className="ui-field">
           <span id={severityLabelId} className="ui-eyebrow">
             Severity
@@ -125,7 +125,7 @@ export const CommentEditor = ({
         <div
           role="tablist"
           aria-label="Write or preview"
-          className="border-border flex gap-1 border-b px-1.5"
+          className="border-border flex gap-(--space-1) border-b px-(--space-2)"
         >
           {TABS.map(({ id, label }) => (
             <button
@@ -137,7 +137,7 @@ export const CommentEditor = ({
                 setTab(id);
               }}
               className={cn(
-                "h-(--control-sm) px-2 text-(length:--fs-control) transition-colors",
+                "h-(--control-sm) px-(--space-2) text-(length:--fs-control) transition-colors",
                 "focus-visible:-outline-offset-2",
                 tab === id
                   ? "text-fg-0 shadow-[inset_0_-2px_0_var(--accent-fg)]"
@@ -160,10 +160,14 @@ export const CommentEditor = ({
           aria-describedby={bodyError === null ? undefined : bodyErrorId}
           placeholder="Markdown supported"
           rows={4}
-          className="text-fg-0 block min-h-24 w-full resize-none bg-transparent px-2.5 py-2 text-(length:--fs-body) leading-(--lh-body)"
+          className="text-fg-0 block min-h-[96px] w-full resize-none bg-transparent px-(--space-3) py-(--space-2) text-(length:--fs-body) leading-(--lh-body)"
         />
         {tab === "preview" && (
-          <div role="tabpanel" aria-label="Preview" className="min-h-24 px-2.5 py-2">
+          <div
+            role="tabpanel"
+            aria-label="Preview"
+            className="min-h-[96px] px-(--space-3) py-(--space-2)"
+          >
             {state.body.trim().length > 0 ? (
               <Markdown>{state.body}</Markdown>
             ) : (
@@ -178,8 +182,8 @@ export const CommentEditor = ({
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-fg-2 mr-auto flex items-center gap-1 text-(length:--fs-meta)">
+      <div className="flex items-center justify-end gap-(--space-2)">
+        <span className="text-fg-2 mr-auto flex items-center gap-(--space-1) text-(length:--fs-meta)">
           <Kbd>⌘/Ctrl ↵</Kbd> save · <Kbd>Esc</Kbd> cancel
         </span>
         <Button

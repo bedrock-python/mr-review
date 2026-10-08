@@ -40,7 +40,7 @@ export const AnchorFields = ({
       <Field
         label="Anchor file"
         hint={isDiffLoading ? "Loading the files of the diff…" : undefined}
-        className="max-w-96 min-w-48 flex-1"
+        className="max-w-[360px] min-w-[200px] flex-1"
       >
         <Select
           size="sm"
@@ -58,7 +58,7 @@ export const AnchorFields = ({
         </Select>
       </Field>
       {file !== null && (
-        <Field label="Line" className="w-20">
+        <Field label="Line" className="w-[80px]">
           <Input
             size="sm"
             isMono
@@ -85,7 +85,7 @@ export const AnchorFields = ({
       {warning !== null && (
         <p
           role="note"
-          className="flex basis-full items-center gap-1.5 text-(length:--fs-meta) text-(--c-major-fg)"
+          className="flex basis-full items-center gap-(--space-2) text-(length:--fs-meta) text-(--c-major-fg)"
         >
           <TriangleAlert size={ICON_SIZE.inline} aria-hidden="true" />
           {warning}

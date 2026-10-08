@@ -116,7 +116,7 @@ export const FiltersPopover = ({
     <Popover
       aria-label="Filters"
       align="start"
-      className="w-72"
+      className="w-[280px]"
       trigger={
         <Button
           size="sm"
@@ -132,7 +132,7 @@ export const FiltersPopover = ({
       }
     >
       {status !== null && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-(--space-2)">
           <span id={statusLabelId} className="ui-eyebrow">
             Status
           </span>

@@ -84,7 +84,10 @@ export const BulkMenu = ({
           <MenuItem
             key={severity}
             icon={
-              <span className="size-1.5 rounded-full" style={{ background: SEV_COLOR[severity] }} />
+              <span
+                className="ui-severity-counts__dot"
+                style={{ background: SEV_COLOR[severity] }}
+              />
             }
             shortcut={SEVERITY_KEY[severity]}
             aria-label={`Set ${scope} comments to ${severity}`}

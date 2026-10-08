@@ -9,7 +9,7 @@ export const SEVERITY_OPTIONS: readonly SegmentedOption<CommentSeverity>[] = SEV
     label: SEVERITY_LABEL[severity],
     icon: (
       <span
-        className="size-1.5 shrink-0 rounded-full"
+        className="ui-severity-counts__dot"
         style={{ background: SEV_COLOR[severity] }}
         aria-hidden="true"
       />

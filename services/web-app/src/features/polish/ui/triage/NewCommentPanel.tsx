@@ -46,7 +46,7 @@ export const NewCommentPanel = ({
   };
 
   return (
-    <section className="border-border bg-bg-1 flex max-h-[55%] shrink-0 flex-col gap-2 overflow-auto border-b px-4 py-3">
+    <section className="border-border bg-bg-1 flex max-h-[55%] shrink-0 flex-col gap-(--space-2) overflow-auto border-b px-(--space-4) py-(--space-3)">
       <Eyebrow as="h2">New comment</Eyebrow>
       <CommentEditor
         saved={saved}

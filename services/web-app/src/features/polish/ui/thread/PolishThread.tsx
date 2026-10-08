@@ -30,17 +30,22 @@ const ThreadComment = ({
 }: ThreadCommentProps): React.ReactElement => {
   const isDismissed = comment.status === "dismissed";
   return (
-    <li className={cn("flex gap-3.5", hasNext && "pb-3", isDismissed && "opacity-45")}>
-      {/* The spine: a dot in the severity's colour, joined to the next comment of the file. */}
-      <div className="flex flex-col items-center pt-3.5" aria-hidden="true">
+    <li className={cn("flex gap-(--space-3)", isDismissed && "opacity-45")}>
+      {/* The spine: a dot in the severity's colour, a line down to the next comment's dot. */}
+      <div className="flex flex-col items-center pt-(--space-3)" aria-hidden="true">
         <span
-          className="size-2.5 shrink-0 rounded-full"
+          className="size-(--space-2) shrink-0 rounded-full"
           style={{ background: SEV_COLOR[comment.severity] }}
         />
-        {hasNext && <span className="bg-border mt-1.5 w-px flex-1" />}
+        {hasNext && (
+          <span className="bg-border-strong mt-(--space-2) -mb-(--space-2) w-px flex-1" />
+        )}
       </div>
-      <Card padding="sm" className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex min-h-(--control-sm) items-center gap-2">
+      <Card
+        padding="sm"
+        className={cn("flex min-w-0 flex-1 flex-col gap-(--space-2)", hasNext && "mb-(--space-3)")}
+      >
+        <div className="flex min-h-(--control-sm) items-center gap-(--space-2)">
           <SeverityBadge severity={comment.severity} />
           {comment.line !== null && (
             <span className="text-fg-2 font-mono text-(length:--fs-meta)">line {comment.line}</span>
@@ -77,8 +82,8 @@ const ThreadFile = ({ group, onToggleStatus }: ThreadFileProps): React.ReactElem
   const headingId = useId();
   const counts = useMemo(() => countBySeverity(group.comments), [group.comments]);
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <header className="flex min-w-0 items-center gap-2">
+    <section aria-labelledby={headingId} className="flex flex-col gap-(--space-2)">
+      <header className="flex min-w-0 items-center gap-(--space-2)">
         <h3
           id={headingId}
           className="text-fg-0 min-w-0 truncate font-mono text-(length:--fs-meta) font-medium"
@@ -127,8 +132,8 @@ export const PolishThread = ({
   }, [comments]);
 
   return (
-    <div className="h-full overflow-auto px-6 py-5">
-      <div className="mx-auto flex max-w-180 flex-col gap-6">
+    <div className="h-full overflow-auto px-(--space-6) py-(--space-5)">
+      <div className="mx-auto flex max-w-[720px] flex-col gap-(--space-6)">
         {groups.map((group) => (
           <ThreadFile key={group.key} group={group} onToggleStatus={onToggleStatus} />
         ))}

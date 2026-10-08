@@ -35,9 +35,9 @@ const InlineCommentList = ({ comments, onOpen }: InlineCommentListProps): React.
     return <EmptyState size="sm" title="No inline comments" />;
   }
   return (
-    <section className="flex flex-col gap-2 p-4">
+    <section className="flex flex-col gap-(--space-2) p-(--space-4)">
       <SectionHeader title="Inline comments" count={comments.length} />
-      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+      <ul className="m-0 flex list-none flex-col gap-(--space-2) p-0">
         {comments.map((c) => (
           <li key={c.id}>
             <button
@@ -46,17 +46,17 @@ const InlineCommentList = ({ comments, onOpen }: InlineCommentListProps): React.
                 onOpen(c.id);
               }}
               className={cn(
-                "flex w-full items-start gap-2 px-2.5 py-2 text-left",
+                "flex w-full items-start gap-(--space-2) px-(--space-3) py-(--space-2) text-left",
                 "border-border bg-bg-1 rounded-(--radius-control) border",
                 "hover:border-border-strong hover:bg-bg-hover transition-colors"
               )}
             >
               <span
-                className="mt-1 size-2 shrink-0 rounded-full"
+                className="ui-severity-counts__dot mt-(--space-1)"
                 style={{ background: SEV_COLOR[c.severity] }}
                 aria-hidden="true"
               />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-0 flex-1 flex-col gap-(--space-1)">
                 <span className="text-fg-2 font-mono text-(length:--fs-meta)">{lineLabel(c)}</span>
                 <span className="text-fg-1 truncate text-(length:--fs-control)">{c.body}</span>
               </span>
@@ -74,7 +74,7 @@ type GeneralNotesProps = {
 };
 
 const GeneralNotes = ({ comments, onToggleStatus }: GeneralNotesProps): React.ReactElement => (
-  <section className="border-border mt-auto flex flex-col gap-2 border-t p-4">
+  <section className="border-border mt-auto flex flex-col gap-(--space-2) border-t p-(--space-4)">
     <SectionHeader title="General notes" count={comments.length} />
     {comments.map((c) => {
       const isDismissed = c.status === "dismissed";
@@ -82,9 +82,9 @@ const GeneralNotes = ({ comments, onToggleStatus }: GeneralNotesProps): React.Re
         <Card
           key={c.id}
           padding="sm"
-          className={cn("flex flex-col gap-2", isDismissed && "opacity-45")}
+          className={cn("flex flex-col gap-(--space-2)", isDismissed && "opacity-45")}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-(--space-2)">
             <SeverityBadge severity={c.severity} />
             <IconButton
               size="sm"
@@ -152,7 +152,7 @@ export const PolishPinned = ({
     >
       <div className="border-border flex min-w-0 flex-col overflow-hidden border-r">
         {active?.file && (
-          <div className="border-border bg-bg-2 text-fg-2 shrink-0 truncate border-b px-3 py-1.5 font-mono text-(length:--fs-meta)">
+          <div className="border-border bg-bg-2 text-fg-2 shrink-0 truncate border-b px-(--space-3) py-(--space-2) font-mono text-(length:--fs-meta)">
             {active.file}
             {active.line !== null && `:${String(active.line)}`}
           </div>

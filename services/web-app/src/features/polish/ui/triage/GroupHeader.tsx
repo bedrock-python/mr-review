@@ -30,7 +30,7 @@ const GroupHeaderBase = ({
         onToggle(group.key);
       }}
       className={cn(
-        "flex min-h-(--control-md) w-full items-center gap-2 px-1.5 text-left",
+        "flex min-h-(--control-md) w-full items-center gap-(--space-2) px-(--space-2) text-left",
         "hover:bg-bg-hover rounded-(--radius-control) transition-colors",
         "focus-visible:-outline-offset-2"
       )}

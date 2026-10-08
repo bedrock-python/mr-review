@@ -65,7 +65,7 @@ const CommentCardBase = ({
         if (!isFocused) handlers.onFocus(id);
       }}
       className={cn(
-        "group flex flex-col gap-2 transition-colors",
+        "group flex flex-col gap-(--space-2) transition-colors",
         // A keyboard focus ring lies over the border instead of floating outside it.
         "focus-visible:-outline-offset-1",
         isFocused
@@ -73,7 +73,7 @@ const CommentCardBase = ({
           : "hover:border-border-strong"
       )}
     >
-      <header className="flex min-h-(--control-sm) flex-wrap items-center gap-2">
+      <header className="flex min-h-(--control-sm) flex-wrap items-center gap-(--space-2)">
         <SeverityBadge severity={comment.severity} />
         {comment.file === null ? (
           <Badge variant="outline">general</Badge>
@@ -95,7 +95,7 @@ const CommentCardBase = ({
         {isDismissed && <Badge>dismissed</Badge>}
         <div
           className={cn(
-            "ml-auto flex gap-0.5 transition-opacity duration-(--dur-fast)",
+            "ml-auto flex gap-(--space-1) transition-opacity duration-(--dur-fast)",
             // The focused card always shows its actions; the others on hover or keyboard focus.
             isFocused
               ? "opacity-100"
@@ -157,11 +157,11 @@ const CommentCardBase = ({
       )}
 
       {comment.file !== null && comment.line !== null && (
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-(--space-2)">
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-2"
+            className="-ml-(--space-2)"
             aria-expanded={isContextOpen}
             icon={
               <ChevronRight

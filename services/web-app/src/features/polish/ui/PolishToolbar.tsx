@@ -60,7 +60,7 @@ export const PolishToolbar = ({
         {plural(comments.length, "comment")} · {keptCount} kept
       </span>
       {isSaving && (
-        <span className="text-fg-2 flex items-center gap-1.5 text-(length:--fs-meta)">
+        <span className="text-fg-2 flex items-center gap-(--space-2) text-(length:--fs-meta)">
           <Spinner size="sm" tone="muted" isDecorative />
           Saving…
         </span>

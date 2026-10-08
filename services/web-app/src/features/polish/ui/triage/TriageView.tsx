@@ -195,7 +195,7 @@ export const TriageView = ({
         />
 
         {isLocked && (
-          <div className="border-border shrink-0 border-b px-4 py-2">
+          <div className="border-border shrink-0 border-b px-(--space-4) py-(--space-2)">
             <Callout tone="info" size="sm">
               This iteration was already posted: comments can still be edited, but not added or
               deleted.

@@ -15,7 +15,11 @@ export const SeverityChips = ({
   counts,
   onChange,
 }: SeverityChipsProps): React.ReactElement => (
-  <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Filter by severity">
+  <div
+    className="flex shrink-0 items-center gap-(--space-1)"
+    role="group"
+    aria-label="Filter by severity"
+  >
     {SEVERITY_ORDER.map((severity) => (
       <Chip
         key={severity}

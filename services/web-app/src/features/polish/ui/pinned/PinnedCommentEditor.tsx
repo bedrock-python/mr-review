@@ -49,8 +49,8 @@ export const PinnedCommentEditor = ({
   };
 
   return (
-    <div className="comment-editor flex min-h-0 flex-1 flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
+    <div className="comment-editor flex min-h-0 flex-1 flex-col gap-(--space-3) p-(--space-4)">
+      <div className="flex items-center gap-(--space-2)">
         <span
           className="text-fg-1 min-w-0 truncate font-mono text-(length:--fs-meta)"
           title={comment.file ?? undefined}
@@ -61,7 +61,7 @@ export const PinnedCommentEditor = ({
           {position + 1}/{total}
         </span>
         {isDismissed && <Badge>dismissed</Badge>}
-        <span className="ml-auto flex gap-0.5">
+        <span className="ml-auto flex gap-(--space-1)">
           <IconButton
             size="sm"
             label="Previous comment"
@@ -100,10 +100,10 @@ export const PinnedCommentEditor = ({
         onChange={(event) => {
           setBody(event.target.value);
         }}
-        className="min-h-45 flex-1 text-(length:--fs-body)"
+        className="min-h-[180px] flex-1 text-(length:--fs-body)"
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-(--space-2)">
         <Button
           variant="ghost"
           size="sm"

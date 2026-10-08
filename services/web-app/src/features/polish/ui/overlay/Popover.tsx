@@ -35,7 +35,7 @@ export const Popover = ({
         collisionPadding={COLLISION_PADDING_PX}
         aria-label={ariaLabel}
         className={cn(
-          "z-(--z-popover) flex flex-col gap-3 p-3",
+          "z-(--z-popover) flex flex-col gap-(--space-3) p-(--space-3)",
           "border-border-strong bg-bg-1 rounded-(--radius-card) border",
           "shadow-(--shadow-pop)",
           "data-[state=open]:animate-[ui-fade-in_var(--dur-base)_var(--ease-out)]",
