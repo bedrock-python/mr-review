@@ -1,0 +1,182 @@
+/* Dialog, Drawer. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Dialog / Drawer ───────────────────────────────────────── */
+  .ui-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dialog);
+    background: var(--overlay);
+  }
+  .ui-overlay[data-state="open"] {
+    animation: ui-fade-in var(--dur-base) ease-out;
+  }
+  .ui-overlay--drawer {
+    z-index: var(--z-drawer);
+  }
+  .ui-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: var(--z-dialog);
+    display: flex;
+    flex-direction: column;
+    max-width: calc(100vw - 32px);
+    max-height: 85vh;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-dialog);
+    transform: translate(-50%, -50%);
+    outline: none;
+  }
+  .ui-dialog[data-state="open"] {
+    animation: ui-dialog-in var(--dur-base) var(--ease-out);
+  }
+  .ui-dialog__header,
+  .ui-drawer__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 14px 16px 12px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ui-dialog__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    padding-top: 4px;
+  }
+  .ui-dialog__title,
+  .ui-drawer__title {
+    margin: 0;
+    font-size: var(--fs-title);
+    font-weight: var(--fw-semibold);
+    line-height: var(--lh-tight);
+    color: var(--fg-0);
+  }
+  .ui-dialog__description {
+    margin: 0;
+    font-size: var(--fs-control);
+    line-height: var(--lh-body);
+    color: var(--fg-2);
+  }
+  .ui-dialog__body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--space-4) var(--space-5);
+  }
+  .ui-dialog__footer,
+  .ui-drawer__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .ui-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: calc(var(--z-drawer) + 1);
+    display: flex;
+    flex-direction: column;
+    max-width: 100vw;
+    background: var(--bg-1);
+    box-shadow: var(--shadow-drawer);
+    outline: none;
+  }
+  .ui-drawer--right {
+    right: 0;
+    border-left: 1px solid var(--border);
+  }
+  .ui-drawer--left {
+    left: 0;
+    border-right: 1px solid var(--border);
+  }
+  .ui-drawer__header {
+    align-items: center;
+    height: 48px;
+    padding: 0 10px 0 16px;
+  }
+  .ui-drawer__title {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--fs-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-drawer__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .ui-drawer--right[data-state="open"] {
+    animation: ui-drawer-in-right 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ui-drawer--right[data-state="closed"] {
+    animation: ui-drawer-out-right 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ui-drawer--left[data-state="open"] {
+    animation: ui-drawer-in-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ui-drawer--left[data-state="closed"] {
+    animation: ui-drawer-out-left 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ui-overlay[data-state="closed"] {
+    animation: ui-fade-out 0.18s ease-in;
+  }
+}
+
+@keyframes ui-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+@keyframes ui-drawer-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes ui-drawer-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes ui-drawer-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes ui-drawer-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}

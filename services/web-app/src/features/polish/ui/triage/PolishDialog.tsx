@@ -1,4 +1,4 @@
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog } from "@shared/ui";
 
 type PolishDialogProps = {
   isOpen: boolean;
@@ -13,39 +13,8 @@ type PolishDialogProps = {
 
 const DEFAULT_WIDTH_PX = 440;
 
-/** Modal shell shared by the Polish dialogs, styled like the app's other modals. */
+/** The shared Dialog at the width the Polish dialogs were laid out for. */
 export const PolishDialog = ({
-  isOpen,
-  onClose,
-  title,
-  description,
   width = DEFAULT_WIDTH_PX,
-  shouldRestoreFocus = true,
-  children,
-}: PolishDialogProps): React.ReactElement => (
-  <Dialog.Root
-    open={isOpen}
-    onOpenChange={(open) => {
-      if (!open) onClose();
-    }}
-  >
-    <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-[200] bg-black/55" />
-      <Dialog.Content
-        className="border-border bg-bg-1 fixed top-1/2 left-1/2 z-[201] flex max-h-[80vh] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--radius-3)] border"
-        style={{ width }}
-        onCloseAutoFocus={(event) => {
-          if (!shouldRestoreFocus) event.preventDefault();
-        }}
-      >
-        <div className="border-border border-b px-5 pt-4 pb-3">
-          <Dialog.Title className="text-fg-0 m-0 text-[15px] font-semibold">{title}</Dialog.Title>
-          <Dialog.Description className="text-fg-2 m-0 mt-1 text-[12px]">
-            {description}
-          </Dialog.Description>
-        </div>
-        <div className="overflow-auto px-5 py-4">{children}</div>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>
-);
+  ...rest
+}: PolishDialogProps): React.ReactElement => <Dialog width={width} {...rest} />;

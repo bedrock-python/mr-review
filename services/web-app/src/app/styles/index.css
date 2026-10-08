@@ -740,20 +740,6 @@
       0 0 0 3.5px var(--focus-ring);
   }
 
-  /* side sheets (review history, iterations) slide in from the right */
-  .side-sheet[data-state="open"] {
-    animation: side-sheet-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .side-sheet[data-state="closed"] {
-    animation: side-sheet-out 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .side-sheet-overlay[data-state="open"] {
-    animation: side-sheet-fade-in 0.2s ease-out;
-  }
-  .side-sheet-overlay[data-state="closed"] {
-    animation: side-sheet-fade-out 0.18s ease-in;
-  }
-
   /* history rows: the delete button shows on hover and on keyboard focus */
   .history-row:hover {
     background: var(--bg-hover);
@@ -817,41 +803,10 @@
 
   [data-theme="phosphor"] .chip,
   [data-theme="phosphor"] .btn,
-  [data-theme="phosphor"] .sev {
+  [data-theme="phosphor"] .sev,
+  [data-theme="phosphor"] .ui-btn,
+  [data-theme="phosphor"] .ui-chip {
     text-transform: uppercase;
     letter-spacing: 0.05em;
-  }
-}
-
-@keyframes side-sheet-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-@keyframes side-sheet-out {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-@keyframes side-sheet-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes side-sheet-fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }
