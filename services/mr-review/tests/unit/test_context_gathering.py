@@ -35,7 +35,8 @@ def _deleted(path: str) -> DiffFile:
     return DiffFile(path=path, additions=0, deletions=1, hunks=[hunk])
 
 
-def _binary(path: str) -> DiffFile:
+def _no_lines(path: str) -> DiffFile:
+    """A change the host sent no lines for: a binary file, or a diff collapsed for its size."""
     return DiffFile(path=path, additions=0, deletions=0, hunks=[])
 
 
@@ -111,14 +112,23 @@ async def test__gathering__concurrency_capped_by_the_semaphore() -> None:
 # ── full files ────────────────────────────────────────────────────────────────
 
 
-async def test__full_files__deleted_and_binary_changes_not_fetched() -> None:
-    diff = [_deleted("old.py"), _binary("logo.png"), _changed("src/a.py"), _changed("src/b.py")]
+async def test__full_files__deleted_files_not_fetched() -> None:
+    diff = [_deleted("old.py"), _changed("src/a.py"), _changed("src/b.py")]
     provider = _provider(files={"src/a.py": "a", "src/b.py": "b"})
 
     result = await collect_full_files(provider, "org/repo", diff, "HEAD")
 
     assert result == {"src/a.py": "a", "src/b.py": "b"}
     assert _requested_files(provider) == ["src/a.py", "src/b.py"]
+
+
+async def test__full_files__file_whose_diff_came_back_empty_still_fetched() -> None:
+    """GitLab sends ``diff: ""`` for a file too large to show; it still exists at the head."""
+    provider = _provider(files={"db/schema.sql": "CREATE TABLE t (id int);"})
+
+    result = await collect_full_files(provider, "org/repo", [_no_lines("db/schema.sql")], "HEAD")
+
+    assert result == {"db/schema.sql": "CREATE TABLE t (id int);"}
 
 
 async def test__full_files__cap_counts_only_files_with_content() -> None:

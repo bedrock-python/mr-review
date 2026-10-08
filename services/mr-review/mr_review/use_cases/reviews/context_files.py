@@ -155,10 +155,14 @@ async def collect_context_files(
     return await _fetch_contents(provider, repo_path, unique, ref, semaphore)
 
 
-def has_new_content(diff_file: DiffFile) -> bool:
-    """Whether the change leaves the file with lines to read: not deleted, not a binary or
-    rename-only change (those have no hunk adding lines)."""
-    return any(hunk.new_count > 0 for hunk in diff_file.hunks)
+def is_deleted(diff_file: DiffFile) -> bool:
+    """Whether the change removes the file: its diff has lines and every one of them is removed.
+
+    A file whose diff came back empty — a host collapses large or generated files, binary and
+    rename-only changes have no lines — still exists and is worth reading in full.
+    """
+    lines = [line for hunk in diff_file.hunks for line in hunk.lines]
+    return bool(lines) and all(line.type == "removed" for line in lines)
 
 
 async def collect_full_files(
@@ -168,8 +172,11 @@ async def collect_full_files(
     ref: str = "HEAD",
     semaphore: asyncio.Semaphore | None = None,
 ) -> dict[str, str]:
-    """Full contents of the first ``_MAX_FULL_FILES`` changed files that still have content."""
-    targets = [df.path for df in diff_files if has_new_content(df)][:_MAX_FULL_FILES]
+    """Full contents of the first ``_MAX_FULL_FILES`` changed files that were not deleted.
+
+    Binary content is dropped later, when the prompt is built.
+    """
+    targets = [df.path for df in diff_files if not is_deleted(df)][:_MAX_FULL_FILES]
     return await _fetch_contents(provider, repo_path, targets, ref, semaphore or asyncio.Semaphore(CONCURRENCY))
 
 
@@ -339,7 +346,7 @@ async def collect_related_code(
     sources = [
         df.path
         for df in diff_files
-        if has_new_content(df) and os.path.splitext(df.path)[1].lower() in _PYTHON_EXTENSIONS | _JS_EXTENSIONS
+        if not is_deleted(df) and os.path.splitext(df.path)[1].lower() in _PYTHON_EXTENSIONS | _JS_EXTENSIONS
     ][:_MAX_RELATED_SOURCES]
 
     async def _fetch_source(path: str) -> tuple[str, str | None]:
