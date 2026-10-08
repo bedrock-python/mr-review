@@ -24,7 +24,7 @@ export const reviewKeys = {
  * the review still in flight was answered before this change: it is cancelled first, or it
  * would land after this and put the old copy back.
  */
-const storeReview = async (qc: QueryClient, review: Review): Promise<void> => {
+export const storeReview = async (qc: QueryClient, review: Review): Promise<void> => {
   await qc.cancelQueries({ queryKey: reviewKeys.detail(review.id) });
   qc.setQueryData(reviewKeys.detail(review.id), review);
   void qc.invalidateQueries({ queryKey: reviewKeys.lists() });

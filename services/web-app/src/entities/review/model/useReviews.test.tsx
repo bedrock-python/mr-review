@@ -4,6 +4,7 @@ import { ApiError } from "@shared/api";
 import { createQueryClientWrapper, createTestQueryClient } from "@shared/lib/test-utils";
 import { reviewApi } from "../api/reviewApi";
 import { DEFAULT_BRIEF_CONFIG } from "./review.schema";
+import { usePostReview } from "./usePostReview";
 import {
   useCreateIteration,
   useCreateReview,
@@ -158,5 +159,69 @@ describe("a review fetch in flight while the review changes", () => {
     });
 
     expect(result.current.review.data?.iterations).toHaveLength(1);
+  });
+});
+
+describe("posting", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the posted review over a read that started before the post", async () => {
+    const posted = {
+      ...REVIEW,
+      iterations: [
+        { ...ITERATION, stage: "post" as const, completed_at: "2026-05-16T11:00:00+00:00" },
+      ],
+    };
+    let answerSlowFetch: (review: Review) => void = () => undefined;
+    vi.spyOn(reviewApi, "get")
+      .mockResolvedValueOnce({ ...REVIEW, iterations: [ITERATION] })
+      .mockImplementationOnce(
+        () =>
+          new Promise<Review>((resolve) => {
+            answerSlowFetch = resolve;
+          })
+      );
+    vi.spyOn(reviewApi, "list").mockResolvedValueOnce([REVIEW]).mockResolvedValue([posted]);
+    vi.spyOn(reviewApi, "post").mockResolvedValue({
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      held_back: 0,
+      completed: true,
+      results: [],
+      review: posted,
+    });
+    const wrapper = createQueryClientWrapper(createTestQueryClient());
+    const { result } = renderHook(
+      () => ({
+        review: useReview(REVIEW.id),
+        list: useReviews(),
+        post: usePostReview(REVIEW.id),
+      }),
+      { wrapper }
+    );
+    await waitFor(() => {
+      expect(result.current.review.data?.iterations[0]?.completed_at).toBeNull();
+    });
+
+    void result.current.review.refetch();
+    await act(() =>
+      result.current.post.mutateAsync({
+        iterationId: ITERATION.id,
+        fallbackToGeneralNote: true,
+        severityLabel: "bold",
+      })
+    );
+    await act(async () => {
+      answerSlowFetch({ ...REVIEW, iterations: [ITERATION] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.review.data?.iterations[0]?.completed_at).not.toBeNull();
+    await waitFor(() => {
+      expect(result.current.list.data?.[0]?.iterations[0]?.stage).toBe("post");
+    });
   });
 });
