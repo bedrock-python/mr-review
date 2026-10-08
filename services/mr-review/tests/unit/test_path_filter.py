@@ -14,6 +14,124 @@ def _file(path: str) -> DiffFile:
     return DiffFile(path=path, additions=1, deletions=0, hunks=[])
 
 
+# What real git answers for each .gitignore (git 2.54, core.ignorecase=false, files created in a
+# scratch repository, ignored ones listed by `git ls-files --others --ignored --exclude-standard`).
+# The two places this filter departs from git on purpose are tested separately below.
+GIT_IGNORES: list[tuple[list[str], str, bool]] = [
+    (["docs"], "docs/a.md", True),
+    (["docs"], "x/docs/b.md", True),
+    (["docs"], "docsx/c.md", False),
+    (["docs"], "src/docs.py", False),
+    (["/docs"], "docs/a.md", True),
+    (["/docs"], "x/docs/b.md", False),
+    (["docs/"], "docs/a.md", True),
+    (["docs/"], "x/docs/b.md", True),
+    (["docs/"], "src/docs", False),
+    (["docs/**"], "docs/a.md", True),
+    (["docs/**"], "docs/x/y.md", True),
+    (["docs/**"], "x/docs/a.md", False),
+    (["migrations"], "app/migrations/0001_initial.py", True),
+    (["migrations"], "migrations.py", False),
+    (["src/generated/"], "src/generated/a.py", True),
+    (["src/generated/"], "tools/src/generated/b.py", False),
+    (["src/generated"], "src/generated/a.py", True),
+    (["src/generated"], "tools/src/generated/b.py", False),
+    (["src/generated"], "src/generated.py", False),
+    (["*.PNG"], "docs/shot.png", False),
+    (["*.PNG"], "img/shot.PNG", True),
+    (["**/test_*.py"], "test_a.py", True),
+    (["**/test_*.py"], "a/b/test_c.py", True),
+    (["**/test_*.py"], "a/test_c.txt", False),
+    (["a/**/b"], "a/b", True),
+    (["a/**/b"], "a/x/b", True),
+    (["a/**/b"], "a/x/y/b", True),
+    (["a/**/b"], "c/a/b", False),
+    (["*.lock"], "uv.lock", True),
+    (["*.lock"], "web/yarn.lock", True),
+    (["*.lock"], "lock", False),
+    (["*.py"], "src/A.PY", False),
+    (["*.py"], "lib/b.py", True),
+    (["a[!b]c"], "a/c", False),
+    (["a[!b]c"], "axc", True),
+    (["a[!b]c"], "abc", False),
+    (["a?c"], "a/c", False),
+    (["a?c"], "abc", True),
+    (["*.lock", "!uv.lock"], "uv.lock", False),
+    (["*.lock", "!uv.lock"], "a/poetry.lock", True),
+    (["!*.lock", "uv.lock"], "uv.lock", True),
+    (["!*.lock", "uv.lock"], "a/poetry.lock", False),
+    (["build/", "!build/"], "build/out.js", False),
+    (["\\#notes.md"], "#notes.md", True),
+    (["#comment"], "#comment", False),
+    (["app/\\[slug\\]/page.tsx"], "app/[slug]/page.tsx", True),
+    (["app/\\[slug\\]/page.tsx"], "app/s/page.tsx", False),
+    (["trailing.txt   "], "trailing.txt", True),
+    (["*.min.js"], "static/app.min.js", True),
+    (["*.min.js"], "static/app.js", False),
+    (["foo/*"], "foo/a.txt", True),
+    (["foo/*"], "foo/b/c.txt", True),
+    (["foo/*"], "x/foo/a.txt", False),
+    (["**/foo"], "foo/a.txt", True),
+    (["**/foo"], "x/foo", True),
+    (["**/foo"], "x/y/foo/z.txt", True),
+]
+
+
+@pytest.mark.parametrize(("patterns", "path", "ignored"), GIT_IGNORES)
+def test__exclude_patterns__match_what_git_ignores(patterns: list[str], path: str, ignored: bool) -> None:
+    assert (PathFilter(exclude=patterns).exclusion_reason(path) is not None) is ignored
+
+
+@pytest.mark.parametrize(
+    ("include", "path"),
+    [(["src"], "src/a.py"), (["services/api"], "services/api/main.py"), (["src/"], "src/x/y.py")],
+)
+def test__include_directory_pattern__keeps_everything_below_it(include: list[str], path: str) -> None:
+    assert PathFilter(include=include).exclusion_reason(path) is None
+
+
+def test__include_patterns__negation_carves_out_part_of_an_included_directory() -> None:
+    path_filter = PathFilter(include=["src/", "!src/legacy/"])
+
+    assert path_filter.exclusion_reason("src/app.py") is None
+    assert path_filter.exclusion_reason("src/legacy/old.py") == NOT_INCLUDED
+
+
+def test__leading_dot_slash__means_the_repository_root() -> None:
+    """Unlike git, which matches nothing for ``./legacy/``."""
+    path_filter = PathFilter(exclude=["./legacy/"])
+
+    assert path_filter.exclusion_reason("legacy/a.py") == "./legacy/"
+    assert path_filter.exclusion_reason("x/legacy/a.py") is None
+
+
+def test__negation__takes_a_file_back_in_from_an_excluded_directory() -> None:
+    """Unlike git, which cannot re-include a file whose directory is excluded."""
+    path_filter = PathFilter(exclude=["vendor/", "!/vendor/keep.go"])
+
+    assert path_filter.exclusion_reason("vendor/keep.go") is None
+    assert path_filter.exclusion_reason("vendor/other.go") == "vendor/"
+
+
+def test__escaped_path__review_anyway_for_a_name_with_glob_characters() -> None:
+    path_filter = PathFilter(exclude=["*.tsx", "!/app/\\[slug\\]/page.tsx"])
+
+    assert path_filter.exclusion_reason("app/[slug]/page.tsx") is None
+    assert path_filter.exclusion_reason("app/s/page.tsx") == "*.tsx"
+
+
+@pytest.mark.parametrize("path", ["docs/Screenshot.PNG", "IMG_1.JPG", "Fonts/X.WOFF2", "web/App.MIN.JS"])
+def test__default_excludes__ignore_case(path: str) -> None:
+    assert PathFilter.from_brief(BriefConfig()).exclusion_reason(path) is not None
+
+
+def test__user_patterns__case_sensitive_like_git() -> None:
+    path_filter = PathFilter.from_brief(BriefConfig(exclude_paths=["*.snap"], use_default_excludes=False))
+
+    assert path_filter.exclusion_reason("a/b.SNAP") is None
+    assert path_filter.exclusion_reason("a/b.snap") == "*.snap"
+
+
 @pytest.mark.parametrize(
     ("pattern", "path", "excluded"),
     [
