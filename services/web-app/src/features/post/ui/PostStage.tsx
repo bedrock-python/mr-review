@@ -6,6 +6,7 @@ import { useReview, usePostReview } from "@entities/review";
 import type { Iteration, Review } from "@entities/review";
 import { useMR } from "@entities/mr";
 import { useHosts } from "@entities/host";
+import { StageLoading } from "@shared/ui";
 import { describePostResult, summarizePost } from "../lib/postSummary";
 import { useSeverityLabel } from "../model/useSeverityLabel";
 import { PostConfirmPanel } from "./PostConfirmPanel";
@@ -139,21 +140,7 @@ export const PostStage = (): React.ReactElement => {
   }
 
   if (isLoading || review === undefined) {
-    return (
-      <div style={CENTERED}>
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin"
-        />
-        <span>Loading review…</span>
-      </div>
-    );
+    return <StageLoading label="Loading review…" />;
   }
 
   const iteration = review.iterations.find((it) => it.id === activeIterationId) ?? null;

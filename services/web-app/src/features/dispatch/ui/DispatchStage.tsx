@@ -17,7 +17,7 @@ import {
   getReviewBriefConfig,
 } from "@entities/review";
 import type { DispatchResult, ImportResponseResult, Review } from "@entities/review";
-import { Skeleton } from "@shared/ui";
+import { Skeleton, StageLoading } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
 import { createDispatchSession } from "../model/dispatchSession";
@@ -1313,30 +1313,7 @@ export const DispatchStage = (): React.ReactElement => {
   }
 
   if (!review) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          gap: 10,
-          color: "var(--fg-2)",
-        }}
-      >
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin"
-        />
-        <span style={{ fontSize: 13 }}>Loading review…</span>
-      </div>
-    );
+    return <StageLoading label="Loading review…" />;
   }
 
   return (

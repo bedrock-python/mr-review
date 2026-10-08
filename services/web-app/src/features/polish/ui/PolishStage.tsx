@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview } from "@entities/review";
+import { StageLoading } from "@shared/ui";
 import { isIterationLocked } from "../lib";
 import { usePolishActions, usePolishViewStore } from "../model";
 import { PolishToolbar } from "./PolishToolbar";
@@ -143,21 +144,7 @@ export const PolishStage = (): React.ReactElement => {
   }
 
   if (isLoading || review === undefined) {
-    return (
-      <div style={{ ...centeredStyle, flexDirection: "row" }}>
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin"
-        />
-        <span>Loading review…</span>
-      </div>
-    );
+    return <StageLoading label="Loading review…" />;
   }
 
   const activeIteration =

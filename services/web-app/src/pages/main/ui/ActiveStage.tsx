@@ -3,7 +3,7 @@ import type { LazyExoticComponent } from "react";
 import { useNav } from "@app/navigation";
 import { STAGE_PANEL_ID, stageTabId, useStageBarStore } from "@widgets/stage-bar";
 import { isChunkLoadError, reloadOnStaleChunk } from "@shared/lib";
-import { Spinner } from "@shared/ui";
+import { StageLoading } from "@shared/ui";
 import { ErrorBoundary } from "@shared/ui/error-boundary";
 import type { ErrorFallbackProps } from "@shared/ui/error-boundary";
 import type { ReviewStage } from "@entities/review";
@@ -30,12 +30,6 @@ const STAGE_COMPONENTS: Record<ReviewStage, StageComponent> = {
     reloadOnStaleChunk(() => import("@features/post").then((m) => ({ default: m.PostStage })))
   ),
 };
-
-const StageLoading = (): React.ReactElement => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-    <Spinner />
-  </div>
-);
 
 const reloadPage = (): void => {
   window.location.reload();

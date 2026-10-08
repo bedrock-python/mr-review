@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNav } from "@app/navigation";
 import { useStageNavigation } from "@widgets/stage-bar";
 import { useMR, useDiff, getDiffStats, sumDiffStats } from "@entities/mr";
-import { Markdown } from "@shared/ui";
+import { Markdown, StageLoading } from "@shared/ui";
 import { DiffViewer } from "./DiffViewer";
 import { FileList } from "./FileList";
 import type { MR, MRDiffStats, PipelineStatus } from "@entities/mr";
@@ -241,30 +241,7 @@ const PickWorkspace = (): React.ReactElement => {
   };
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          gap: 10,
-          color: "var(--fg-2)",
-        }}
-      >
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin"
-        />
-        <span style={{ fontSize: 13 }}>Loading merge request…</span>
-      </div>
-    );
+    return <StageLoading label="Loading merge request…" />;
   }
 
   if (isError) {
