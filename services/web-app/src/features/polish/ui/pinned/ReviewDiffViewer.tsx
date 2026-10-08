@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useReviewDiff } from "@entities/review";
-import { DiffViewer } from "@shared/ui";
+import { DiffViewer, StageLoading } from "@shared/ui";
 import { SEV_COLOR } from "../../lib";
 import type { Comment } from "@entities/review";
 import type { DiffLineWithFile } from "@shared/ui";
@@ -57,30 +57,7 @@ export const ReviewDiffViewer = ({
   );
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          gap: 8,
-          color: "var(--fg-2)",
-        }}
-      >
-        <div
-          style={{
-            width: 14,
-            height: 14,
-            border: "2px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-          }}
-          className="animate-spin motion-reduce:animate-none"
-        />
-        <span style={{ fontSize: 12 }}>Loading diff…</span>
-      </div>
-    );
+    return <StageLoading label="Loading diff…" />;
   }
 
   return (

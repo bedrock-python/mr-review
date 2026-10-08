@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { useNav } from "@app/navigation";
 import { useStageBarStore } from "@widgets/stage-bar";
 import { useReview } from "@entities/review";
-import { StageLoading } from "@shared/ui";
+import { Button, EmptyState, ICON_SIZE, StageLoading } from "@shared/ui";
 import { isIterationLocked } from "../lib";
 import { usePolishActions, usePolishViewStore } from "../model";
 import { PolishToolbar } from "./PolishToolbar";
@@ -12,17 +13,6 @@ import { TriageView } from "./triage/TriageView";
 import type { PolishViewMode } from "../model";
 import type { LeaveGuard } from "./triage/TriageView";
 import type { Iteration } from "@entities/review";
-
-const centeredStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100%",
-  gap: 10,
-  color: "var(--fg-2)",
-  fontSize: 13,
-};
 
 type PolishWorkspaceProps = {
   reviewId: string;
@@ -89,7 +79,7 @@ const PolishWorkspace = ({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="flex h-full flex-col overflow-hidden">
       <PolishToolbar
         comments={comments}
         isSaving={isSaving}
@@ -97,7 +87,7 @@ const PolishWorkspace = ({
         onViewModeChange={handleViewModeChange}
         onContinue={handleContinue}
       />
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div className="min-h-0 flex-1 overflow-hidden">
         {viewMode === "list" && (
           <TriageView
             reviewId={reviewId}
@@ -139,7 +129,11 @@ export const PolishStage = (): React.ReactElement => {
 
   if (activeReviewId === null) {
     return (
-      <div style={centeredStyle}>No active review. Go back to Pick to select a merge request.</div>
+      <EmptyState
+        isFill
+        title="No active review"
+        description="Go back to Pick to select a merge request."
+      />
     );
   }
 
@@ -153,7 +147,13 @@ export const PolishStage = (): React.ReactElement => {
     null;
 
   if (activeIteration === null) {
-    return <div style={centeredStyle}>No iteration yet. Go back to Dispatch to run a review.</div>;
+    return (
+      <EmptyState
+        isFill
+        title="No iteration yet"
+        description="Go back to Dispatch to run a review."
+      />
+    );
   }
 
   const hasComments = activeIteration.comments.length > 0;
@@ -166,21 +166,24 @@ export const PolishStage = (): React.ReactElement => {
 
   if (!hasComments && !isOpen) {
     return (
-      <div style={centeredStyle}>
-        <p>No comments generated. Go back to Dispatch and try again.</p>
-        {!isIterationLocked(activeIteration) && (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              setViewMode("list");
-              setOpenIterationId(activeIteration.id);
-            }}
-          >
-            Write a comment yourself
-          </button>
-        )}
-      </div>
+      <EmptyState
+        isFill
+        title="No comments generated"
+        description="Go back to Dispatch and try again, or write the review yourself."
+        actions={
+          isIterationLocked(activeIteration) ? undefined : (
+            <Button
+              icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
+              onClick={() => {
+                setViewMode("list");
+                setOpenIterationId(activeIteration.id);
+              }}
+            >
+              Write a comment yourself
+            </Button>
+          )
+        }
+      />
     );
   }
 
