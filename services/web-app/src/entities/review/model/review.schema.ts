@@ -39,6 +39,32 @@ export const BriefConfigSchema = z.object({
 
 export const CommentStatusSchema = z.enum(["kept", "dismissed"]);
 
+// inline: anchored to its line; general_note: an MR-level note (no line, or the line could not be
+// anchored); failed: the host refused it or could not be reached.
+export const PostOutcomeSchema = z.enum(["inline", "general_note", "failed"]);
+
+export const PostFailureKindSchema = z.enum([
+  "position_rejected",
+  "rejected",
+  "ambiguous",
+  "blocked",
+]);
+
+/** What happened the last time a comment was sent to the MR. */
+export const CommentPostSchema = z.object({
+  outcome: PostOutcomeSchema,
+  // When it was posted, or when the attempt failed.
+  at: z.string().datetime({ offset: true }),
+  note_id: z.string().nullable().default(null),
+  url: z.string().nullable().default(null),
+  // failed: the host's error; general_note: why a comment with a line did not go inline.
+  reason: z.string().nullable().default(null),
+  // failed only. position_rejected / rejected: nothing was posted. ambiguous: the host gave no
+  // definitive answer, so it may be on the MR already. blocked: not sent on purpose (a pending
+  // review of the user's in Gitea).
+  failure_kind: PostFailureKindSchema.nullable().default(null),
+});
+
 export const CommentSchema = z.object({
   id: z.string().uuid(),
   file: z.string().nullable(),
@@ -53,6 +79,9 @@ export const CommentSchema = z.object({
   patch_status: PatchStatusSchema.default("pending"),
   patch_ref_url: z.string().url().nullable().default(null),
   patch_applied_at: z.string().datetime({ offset: true }).nullable().default(null),
+  // Set by Post; absent until the comment was first sent (optional, so comments built in the app
+  // before posting need not spell it out).
+  post: CommentPostSchema.nullish(),
 });
 
 export const IterationStageSchema = z.enum(["brief", "dispatch", "polish", "post"]);
@@ -83,6 +112,9 @@ export type BriefPreset = z.infer<typeof BriefPresetSchema>;
 export type BriefConfig = z.infer<typeof BriefConfigSchema>;
 export type CommentSeverity = z.infer<typeof SeveritySchema>;
 export type CommentStatus = z.infer<typeof CommentStatusSchema>;
+export type PostOutcome = z.infer<typeof PostOutcomeSchema>;
+export type PostFailureKind = z.infer<typeof PostFailureKindSchema>;
+export type CommentPost = z.infer<typeof CommentPostSchema>;
 export type Comment = z.infer<typeof CommentSchema>;
 export type IterationStage = z.infer<typeof IterationStageSchema>;
 export type Iteration = z.infer<typeof IterationSchema>;

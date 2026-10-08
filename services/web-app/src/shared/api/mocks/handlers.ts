@@ -131,8 +131,24 @@ const reviewHandlers = [
     return HttpResponse.json({ imported: 0, errors: [], json_error: null });
   }),
 
-  http.post("/api/v1/reviews/:reviewId/post", () => {
-    return HttpResponse.json({ posted: 0 });
+  http.post("/api/v1/reviews/:reviewId/post", ({ params }) => {
+    const now = new Date().toISOString();
+    return HttpResponse.json({
+      posted: 0,
+      failed: 0,
+      skipped: 0,
+      completed: false,
+      results: [],
+      review: {
+        id: String(params.reviewId),
+        host_id: MOCK_HOST_ID,
+        repo_path: "group/awesome-repo",
+        mr_iid: 42,
+        iterations: [],
+        created_at: now,
+        updated_at: now,
+      },
+    });
   }),
 ];
 

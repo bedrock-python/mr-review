@@ -83,6 +83,32 @@ describe("CommentSchema (backward compat)", () => {
     expect(parsed.patch_ref_url).toContain("github.com");
   });
 
+  it("parses a comment that was never posted", () => {
+    expect(CommentSchema.parse(LEGACY_COMMENT).post ?? null).toBeNull();
+    expect(CommentSchema.parse({ ...LEGACY_COMMENT, post: null }).post).toBeNull();
+  });
+
+  it("parses the record of a post as the backend sends it", () => {
+    const parsed = CommentSchema.parse({
+      ...LEGACY_COMMENT,
+      post: {
+        outcome: "general_note",
+        at: "2026-10-08T10:00:00.123456Z",
+        note_id: "17",
+        url: null,
+        reason: "x",
+      },
+    });
+    expect(parsed.post).toEqual({
+      outcome: "general_note",
+      at: "2026-10-08T10:00:00.123456Z",
+      note_id: "17",
+      url: null,
+      reason: "x",
+      failure_kind: null,
+    });
+  });
+
   it("rejects an invalid patch_status", () => {
     expect(CommentSchema.safeParse({ ...LEGACY_COMMENT, patch_status: "rejected" }).success).toBe(
       false
