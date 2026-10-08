@@ -1,130 +1,142 @@
-import { Skeleton } from "@shared/ui";
-import { PanelsIcon } from "./MRHeaderIcons";
+import { CircleAlert, PanelLeftClose, PanelLeftOpen, RotateCw } from "lucide-react";
+import { Button, ICON_SIZE, IconButton, Skeleton } from "@shared/ui";
 
-const headerContainerStyle: React.CSSProperties = {
-  borderBottom: "1px solid var(--border)",
-  background: "var(--bg-1)",
-  padding: "12px 20px 10px",
-  flexShrink: 0,
+/** The key that shows and hides the navigator (repositories and merge requests). */
+export const NAVIGATOR_SHORTCUT = "[";
+/** The id of the navigator's container, which the toggle controls. */
+export const NAVIGATOR_ID = "navigator";
+
+export type MRHeaderFrameProps = {
+  /** The first row: breadcrumbs, meta, actions. */
+  topRow: React.ReactNode;
+  /** The second row: the title, or its placeholder or error. */
+  children: React.ReactNode;
 };
 
-/** Outer box shared by the loaded, loading and error header variants. */
-export const MRHeaderFrame = ({ children }: { children: React.ReactNode }): React.ReactElement => (
-  <div style={headerContainerStyle}>{children}</div>
+/**
+ * The workspace header: a meta row and the title. The stage bar under it is its bottom row
+ * and draws the border, so the three read as one block.
+ */
+export const MRHeaderFrame = ({ topRow, children }: MRHeaderFrameProps): React.ReactElement => (
+  <div className="bg-bg-1 flex shrink-0 flex-col gap-(--space-1) px-(--space-4) pt-(--space-2) pb-(--space-1)">
+    <div className="flex min-h-(--control-sm) flex-wrap items-center gap-x-(--space-3) gap-y-(--space-1)">
+      {topRow}
+    </div>
+    {children}
+  </div>
+);
+
+export type NavigatorToggleProps = {
+  isNavCollapsed: boolean;
+  onToggleNav: () => void;
+};
+
+/** Shows or hides the repositories and merge requests next to the workspace. */
+export const NavigatorToggle = ({
+  isNavCollapsed,
+  onToggleNav,
+}: NavigatorToggleProps): React.ReactElement => (
+  <IconButton
+    size="sm"
+    label={isNavCollapsed ? "Show navigator" : "Hide navigator"}
+    shortcut={NAVIGATOR_SHORTCUT}
+    tooltipSide="bottom"
+    aria-expanded={!isNavCollapsed}
+    aria-controls={NAVIGATOR_ID}
+    onClick={onToggleNav}
+    icon={
+      isNavCollapsed ? (
+        <PanelLeftOpen size={ICON_SIZE.inline} aria-hidden="true" />
+      ) : (
+        <PanelLeftClose size={ICON_SIZE.inline} aria-hidden="true" />
+      )
+    }
+  />
 );
 
 export type MRBreadcrumbsProps = {
   hostName: string;
   repoName: string;
   repoPath: string;
-  mrIid: number;
-  isNavCollapsed: boolean;
-  onShowNav: () => void;
+  /** The last crumb: "!12", or "branch diff". */
+  leaf: string;
 };
 
-/** "host › repo › !iid", with the navigator toggle while the nav is collapsed. */
+/** "host › repo › !iid" in the meta row. */
 export const MRBreadcrumbs = ({
   hostName,
   repoName,
   repoPath,
-  mrIid,
-  isNavCollapsed,
-  onShowNav,
+  leaf,
 }: MRBreadcrumbsProps): React.ReactElement => (
   <nav
     aria-label="Breadcrumbs"
-    className="mono"
-    style={{
-      fontSize: 11,
-      color: "var(--fg-2)",
-      marginBottom: 6,
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-    }}
+    className="text-fg-2 flex min-w-0 shrink-0 items-center gap-(--space-1) font-mono text-(length:--fs-meta)"
   >
-    {isNavCollapsed && (
-      <button
-        type="button"
-        onClick={onShowNav}
-        title="Show navigator"
-        aria-label="Show navigator"
-        style={{
-          marginRight: 6,
-          padding: "2px 4px",
-          background: "transparent",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-1)",
-          cursor: "pointer",
-          color: "var(--fg-2)",
-          display: "inline-flex",
-          alignItems: "center",
-        }}
-      >
-        <PanelsIcon />
-      </button>
-    )}
     <span>{hostName}</span>
     <span aria-hidden="true">›</span>
     <span title={repoPath}>{repoName}</span>
     <span aria-hidden="true">›</span>
-    <span style={{ color: "var(--fg-2)" }}>!{mrIid}</span>
+    <span className="text-fg-1">{leaf}</span>
   </nav>
 );
 
-/** Placeholder with the header's footprint while the MR loads. */
-export const MRHeaderSkeleton = ({
-  breadcrumbs,
-}: {
-  breadcrumbs: React.ReactNode;
-}): React.ReactElement => (
-  <div style={headerContainerStyle} role="status" aria-label="Loading merge request">
-    {breadcrumbs}
-    <Skeleton
-      style={{ width: "55%", height: 24, borderRadius: "var(--radius-2)", marginBottom: 12 }}
-    />
-    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      <Skeleton style={{ width: 20, height: 20, borderRadius: "50%" }} />
-      <Skeleton style={{ width: 120, height: 12, borderRadius: "var(--radius-1)" }} />
-      <Skeleton style={{ width: 160, height: 16, borderRadius: "var(--radius-pill)" }} />
-    </div>
+/** A thin rule between the groups of the meta row. */
+export const MetaDivider = (): React.ReactElement => (
+  <span aria-hidden="true" className="bg-border h-(--space-3) w-px shrink-0" />
+);
+
+/** The meta row's placeholder while the MR loads. */
+export const MRMetaSkeleton = (): React.ReactElement => (
+  <Skeleton width="20%" height="var(--fs-meta)" />
+);
+
+/** The title's placeholder while the MR loads: the one status that says so. */
+export const MRTitleSkeleton = ({ label }: { label: string }): React.ReactElement => (
+  <div role="status" aria-label={label}>
+    <Skeleton width="55%" height="var(--fs-page)" radius="control" />
   </div>
 );
 
 export type MRHeaderErrorProps = {
-  breadcrumbs: React.ReactNode;
-  message: string;
+  /** What failed: "Could not load merge request !12". */
+  title: string;
+  /** The server's own words, shown as they are. */
+  message: string | undefined;
   isRetrying: boolean;
   onRetry: () => void;
 };
 
-/** Compact failure row; keeps the breadcrumbs so the user knows what failed. */
+/**
+ * Compact failure row: in place of the title when the merge request could not be loaded,
+ * under it when a refresh failed. The breadcrumbs above say which one.
+ */
 export const MRHeaderError = ({
-  breadcrumbs,
+  title,
   message,
   isRetrying,
   onRetry,
 }: MRHeaderErrorProps): React.ReactElement => (
-  <div style={headerContainerStyle}>
-    {breadcrumbs}
-    <div
-      role="alert"
-      style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--fg-2)" }}
+  <div
+    role="alert"
+    className="text-fg-1 flex min-h-(--control-md) min-w-0 items-center gap-(--space-2) text-(length:--fs-control)"
+  >
+    <CircleAlert
+      size={ICON_SIZE.inline}
+      aria-hidden="true"
+      className="shrink-0 text-(--c-danger-fg)"
+    />
+    <span className="shrink-0">{title}</span>
+    {message !== undefined && <span className="text-fg-2 min-w-0 break-words">{message}</span>}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={<RotateCw size={ICON_SIZE.inline} aria-hidden="true" />}
+      isLoading={isRetrying}
+      onClick={onRetry}
+      className="shrink-0"
     >
-      <span
-        aria-hidden="true"
-        style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--c-critical)" }}
-      />
-      <span>{message}</span>
-      <button
-        type="button"
-        className="btn ghost"
-        style={{ padding: "3px 10px", fontSize: 11 }}
-        onClick={onRetry}
-        disabled={isRetrying}
-      >
-        {isRetrying ? "Retrying…" : "Retry"}
-      </button>
-    </div>
+      Retry
+    </Button>
   </div>
 );

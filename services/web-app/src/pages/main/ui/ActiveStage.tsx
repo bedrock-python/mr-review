@@ -3,7 +3,7 @@ import type { LazyExoticComponent } from "react";
 import { useNav } from "@app/navigation";
 import { STAGE_PANEL_ID, stageTabId, useStageBarStore } from "@widgets/stage-bar";
 import { isChunkLoadError, reloadOnStaleChunk } from "@shared/lib";
-import { StageLoading } from "@shared/ui";
+import { Button, ErrorState, StageLoading } from "@shared/ui";
 import { ErrorBoundary } from "@shared/ui/error-boundary";
 import type { ErrorFallbackProps } from "@shared/ui/error-boundary";
 import type { ReviewStage } from "@entities/review";
@@ -39,38 +39,27 @@ const reloadPage = (): void => {
 const StageError = ({ error, reset }: ErrorFallbackProps): React.ReactElement => {
   const isChunkError = isChunkLoadError(error);
   return (
-    <div
-      role="alert"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        height: "100%",
-        padding: 24,
-        textAlign: "center",
-        color: "var(--fg-2)",
-        fontSize: 13,
-      }}
-    >
-      <div style={{ fontWeight: 600, color: "var(--fg-0)" }}>This stage could not be shown</div>
-      <div style={{ fontSize: 12, maxWidth: 420 }}>
-        {isChunkError
+    <ErrorState
+      isFill
+      title="This stage could not be shown"
+      message={
+        isChunkError
           ? "mr-review was probably updated since this page was opened. Reload to get the current version."
-          : error.message}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary" onClick={reloadPage}>
-          Reload page
-        </button>
-        {!isChunkError && (
-          <button type="button" className="btn" onClick={reset}>
-            Try again
-          </button>
-        )}
-      </div>
-    </div>
+          : error.message
+      }
+      actions={
+        <>
+          <Button variant="primary" size="sm" onClick={reloadPage}>
+            Reload page
+          </Button>
+          {!isChunkError && (
+            <Button size="sm" onClick={reset}>
+              Try again
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 };
 
@@ -88,7 +77,7 @@ export const ActiveStage = (): React.ReactElement => {
       role="tabpanel"
       id={STAGE_PANEL_ID}
       aria-labelledby={stageTabId(activeStage)}
-      style={{ flex: 1, overflow: "auto" }}
+      className="flex-1 overflow-auto"
     >
       {/* Keyed like the stage: an error in one stage does not stick to the next. */}
       <ErrorBoundary key={`${activeStage}|${workspaceKey}`} fallbackRender={StageError}>

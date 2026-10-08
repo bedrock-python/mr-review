@@ -4,6 +4,8 @@ type AppState = {
   navCollapsed: boolean;
   historyOpen: boolean;
   iterationHistoryOpen: boolean;
+  /** The "Add host" dialog: opened from the hosts rail and from the first-run empty state. */
+  addHostOpen: boolean;
 };
 
 type AppActions = {
@@ -13,12 +15,14 @@ type AppActions = {
   setHistoryOpen: (open: boolean) => void;
   toggleIterationHistory: () => void;
   setIterationHistoryOpen: (open: boolean) => void;
+  setAddHostOpen: (open: boolean) => void;
 };
 
 export const useAppStore = create<AppState & AppActions>()((set) => ({
   navCollapsed: false,
   historyOpen: false,
   iterationHistoryOpen: false,
+  addHostOpen: false,
 
   toggleNav: () => {
     set((s) => ({ navCollapsed: !s.navCollapsed }));
@@ -37,5 +41,8 @@ export const useAppStore = create<AppState & AppActions>()((set) => ({
   },
   setIterationHistoryOpen: (open) => {
     set({ iterationHistoryOpen: open });
+  },
+  setAddHostOpen: (open) => {
+    set({ addHostOpen: open });
   },
 }));

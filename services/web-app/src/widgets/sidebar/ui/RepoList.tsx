@@ -1,39 +1,50 @@
-import { useCallback } from "react";
-import { InfiniteVirtualList, ListMessage, Skeleton } from "@shared/ui";
-import { getVcsErrorMessage } from "@shared/lib";
-import { getRepoRowHeight, getRepoRowKey, isRepoRowFocusable } from "../lib/repoTree";
+import { useCallback, useMemo } from "react";
+import { Book, SearchX } from "lucide-react";
+import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList, Skeleton } from "@shared/ui";
+import { describeLoadError, formatLoadError } from "@shared/lib";
+import {
+  REPO_ROW_HEIGHT,
+  getRepoRowHeight,
+  getRepoRowKey,
+  isRepoRowFocusable,
+} from "../lib/repoTree";
 import { DividerRow, NamespaceRow, RepoRow, SectionLabelRow } from "./RepoRows";
 import type { InfiniteListResult, RepoPage } from "@entities/mr";
 import type { ListPagination } from "@shared/ui";
 import type { RepoListRow } from "../lib/repoTree";
 
-const SKELETON_ROWS = 6;
+const SKELETON_ROWS = 8;
+const SKELETON_NAME_WIDTHS: readonly string[] = ["58%", "42%", "66%", "50%"];
 
 const ReposSkeleton = (): React.ReactElement => (
-  <div aria-label="Loading repositories" role="status" style={{ padding: "4px 0" }}>
+  <div aria-label="Loading repositories" role="status">
     {Array.from({ length: SKELETON_ROWS }, (_, i) => (
       <div
         key={i}
-        style={{ padding: "7px 10px", display: "flex", flexDirection: "column", gap: 5 }}
+        className="flex items-center gap-(--space-2) px-(--space-3)"
+        style={{ height: REPO_ROW_HEIGHT.repo }}
       >
+        <Skeleton width="var(--icon-inline)" height="var(--icon-inline)" />
         <Skeleton
-          style={{
-            width: `${String(50 + (i % 4) * 15)}%`,
-            height: 13,
-            borderRadius: "var(--radius-1)",
-          }}
-        />
-        <Skeleton
-          style={{
-            width: `${String(35 + (i % 3) * 12)}%`,
-            height: 10,
-            borderRadius: "var(--radius-1)",
-          }}
+          width={SKELETON_NAME_WIDTHS[i % SKELETON_NAME_WIDTHS.length] ?? "50%"}
+          height="var(--fs-control)"
         />
       </div>
     ))}
   </div>
 );
+
+/** What failed, in the host's words; a rejected token is named as such. */
+const LoadError = ({
+  error,
+  onRetry,
+}: {
+  error: Error | null;
+  onRetry: () => void;
+}): React.ReactElement => {
+  const { title, message } = describeLoadError(error, "repositories");
+  return <ErrorState size="sm" title={title} message={message} onRetry={onRetry} />;
+};
 
 export type RepoListProps = {
   rows: RepoListRow[];
@@ -62,6 +73,13 @@ export const RepoList = ({
 }: RepoListProps): React.ReactElement => {
   const { data, error, isError, isFetching, isPending, isPlaceholderData, fetchNextPage, refetch } =
     reposQuery;
+
+  // A favourite is listed twice, on top and in its namespace; only the first is highlighted.
+  const selectedRowKey = useMemo(
+    () =>
+      rows.find((row) => row.kind === "repo" && row.repo.path === selectedRepoPath)?.key ?? null,
+    [rows, selectedRepoPath]
+  );
 
   const loadNextPage = useCallback((): void => {
     void fetchNextPage();
@@ -93,7 +111,7 @@ export const RepoList = ({
             <RepoRow
               repo={row.repo}
               depth={row.depth}
-              isSelected={selectedRepoPath === row.repo.path}
+              isSelected={row.key === selectedRowKey}
               isFavourite={favouriteRepos.has(row.repo.path)}
               onSelect={onSelectRepo}
               onToggleFavourite={onToggleFavourite}
@@ -101,7 +119,7 @@ export const RepoList = ({
           );
       }
     },
-    [selectedRepoPath, favouriteRepos, onSelectRepo, onToggleFavourite, onToggleNamespace]
+    [selectedRowKey, favouriteRepos, onSelectRepo, onToggleFavourite, onToggleNamespace]
   );
 
   const pagination: ListPagination = {
@@ -112,22 +130,28 @@ export const RepoList = ({
     isFetchNextPageError: reposQuery.isFetchNextPageError,
     isIdle: !isFetching && !isPlaceholderData,
     fetchNextPage: loadNextPage,
-    errorMessage: `${getVcsErrorMessage(error)} more repositories`,
+    errorMessage: formatLoadError(error, "more repositories"),
     pausedMessage: "No new repositories shown in the last pages — some may be in collapsed groups",
   };
 
   const renderFooter = (): React.ReactNode => {
     if (isPending && isFetching) return <ReposSkeleton />;
-    if (isError && data === undefined) {
-      return (
-        <ListMessage isError actionLabel="Retry" onAction={handleRetry}>
-          {getVcsErrorMessage(error)} repositories
-        </ListMessage>
-      );
-    }
+    if (isError && data === undefined) return <LoadError error={error} onRetry={handleRetry} />;
     if (data !== undefined && loadedCount === 0 && !isPlaceholderData) {
-      return (
-        <ListMessage>{isSearching ? "No repositories found" : "No repositories yet"}</ListMessage>
+      return isSearching ? (
+        <EmptyState
+          size="sm"
+          icon={<SearchX size={ICON_SIZE.inline} />}
+          title="No repositories found"
+          description="Search matches repository names and paths the host token can read."
+        />
+      ) : (
+        <EmptyState
+          size="sm"
+          icon={<Book size={ICON_SIZE.inline} />}
+          title="No repositories yet"
+          description="The host token cannot see any. Pin one by its URL with the + above."
+        />
       );
     }
     return null;

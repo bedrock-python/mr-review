@@ -1,16 +1,17 @@
 import { getDiffStats } from "@entities/mr";
-import { ROW_FOCUS_ATTR } from "@shared/lib";
-import { formatAge } from "../lib/formatAge";
+import { ROW_FOCUS_ATTR, cn, formatRelative } from "@shared/lib";
+import { StatusBadge } from "@shared/ui";
 import type { MR, PipelineStatus } from "@entities/mr";
 
-const PIPELINE_DOT_COLORS: Record<PipelineStatus, string> = {
-  passed: "oklch(72% 0.18 145)",
-  failed: "oklch(68% 0.20 25)",
-  running: "oklch(78% 0.18 60)",
-  none: "var(--fg-3)",
+const PIPELINE_DOT: Record<Exclude<PipelineStatus, "none">, { color: string; label: string }> = {
+  passed: { color: "var(--c-success)", label: "Pipeline passed" },
+  failed: { color: "var(--c-danger)", label: "Pipeline failed" },
+  running: { color: "var(--c-warn)", label: "Pipeline running" },
 };
 
 const rowFocusProps = { [ROW_FOCUS_ATTR]: "" };
+
+const formatDate = (iso: string): string => new Date(iso).toLocaleString();
 
 export type MRItemButtonProps = {
   isSelected: boolean;
@@ -20,6 +21,7 @@ export type MRItemButtonProps = {
   children: React.ReactNode;
 };
 
+/** One row of the list: a full-width button, the selected one marked by the accent bar. */
 export const MRItemButton = ({
   isSelected,
   onClick,
@@ -32,115 +34,99 @@ export const MRItemButton = ({
     onClick={onClick}
     aria-pressed={isSelected}
     title={title}
-    style={{
-      width: "100%",
-      textAlign: "left",
-      borderBottom: "1px solid var(--border)",
-      padding: "10px 12px 10px 11px",
-      background: isSelected ? "var(--bg-2)" : "transparent",
-      borderLeft: isSelected ? "3px solid var(--accent-fg)" : "3px solid transparent",
-      cursor: "pointer",
-      transition: "background 0.08s",
-      display: "block",
-    }}
-    onMouseEnter={(event) => {
-      if (!isSelected) event.currentTarget.style.background = "var(--bg-hover)";
-    }}
-    onMouseLeave={(event) => {
-      if (!isSelected) event.currentTarget.style.background = "transparent";
-    }}
+    className={cn(
+      "border-border flex w-full flex-col gap-(--space-1) border-b border-l-[3px] py-(--space-2) pr-(--space-3) pl-[calc(var(--space-3)-3px)] text-left",
+      "transition-colors duration-(--dur-fast)",
+      isSelected
+        ? "bg-bg-2 border-l-(--accent-fg)"
+        : "hover:bg-bg-hover border-l-transparent bg-transparent"
+    )}
   >
     {children}
   </button>
 );
 
-/** Top line: iid · draft tag · pipeline dot · age. */
-export const MRItemTopLine = ({ mr }: { mr: MR }): React.ReactElement => (
-  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-    <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)", flexShrink: 0 }}>
-      !{mr.iid}
-    </span>
-    {mr.draft && (
-      <span
-        className="mono"
-        style={{
-          fontSize: 9,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-1)",
-          padding: "1px 4px",
-          color: "var(--fg-2)",
-        }}
-      >
-        DRAFT
-      </span>
-    )}
-    {mr.pipeline !== null && mr.pipeline !== "none" && (
-      <span
-        title={`Pipeline ${mr.pipeline}`}
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: PIPELINE_DOT_COLORS[mr.pipeline],
-          display: "inline-block",
-          flexShrink: 0,
-        }}
-      />
-    )}
-    <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--fg-2)" }}>
-      {formatAge(mr.created_at)}
-    </span>
+/** First line: the title (two lines at most) and its age. */
+export const MRItemHeadline = ({
+  mr,
+  isSelected,
+}: {
+  mr: MR;
+  isSelected: boolean;
+}): React.ReactElement => (
+  <div className="flex items-start gap-(--space-2)">
+    <p
+      className={cn(
+        "m-0 line-clamp-2 min-w-0 flex-1 text-(length:--fs-body) leading-(--lh-tight) font-medium",
+        isSelected ? "text-fg-0" : "text-fg-1"
+      )}
+    >
+      {mr.title}
+    </p>
+    {/* The last update, which is the list's default order. */}
+    <time
+      dateTime={mr.updated_at}
+      title={`Updated ${formatDate(mr.updated_at)} · opened ${formatDate(mr.created_at)}`}
+      className="text-fg-2 shrink-0 pt-px text-(length:--fs-meta) tabular-nums"
+    >
+      {formatRelative(mr.updated_at)}
+    </time>
   </div>
 );
 
-export const MRItemTitle = ({
-  title,
-  isSelected,
-}: {
-  title: string;
-  isSelected: boolean;
-}): React.ReactElement => (
-  <p
-    style={{
-      fontSize: 13,
-      color: isSelected ? "var(--fg-0)" : "var(--fg-1)",
-      lineHeight: 1.4,
-      display: "-webkit-box",
-      WebkitLineClamp: 2,
-      WebkitBoxOrient: "vertical",
-      overflow: "hidden",
-      marginBottom: 6,
-    }}
-  >
-    {title}
-  </p>
-);
+const PipelineDot = ({ status }: { status: MR["pipeline"] }): React.ReactElement | null => {
+  if (status === null || status === "none") return null;
+  const look = PIPELINE_DOT[status];
+  return (
+    <span
+      role="img"
+      aria-label={look.label}
+      title={look.label}
+      className="size-[6px] shrink-0 rounded-full"
+      style={{ background: look.color }}
+    />
+  );
+};
 
-export const MRItemAuthor = ({ author }: { author: string }): React.ReactElement => (
-  <span
-    style={{
-      fontSize: 11,
-      color: "var(--fg-2)",
-      maxWidth: 100,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
-    }}
-  >
-    @{author}
-  </span>
-);
-
-/** "+12 -3", or nothing when the host did not report stats for list views. */
-export const MRDiffStats = ({ mr }: { mr: MR }): React.ReactElement | null => {
+/** "+12 −3", or nothing when the host did not report stats for list views. */
+const MRDiffStats = ({ mr }: { mr: MR }): React.ReactElement | null => {
   const stats = getDiffStats(mr);
   if (stats === null) return null;
   return (
-    <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
-      <span style={{ color: "oklch(72% 0.18 145)" }}>+{stats.additions}</span>{" "}
-      <span style={{ color: "oklch(68% 0.20 25)" }}>-{stats.deletions}</span>
+    <span className="shrink-0 tabular-nums">
+      <span className="text-(--c-add-fg)">+{stats.additions}</span>{" "}
+      <span className="text-(--c-del-fg)">-{stats.deletions}</span>
     </span>
   );
 };
+
+export type MRItemMetaProps = {
+  mr: MR;
+  /** The inbox names the repository; a repository's own list does not repeat it. */
+  repoName?: string;
+  repoPath?: string;
+};
+
+/** Second line, mono: repository · !iid · @author, then draft, pipeline and size. */
+export const MRItemMeta = ({ mr, repoName, repoPath }: MRItemMetaProps): React.ReactElement => (
+  <div className="text-fg-2 flex min-w-0 items-center gap-(--space-2) font-mono text-(length:--fs-meta)">
+    <span className="flex min-w-0 items-center gap-(--space-1)">
+      {repoName !== undefined && (
+        <>
+          <span title={repoPath} className="truncate">
+            {repoName}
+          </span>
+          <span aria-hidden="true">·</span>
+        </>
+      )}
+      <span className="shrink-0">!{mr.iid}</span>
+      <span aria-hidden="true">·</span>
+      <span className="truncate">@{mr.author}</span>
+    </span>
+    {mr.draft && <StatusBadge status="neutral" label="Draft" />}
+    <span className="ml-auto flex shrink-0 items-center gap-(--space-2)">
+      <PipelineDot status={mr.pipeline} />
+      <MRDiffStats mr={mr} />
+    </span>
+  </div>
+);

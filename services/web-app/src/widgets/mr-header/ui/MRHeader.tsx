@@ -3,10 +3,17 @@ import { useNav } from "@app/navigation";
 import { useMR, useCachedRepo, getRepoNameFromPath } from "@entities/mr";
 import { useHosts } from "@entities/host";
 import { useReview } from "@entities/review";
-import { getVcsErrorMessage } from "@shared/lib";
+import { describeLoadError } from "@shared/lib";
 import { useSyncMR } from "../model/useSyncMR";
 import { MRHeaderActions, MRHeaderMeta } from "./MRHeaderParts";
-import { MRBreadcrumbs, MRHeaderError, MRHeaderFrame, MRHeaderSkeleton } from "./MRHeaderStates";
+import {
+  MRBreadcrumbs,
+  MRHeaderError,
+  MRHeaderFrame,
+  MRMetaSkeleton,
+  MRTitleSkeleton,
+  NavigatorToggle,
+} from "./MRHeaderStates";
 import type { Host } from "@entities/host";
 
 const buildMRUrl = (
@@ -22,8 +29,14 @@ const buildMRUrl = (
   return `${base}/${repoPath}/-/merge_requests/${String(mrIid)}`;
 };
 
+/**
+ * One frame for the loading, failed and loaded merge request, so the navigator toggle and
+ * the breadcrumbs stay the same elements (and keep focus) while the merge request arrives.
+ */
 export const MRHeader = (): React.ReactElement | null => {
-  const { navCollapsed, toggleNav, toggleIterationHistory } = useAppStore();
+  const navCollapsed = useAppStore((s) => s.navCollapsed);
+  const toggleNav = useAppStore((s) => s.toggleNav);
+  const toggleIterationHistory = useAppStore((s) => s.toggleIterationHistory);
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId } = useNav();
   const { data: hosts } = useHosts();
   // Only reuses repo data the sidebar already loaded: fetching the repository
@@ -36,33 +49,8 @@ export const MRHeader = (): React.ReactElement | null => {
   if (!selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
   const host = hosts?.find((h) => h.id === selectedHostId);
-  const breadcrumbs = (
-    <MRBreadcrumbs
-      hostName={host?.name ?? selectedHostId}
-      repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
-      repoPath={selectedRepoPath}
-      mrIid={selectedMRIid}
-      isNavCollapsed={navCollapsed}
-      onShowNav={toggleNav}
-    />
-  );
-
   const mr = mrQuery.data;
-  if (!mr) {
-    if (mrQuery.isError) {
-      return (
-        <MRHeaderError
-          breadcrumbs={breadcrumbs}
-          message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
-          isRetrying={mrQuery.isFetching}
-          onRetry={() => {
-            void mrQuery.refetch();
-          }}
-        />
-      );
-    }
-    return <MRHeaderSkeleton breadcrumbs={breadcrumbs} />;
-  }
+  const isLoading = mr === undefined && !mrQuery.isError;
 
   const handleSync = (): void => {
     syncMR.mutate({
@@ -73,34 +61,74 @@ export const MRHeader = (): React.ReactElement | null => {
     });
   };
 
-  return (
-    <MRHeaderFrame>
-      {breadcrumbs}
+  const mrLabel = `merge request !${String(selectedMRIid)}`;
+  const retry = (): void => {
+    void mrQuery.refetch();
+  };
 
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-        <h1
-          style={{
-            flex: 1,
-            fontSize: 22,
-            fontFamily: "var(--font-display)",
-            fontWeight: 600,
-            color: "var(--fg-0)",
-            lineHeight: 1.25,
-            margin: 0,
-          }}
-        >
+  const renderTitle = (): React.ReactNode => {
+    if (mr !== undefined) {
+      return (
+        <h1 className="text-fg-0 m-0 line-clamp-2 font-(family-name:--font-display) text-(length:--fs-page) leading-(--lh-tight) font-semibold">
           {mr.title}
         </h1>
-        <MRHeaderActions
-          iterationCount={review?.iterations.length ?? 0}
-          onShowHistory={toggleIterationHistory}
-          isSyncing={syncMR.isPending}
-          onSync={handleSync}
-          mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+      );
+    }
+    if (mrQuery.isError) {
+      const { title, message } = describeLoadError(mrQuery.error, mrLabel);
+      return (
+        <MRHeaderError
+          title={title}
+          message={message}
+          isRetrying={mrQuery.isFetching}
+          onRetry={retry}
         />
-      </div>
+      );
+    }
+    return <MRTitleSkeleton label="Loading merge request" />;
+  };
 
-      <MRHeaderMeta mr={mr} />
+  // A refresh that failed over a loaded merge request: the header stays, this says it is old.
+  const renderRefreshError = (): React.ReactNode => {
+    if (mr === undefined || !mrQuery.isError || mrQuery.isFetching) return null;
+    const { message } = describeLoadError(mrQuery.error, mrLabel);
+    return (
+      <MRHeaderError
+        title={`Could not refresh ${mrLabel}`}
+        message={message}
+        isRetrying={mrQuery.isFetching}
+        onRetry={retry}
+      />
+    );
+  };
+
+  return (
+    <MRHeaderFrame
+      topRow={
+        <>
+          <NavigatorToggle isNavCollapsed={navCollapsed} onToggleNav={toggleNav} />
+          <MRBreadcrumbs
+            hostName={host?.name ?? selectedHostId}
+            repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
+            repoPath={selectedRepoPath}
+            leaf={`!${String(selectedMRIid)}`}
+          />
+          {isLoading && <MRMetaSkeleton />}
+          {mr !== undefined && <MRHeaderMeta mr={mr} />}
+          {mr !== undefined && (
+            <MRHeaderActions
+              iterationCount={review?.iterations.length ?? 0}
+              onShowHistory={toggleIterationHistory}
+              isSyncing={syncMR.isPending}
+              onSync={handleSync}
+              mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+            />
+          )}
+        </>
+      }
+    >
+      {renderTitle()}
+      {renderRefreshError()}
     </MRHeaderFrame>
   );
 };

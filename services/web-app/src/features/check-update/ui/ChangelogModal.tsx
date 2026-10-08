@@ -1,213 +1,110 @@
-import { useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
-
-import { Markdown } from "@shared/ui";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import { copyText } from "@shared/lib";
+import { Button, Dialog, ICON_SIZE, IconButton, Markdown, buttonClassName } from "@shared/ui";
 import type { ComponentUpdateInfo, UpdateInfo } from "../api";
 
 type ChangelogModalProps = {
+  /** "API" or "Web app": the part of mr-review this release is for. */
+  componentLabel: string;
   component: ComponentUpdateInfo;
   deploymentMode: UpdateInfo["deploymentMode"];
   isOpen: boolean;
   onClose: () => void;
+  /** Off when the caller puts focus back itself (it opened from a dialog now closed). */
+  shouldRestoreFocus?: boolean;
 };
 
 const UPDATE_COMMAND = "docker compose pull && docker compose up -d";
+const COPIED_FEEDBACK_MS = 2000;
 
-const CopyIcon = (): React.ReactElement => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-
-const CheckIcon = (): React.ReactElement => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
+/** The release notes of a newer version, and the command that installs it. */
 export const ChangelogModal = ({
+  componentLabel,
   component,
   deploymentMode,
   isOpen,
   onClose,
+  shouldRestoreFocus = true,
 }: ChangelogModalProps): React.ReactElement => {
   const [isCopied, setIsCopied] = useState(false);
+  const resetTimer = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(resetTimer.current);
+    },
+    []
+  );
 
   const handleCopy = (): void => {
-    void navigator.clipboard.writeText(UPDATE_COMMAND).then(() => {
-      setIsCopied(true);
-      setTimeout(() => {
-        setIsCopied(false);
-      }, 2000);
-    });
+    copyText(UPDATE_COMMAND).then(
+      () => {
+        setIsCopied(true);
+        window.clearTimeout(resetTimer.current);
+        resetTimer.current = window.setTimeout(() => {
+          setIsCopied(false);
+        }, COPIED_FEEDBACK_MS);
+      },
+      (error: unknown) => {
+        toast.error("Could not copy", {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      }
+    );
   };
 
   return (
-    <Dialog.Root
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      shouldRestoreFocus={shouldRestoreFocus}
+      size="lg"
+      title={`What's new in ${componentLabel} v${component.latest}`}
+      description={`You're on v${component.current}.`}
+      footer={
+        <>
+          <a
+            href={component.release.html_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClassName({ variant: "ghost" })}
+          >
+            View on GitHub
+            <ExternalLink size={ICON_SIZE.inline} aria-hidden="true" />
+          </a>
+          <Button onClick={onClose}>Done</Button>
+        </>
+      }
     >
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "var(--overlay)",
-            zIndex: 200,
-          }}
-        />
-        <Dialog.Content
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 201,
-            width: 580,
-            maxWidth: "calc(100vw - 32px)",
-            maxHeight: "80vh",
-            background: "var(--bg-1)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-3)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: "18px 20px 14px",
-              borderBottom: "1px solid var(--border)",
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 4,
-              }}
-            >
-              <Dialog.Title
-                style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-0)", margin: 0 }}
-              >
-                What&apos;s new in v{component.latest}
-              </Dialog.Title>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--fg-2)",
-                    padding: 4,
-                    borderRadius: "var(--radius-1)",
-                    lineHeight: 1,
-                  }}
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
-              </Dialog.Close>
-            </div>
-            <Dialog.Description style={{ fontSize: 12, color: "var(--fg-2)", margin: 0 }}>
-              You are on v{component.current}
-            </Dialog.Description>
+      <div className="flex flex-col gap-(--space-4)">
+        {component.release.body ? (
+          <Markdown>{component.release.body}</Markdown>
+        ) : (
+          <p className="text-fg-2 m-0 text-(length:--fs-control)">No changelog provided.</p>
+        )}
+        <div className="flex flex-col gap-(--space-2)">
+          <p className="ui-eyebrow m-0">Update ({deploymentMode})</p>
+          <div className="border-border bg-bg-0 flex items-center gap-(--space-2) rounded-(--radius-2) border py-(--space-1) pr-(--space-1) pl-(--space-3)">
+            <code className="text-fg-0 min-w-0 flex-1 font-mono text-(length:--fs-meta) select-all">
+              {UPDATE_COMMAND}
+            </code>
+            <IconButton
+              size="sm"
+              label={isCopied ? "Copied" : "Copy the command"}
+              onClick={handleCopy}
+              icon={
+                isCopied ? (
+                  <Check size={ICON_SIZE.inline} aria-hidden="true" className="text-accent-fg" />
+                ) : (
+                  <Copy size={ICON_SIZE.inline} aria-hidden="true" />
+                )
+              }
+            />
           </div>
-
-          {/* Changelog body */}
-          <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
-            {component.release.body ? (
-              <Markdown>{component.release.body}</Markdown>
-            ) : (
-              <p style={{ fontSize: 12, color: "var(--fg-2)" }}>No changelog provided.</p>
-            )}
-          </div>
-
-          {/* Update command footer */}
-          <div
-            style={{
-              padding: "14px 20px",
-              borderTop: "1px solid var(--border)",
-              flexShrink: 0,
-              background: "var(--bg-0)",
-            }}
-          >
-            <p style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 8 }}>
-              Run this command to update ({deploymentMode}):
-            </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                background: "var(--bg-3)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-2)",
-                padding: "8px 12px",
-              }}
-            >
-              <code
-                className="mono"
-                style={{ flex: 1, fontSize: 11, color: "var(--fg-0)", userSelect: "all" }}
-              >
-                {UPDATE_COMMAND}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopy}
-                title="Copy to clipboard"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  color: isCopied ? "var(--accent-fg)" : "var(--fg-2)",
-                  padding: 4,
-                  borderRadius: "var(--radius-1)",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {isCopied ? <CheckIcon /> : <CopyIcon />}
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
-              <a
-                href={component.release.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn ghost"
-                style={{ padding: "6px 14px", textDecoration: "none", fontSize: 12 }}
-              >
-                View on GitHub ↗
-              </a>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  style={{ padding: "6px 14px", fontSize: 12 }}
-                >
-                  Dismiss
-                </button>
-              </Dialog.Close>
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      </div>
+    </Dialog>
   );
 };

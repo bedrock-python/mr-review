@@ -91,17 +91,17 @@ const waitForStatus = async (text: string): Promise<void> => {
 };
 
 describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
-  it("offers state chips, not relationship chips, and requests open MRs", async () => {
+  it("offers the state, not the relationship, and requests open MRs", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
-    const state = screen.getByRole("group", { name: "State" });
-    expect(within(state).getByRole("button", { name: "Open" })).toHaveAttribute(
-      "aria-pressed",
+    const state = screen.getByRole("radiogroup", { name: "State" });
+    expect(within(state).getByRole("radio", { name: "Open" })).toHaveAttribute(
+      "aria-checked",
       "true"
     );
-    expect(screen.queryByRole("group", { name: "Relationship" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Assigned" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Relationship" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Assigned" })).not.toBeInTheDocument();
     expect(Object.fromEntries(lastListRequest()?.searchParams ?? [])).toEqual({
       state: "opened",
       page: "1",
@@ -109,11 +109,11 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
     });
   });
 
-  it("maps the state chips to the server state", async () => {
+  it("maps the state to the server state", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
-    await userEvent.click(screen.getByRole("button", { name: "Merged" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Merged" }));
 
     await waitFor(() => {
       expect(lastListRequest()?.searchParams.get("state")).toBe("merged");
@@ -121,12 +121,12 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
     await waitFor(() => {
       expect(renderedTitles().length).toBeGreaterThan(0);
     });
-    expect(screen.getByRole("button", { name: "Merged" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "Merged" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("sends the search as a debounced server-side q", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.type(screen.getByRole("searchbox", { name: "Search merge requests" }), "cache");
 
@@ -141,7 +141,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("sorts the loaded MRs by title on the client", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Sort by" }), "title");
 
@@ -156,36 +156,109 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("filters drafts on the client, keeps loading while the list is short", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
-    await userEvent.click(screen.getByRole("button", { name: "Draft" }));
+    await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
+    const menu = screen.getByRole("dialog", { name: "Filter merge requests" });
+    expect(within(menu).getByRole("radio", { name: "All merge requests" })).toHaveFocus();
+    await userEvent.click(within(menu).getByRole("radio", { name: "Drafts only" }));
 
     // A handful of drafts leaves the end of the list on screen, so further pages
     // load automatically until the list fills up or the server runs out.
     const open = getMockMRs(MOCK_BUSY_REPO).filter((mr) => mr.status === "opened");
     const drafts = open.filter((mr) => mr.draft);
-    await waitForStatus(
-      `${String(drafts.length)} shown · ${String(open.length)} loaded · all loaded`
-    );
+    await waitForStatus(`${String(drafts.length)} of ${String(open.length)} shown`);
     expect(renderedTitles()).toEqual(
       drafts.map((mr) => mr.title).slice(0, renderedTitles().length)
     );
     expect(listRequests().every((url) => url.searchParams.get("state") === "opened")).toBe(true);
   });
 
+  it("applies the filter when the text of an option is clicked", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
+    const menu = screen.getByRole("dialog", { name: "Filter merge requests" });
+    // Pressing on the label's text blurs the focused radio with nowhere to go: the menu must
+    // stay open for the click to land.
+    await userEvent.click(within(menu).getByText("Drafts only"));
+
+    expect(within(menu).getByRole("radio", { name: "Drafts only" })).toBeChecked();
+    const open = getMockMRs(MOCK_BUSY_REPO).filter((mr) => mr.status === "opened");
+    const drafts = open.filter((mr) => mr.draft);
+    await waitForStatus(`${String(drafts.length)} of ${String(open.length)} shown`);
+  });
+
+  it("closes the filter menu on a press outside it", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter merge requests" }));
+    expect(screen.getByRole("dialog", { name: "Filter merge requests" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("searchbox", { name: "Search merge requests" }));
+
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+  });
+
+  it("closes the filter menu on Escape and goes back to its button", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+    const button = screen.getByRole("button", { name: "Filter merge requests" });
+
+    await userEvent.click(button);
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+  });
+
+  it("says what failed, in the host's words, and retries", async () => {
+    server.use(
+      http.get(
+        /\/api\/v1\/hosts\/[^/]+\/repos\/.+\/mrs$/,
+        () => HttpResponse.json({ detail: "GitLab answered 502 Bad Gateway" }, { status: 502 }),
+        { once: true }
+      )
+    );
+    renderWithQueryClient(<MRList />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load merge requests");
+    expect(alert).toHaveTextContent("GitLab answered 502 Bad Gateway");
+
+    await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+
+    await waitForStatus("Showing 30 · more below");
+  });
+
+  it("offers to clear a search that matches nothing", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: "Search merge requests" }),
+      "zzz-no-such-title"
+    );
+
+    expect(await screen.findByText("No merge requests match")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByRole("searchbox", { name: "Search merge requests" })).toHaveValue("");
+  });
+
   it("loads the next page when scrolled to the end", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
     scrollToEnd(getVirtualScrollContainer(screen.getByRole("list")));
 
-    await waitForStatus("60 loaded · more available");
+    await waitForStatus("Showing 60 · more below");
     expect(listRequests().map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
   });
 
   it("moves focus through the rows with the arrow keys", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
     const first = getAt(rowButtons(), 0);
     first.focus();
 
@@ -196,7 +269,7 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
 
   it("opens the clicked MR", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(getAt(rowButtons(), 0));
 
@@ -209,25 +282,22 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     nav.state = { ...nav.state, selectedRepoPath: null, isInbox: true };
   });
 
-  it("maps relationship chips to the server scope", async () => {
+  it("maps the relationship to the server scope", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
     expect(lastListRequest()?.searchParams.get("scope")).toBe("all");
-    expect(screen.queryByRole("group", { name: "State" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "State" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Review requested" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Review requested" }));
     await waitFor(() => {
       expect(lastListRequest()?.searchParams.get("scope")).toBe("review_requested");
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Assigned" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Assigned" }));
     await waitFor(() => {
       expect(lastListRequest()?.searchParams.get("scope")).toBe("assigned");
     });
-    expect(screen.getByRole("button", { name: "Assigned" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(screen.getByRole("radio", { name: "Assigned" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("stops walking repositories after a few empty pages and offers Load more", async () => {
@@ -298,8 +368,11 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     );
     renderWithQueryClient(<MRList />);
 
-    await waitForStatus("2 loaded · all loaded");
-    expect(renderedTitles()).toEqual(["Newer one", "Older one"]);
+    await waitFor(() => {
+      expect(renderedTitles()).toEqual(["Newer one", "Older one"]);
+    });
+    // Everything is loaded and shown: no status line to read.
+    expect(screen.queryByText(/Showing|shown/)).not.toBeInTheDocument();
 
     const note = screen.getByText("2 repositories have more open MRs — open one to see them all");
     await userEvent.click(note);
@@ -309,7 +382,7 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
 
   it("navigates to the MR's own repository", async () => {
     renderWithQueryClient(<MRList />);
-    await waitForStatus("30 loaded · more available");
+    await waitForStatus("Showing 30 · more below");
 
     await userEvent.click(getAt(rowButtons(), 0));
 

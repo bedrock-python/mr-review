@@ -11,7 +11,9 @@ export {
 export { compareVersions, isNewerVersion } from "./compareVersions";
 export { copyFolderPath } from "./copyFolderPath";
 export { copyText, COPY_BLOCKED_MESSAGE } from "./copyText";
-export { getVcsErrorMessage } from "./apiError";
+export { getApiErrorStatus, getVcsErrorMessage } from "./apiError";
+export { describeLoadError, formatLoadError } from "./describeLoadError";
+export type { LoadErrorDescription } from "./describeLoadError";
 export { useDebouncedSearch, SEARCH_DEBOUNCE_MS } from "./useDebouncedSearch";
 export type { DebouncedSearch } from "./useDebouncedSearch";
 export { useStableCallback } from "./useStableCallback";

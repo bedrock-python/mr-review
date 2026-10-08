@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { formatBranchRange } from "@entities/mr";
-import { MRDiffStats, MRItemAuthor, MRItemButton, MRItemTitle, MRItemTopLine } from "./MRItemParts";
+import { MRItemButton, MRItemHeadline, MRItemMeta } from "./MRItemParts";
 import type { MR } from "@entities/mr";
 
 export type MRListItemProps = {
@@ -17,13 +17,8 @@ const MRListItemComponent = ({ mr, isSelected, onSelect }: MRListItemProps): Rea
     }}
     title={formatBranchRange(mr.source_branch, mr.target_branch) ?? undefined}
   >
-    <MRItemTopLine mr={mr} />
-    <MRItemTitle title={mr.title} isSelected={isSelected} />
-
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <MRItemAuthor author={mr.author} />
-      <MRDiffStats mr={mr} />
-    </div>
+    <MRItemHeadline mr={mr} isSelected={isSelected} />
+    <MRItemMeta mr={mr} />
   </MRItemButton>
 );
 
