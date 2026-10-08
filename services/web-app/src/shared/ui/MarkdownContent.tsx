@@ -125,6 +125,24 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
               {c}
             </a>
           ),
+          // Comment bodies come from a model: an image would make the browser fetch whatever
+          // URL it chose. Shown as a link instead, fetched only if the reader follows it.
+          img: ({ src, alt }) => {
+            const url = typeof src === "string" && /^https?:\/\//i.test(src) ? src : undefined;
+            const label = alt !== undefined && alt.trim() !== "" ? alt : (url ?? "image");
+            if (url === undefined) return <span style={{ color: "var(--fg-2)" }}>[{label}]</span>;
+            return (
+              <a
+                href={url}
+                title={url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                style={{ color: "var(--accent-fg)", textDecoration: "underline", fontSize: 12 }}
+              >
+                [image: {label}]
+              </a>
+            );
+          },
           hr: () => (
             <hr
               style={{ border: "none", borderTop: "1px solid var(--border)", margin: "10px 0" }}
