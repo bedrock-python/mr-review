@@ -1,7 +1,16 @@
-import { useMemo } from "react";
-import { SEVERITY_ORDER, countBySeverity } from "../lib";
+import { ArrowRight, FileDiff, List, MessagesSquare } from "lucide-react";
+import {
+  Button,
+  ICON_SIZE,
+  SegmentedControl,
+  Spinner,
+  Toolbar,
+  ToolbarDivider,
+  ToolbarSpacer,
+} from "@shared/ui";
 import type { PolishViewMode } from "../model";
 import type { Comment } from "@entities/review";
+import type { SegmentedOption } from "@shared/ui";
 
 type PolishToolbarProps = {
   comments: readonly Comment[];
@@ -11,12 +20,24 @@ type PolishToolbarProps = {
   onContinue: () => void;
 };
 
-const VIEW_MODES: { id: PolishViewMode; label: string }[] = [
-  { id: "list", label: "List" },
-  { id: "pinned", label: "Diff + pins" },
-  { id: "thread", label: "Thread" },
+const VIEW_OPTIONS: readonly SegmentedOption<PolishViewMode>[] = [
+  { value: "list", label: "List", icon: <List size={ICON_SIZE.inline} aria-hidden="true" /> },
+  {
+    value: "pinned",
+    label: "Diff + pins",
+    icon: <FileDiff size={ICON_SIZE.inline} aria-hidden="true" />,
+  },
+  {
+    value: "thread",
+    label: "Thread",
+    icon: <MessagesSquare size={ICON_SIZE.inline} aria-hidden="true" />,
+  },
 ];
 
+const plural = (count: number, word: string): string =>
+  `${String(count)} ${word}${count === 1 ? "" : "s"}`;
+
+/** The stage's first row: how to look at the comments, what will be posted, the next step. */
 export const PolishToolbar = ({
   comments,
   isSaving,
@@ -24,100 +45,34 @@ export const PolishToolbar = ({
   onViewModeChange,
   onContinue,
 }: PolishToolbarProps): React.ReactElement => {
-  const kept = useMemo(() => comments.filter((c) => c.status !== "dismissed"), [comments]);
-  const keptBySeverity = useMemo(() => countBySeverity(kept), [kept]);
-  const dismissedCount = comments.length - kept.length;
+  const keptCount = comments.filter((c) => c.status !== "dismissed").length;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "12px 24px",
-        borderBottom: "1px solid var(--border)",
-        background: "var(--bg-1)",
-        flexShrink: 0,
-      }}
-    >
-      {/* What will be posted: kept comments per severity, then the kept/dismissed split. */}
-      <div
-        style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
-        role="status"
-        aria-label="Comment summary"
-      >
-        {SEVERITY_ORDER.map((s) =>
-          keptBySeverity[s] > 0 ? (
-            <span key={s} className={`sev ${s}`}>
-              <span className="dot" />
-              {keptBySeverity[s]} {s}
-            </span>
-          ) : null
-        )}
-        <span className="chip">{kept.length} kept</span>
-        {dismissedCount > 0 && (
-          <span className="chip" style={{ color: "var(--fg-2)" }}>
-            {dismissedCount} dismissed
-          </span>
-        )}
-        {isSaving && (
-          <span className="chip" style={{ color: "var(--fg-2)" }}>
-            saving…
-          </span>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: "inline-flex",
-          gap: 2,
-          padding: 2,
-          background: "var(--bg-2)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-2)",
-        }}
-        role="group"
+    <Toolbar size="md">
+      <SegmentedControl
         aria-label="View mode"
+        options={VIEW_OPTIONS}
+        value={viewMode}
+        onValueChange={onViewModeChange}
+      />
+      <ToolbarDivider />
+      <span role="status" className="text-fg-2 text-(length:--fs-control) whitespace-nowrap">
+        {plural(comments.length, "comment")} · {keptCount} kept
+      </span>
+      {isSaving && (
+        <span className="text-fg-2 flex items-center gap-1.5 text-(length:--fs-meta)">
+          <Spinner size="sm" tone="muted" isDecorative />
+          Saving…
+        </span>
+      )}
+      <ToolbarSpacer />
+      <Button
+        variant="primary"
+        iconRight={<ArrowRight size={ICON_SIZE.inline} aria-hidden="true" />}
+        onClick={onContinue}
       >
-        {VIEW_MODES.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => {
-              onViewModeChange(v.id);
-            }}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "var(--radius-2)",
-              color: viewMode === v.id ? "var(--fg-0)" : "var(--fg-2)",
-              background: viewMode === v.id ? "var(--bg-0)" : "transparent",
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
-            }}
-            aria-pressed={viewMode === v.id}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1 }} />
-
-      <button type="button" className="btn primary" onClick={onContinue}>
         Continue to post
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <line x1="5" y1="12" x2="19" y2="12" />
-          <polyline points="12 5 19 12 12 19" />
-        </svg>
-      </button>
-    </div>
+      </Button>
+    </Toolbar>
   );
 };

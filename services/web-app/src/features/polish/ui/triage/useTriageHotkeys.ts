@@ -24,25 +24,30 @@ const SEVERITY_BY_KEY: Partial<Record<string, CommentSeverity>> = {
   "4": "suggestion",
 };
 
-const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
-const OPEN_MODAL_SELECTOR = '[aria-modal="true"], [role="dialog"][data-state="open"]';
+const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]';
+const OPEN_LAYER_SELECTOR =
+  '[aria-modal="true"], [role="dialog"][data-state="open"], [role="menu"][data-state="open"]';
 
 /**
- * The keys listen on the whole document, so they must stand down while any other dialog has
- * the user's attention — one the event comes from, or one open anywhere on the page. (The
- * triage view's own dialogs switch the keys off through `isEnabled`.)
+ * The keys listen on the whole document, so they must stand down while any other layer has
+ * the user's attention — a dialog, popover or menu the event comes from, or one open anywhere
+ * on the page (the triage view's own dialogs switch the keys off through `isEnabled`) — and
+ * for a key a control already handled: arrows in a segmented control, a menu button's ↓.
  */
 const isForAnotherLayer = (event: KeyboardEvent): boolean =>
-  (event.target instanceof Element && event.target.closest(DIALOG_SELECTOR) !== null) ||
-  document.querySelector(OPEN_MODAL_SELECTOR) !== null;
+  event.defaultPrevented ||
+  (event.target instanceof Element && event.target.closest(LAYER_SELECTOR) !== null) ||
+  document.querySelector(OPEN_LAYER_SELECTOR) !== null;
+
+const SEGMENTED_CONTROL_ROLES = ["radio"] as const;
 
 const hasCommandModifier = (event: KeyboardEvent): boolean =>
   event.ctrlKey || event.metaKey || event.altKey;
 
 /**
- * Global triage keys. react-hotkeys-hook ignores events from inputs, textareas and selects,
- * so nothing here fires while the user types; the editor handles its own Esc / ⌘↵ and these
- * two only cover the case where focus is elsewhere while an editor is open.
+ * Global triage keys. react-hotkeys-hook ignores events from inputs, textareas, selects and
+ * menu items, so nothing here fires while the user types; the editor handles its own Esc / ⌘↵
+ * and these two only cover the case where focus is elsewhere while an editor is open.
  */
 export const useTriageHotkeys = ({
   isEnabled,
@@ -59,7 +64,13 @@ export const useTriageHotkeys = ({
   onCancelEdit,
   onSaveEdit,
 }: TriageHotkeyHandlers): void => {
-  const base = { preventDefault: true, ignoreEventWhen: isForAnotherLayer };
+  const base = {
+    preventDefault: true,
+    ignoreEventWhen: isForAnotherLayer,
+    // A segmented control (view, status) keeps focus after a click; the triage keys must
+    // still work from there. Its arrow keys are its own: it marks them handled.
+    enableOnFormTags: SEGMENTED_CONTROL_ROLES,
+  };
   const always = { ...base, enabled: isEnabled };
   const whenIdle = { ...base, enabled: isEnabled && !isEditing };
   const whenEditing = { ...base, enabled: isEnabled && isEditing };

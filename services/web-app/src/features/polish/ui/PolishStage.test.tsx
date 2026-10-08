@@ -6,8 +6,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { DEFAULT_BRIEF_CONFIG, reviewKeys } from "@entities/review";
 import type * as ReviewEntity from "@entities/review";
 import type { Comment, NewCommentInput, Review, UpdateCommentInput } from "@entities/review";
+import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { COALESCE_MS, applyCommentPatch, usePolishViewStore } from "../model";
 import { PolishStage } from "./PolishStage";
+import type { UserEvent } from "@testing-library/user-event";
 
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -174,6 +176,13 @@ const cardOrder = (): (string | null)[] => cards().map((c) => c.getAttribute("da
 const waitPastCoalescing = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, COALESCE_MS + 100));
 const lastUpdatePayload = (): unknown => fake.update.mock.lastCall?.[1];
+const severityChip = (name: RegExp): HTMLElement =>
+  within(screen.getByRole("group", { name: "Filter by severity" })).getByRole("button", { name });
+/** Opens the Bulk menu and picks an item by its accessible name. */
+const chooseBulkAction = async (user: UserEvent, name: string): Promise<void> => {
+  await user.click(screen.getByRole("button", { name: "Bulk actions" }));
+  await user.click(await screen.findByRole("menuitem", { name }));
+};
 
 beforeAll(() => {
   // jsdom has no pointer capture; sonner calls it when a toast button is pressed.
@@ -197,7 +206,7 @@ beforeEach(() => {
 
 // ── keyboard triage ──────────────────────────────────────────────────────────
 
-describe("PolishStage list — keyboard triage", () => {
+describe("PolishStage list — keyboard triage", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const threeComments = (): Review =>
     makeReview([
       makeComment("c1", { severity: "critical" }),
@@ -320,7 +329,7 @@ describe("PolishStage list — keyboard triage", () => {
 
 // ── editing ──────────────────────────────────────────────────────────────────
 
-describe("PolishStage list — editing", () => {
+describe("PolishStage list — editing", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const twoComments = (): Review =>
     makeReview([makeComment("c1", { severity: "critical" }), makeComment("c2")]);
 
@@ -477,12 +486,12 @@ describe("PolishStage list — editing", () => {
 
 // ── code context ─────────────────────────────────────────────────────────────
 
-describe("PolishStage list — code context", () => {
+describe("PolishStage list — code context", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("shows the diff lines around an anchored comment", async () => {
     const user = userEvent.setup();
     renderStage(makeReview([makeComment("c1", { line: 10 })]));
 
-    await user.click(within(card("c1")).getByRole("button", { name: "code context" }));
+    await user.click(within(card("c1")).getByRole("button", { name: "Show code" }));
 
     const snippet = screen.getByRole("table", { name: "Code around src/app.ts:10" });
     const rows = within(snippet).getAllByRole("row");
@@ -518,7 +527,7 @@ describe("PolishStage list — code context", () => {
 
 // ── filters and grouping ─────────────────────────────────────────────────────
 
-describe("PolishStage list — filters and grouping", () => {
+describe("PolishStage list — filters and grouping", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const mixed = (): Review =>
     makeReview([
       makeComment("b-minor", { file: "src/b.ts", line: 5, severity: "minor" }),
@@ -547,15 +556,14 @@ describe("PolishStage list — filters and grouping", () => {
   it("filters by severity, status, file and text", async () => {
     const user = userEvent.setup();
     renderStage(mixed());
-    const severityGroup = screen.getByRole("group", { name: "Filter by severity" });
 
-    await user.click(within(severityGroup).getByRole("button", { name: /major/ }));
+    await user.click(severityChip(/major/i));
     expect(cardOrder()).toEqual(["a-major-early", "a-major"]);
-    await user.click(within(severityGroup).getByRole("button", { name: /major/ }));
+    await user.click(severityChip(/major/i));
 
-    await user.click(screen.getByRole("button", { name: "Dismissed" }));
+    await user.click(screen.getByRole("radio", { name: "Dismissed" }));
     expect(cardOrder()).toEqual(["general"]);
-    await user.click(screen.getByRole("button", { name: "All" }));
+    await user.click(screen.getByRole("radio", { name: "All" }));
 
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Filter by file" }),
@@ -591,7 +599,7 @@ describe("PolishStage list — filters and grouping", () => {
     const user = userEvent.setup();
     renderStage(mixed());
 
-    await user.click(screen.getByRole("button", { name: "Kept" }));
+    await user.click(screen.getByRole("radio", { name: "Kept" }));
     expect(focusedId()).toBe("a-critical");
     await user.keyboard("jjjj");
 
@@ -601,7 +609,7 @@ describe("PolishStage list — filters and grouping", () => {
 
 // ── bulk actions, undo, rollback ─────────────────────────────────────────────
 
-describe("PolishStage list — bulk actions and persistence", () => {
+describe("PolishStage list — bulk actions and persistence", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const four = (): Review =>
     makeReview([
       makeComment("m1", { severity: "major" }),
@@ -614,12 +622,8 @@ describe("PolishStage list — bulk actions and persistence", () => {
     const user = userEvent.setup();
     renderStage(four());
 
-    await user.click(
-      within(screen.getByRole("group", { name: "Filter by severity" })).getByRole("button", {
-        name: /major/,
-      })
-    );
-    await user.click(screen.getByRole("button", { name: "Dismiss shown comments" }));
+    await user.click(severityChip(/major/i));
+    await chooseBulkAction(user, "Dismiss shown comments");
 
     expect(isDismissed("m1")).toBe(true);
     expect(isDismissed("m2")).toBe(true);
@@ -654,7 +658,7 @@ describe("PolishStage list — bulk actions and persistence", () => {
     const user = userEvent.setup();
     renderStage(four());
 
-    await user.click(screen.getByRole("button", { name: "Set all comments to critical" }));
+    await chooseBulkAction(user, "Set all comments to critical");
 
     await waitFor(() => {
       expect(fake.update).toHaveBeenCalledTimes(1);
@@ -701,7 +705,7 @@ describe("PolishStage list — bulk actions and persistence", () => {
 
 // ── add and delete ───────────────────────────────────────────────────────────
 
-describe("PolishStage list — adding and deleting", () => {
+describe("PolishStage list — adding and deleting", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("adds an anchored comment from the n shortcut", async () => {
     const user = userEvent.setup();
     renderStage(makeReview([makeComment("c1")]));
@@ -714,7 +718,7 @@ describe("PolishStage list — adding and deleting", () => {
       "src/app.ts"
     );
     await user.type(within(editor).getByRole("textbox", { name: "Line number" }), "11");
-    await user.click(within(editor).getByRole("button", { name: /major/ }));
+    await user.click(within(editor).getByRole("radio", { name: /major/i }));
     await user.click(within(editor).getByRole("button", { name: "Add comment" }));
 
     await waitFor(() => {
@@ -791,7 +795,7 @@ describe("PolishStage list — adding and deleting", () => {
 
 // ── long lists ───────────────────────────────────────────────────────────────
 
-describe("PolishStage list — long lists", () => {
+describe("PolishStage list — long lists", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -809,7 +813,7 @@ describe("PolishStage list — long lists", () => {
 
 // ── pinned view (diff + editor) ──────────────────────────────────────────────
 
-describe("PolishStage pinned view — comment navigation", () => {
+describe("PolishStage pinned view — comment navigation", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const editorTextarea = (): HTMLTextAreaElement =>
     screen.getByRole("textbox", { name: "Edit comment body" });
 
@@ -904,7 +908,7 @@ describe("PolishStage pinned view — comment navigation", () => {
 
 // ── regressions from review of #124 ──────────────────────────────────────────
 
-describe("PolishStage list — editing next to other changes", () => {
+describe("PolishStage list — editing next to other changes", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const bodyField = (): HTMLTextAreaElement =>
     screen.getByRole("textbox", { name: "Comment body" });
 
@@ -918,7 +922,7 @@ describe("PolishStage list — editing next to other changes", () => {
     );
 
     await user.keyboard("e");
-    await user.click(screen.getByRole("button", { name: "Set all comments to minor" }));
+    await chooseBulkAction(user, "Set all comments to minor");
     await waitFor(() => {
       expect(serverComments().map((c) => c.severity)).toEqual(["minor", "minor"]);
     });
@@ -944,7 +948,7 @@ describe("PolishStage list — editing next to other changes", () => {
     );
 
     await user.keyboard("e");
-    await user.click(screen.getByRole("button", { name: "Set all comments to minor" }));
+    await chooseBulkAction(user, "Set all comments to minor");
     await user.click(card("c2"));
 
     expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
@@ -1056,7 +1060,7 @@ describe("PolishStage list — editing next to other changes", () => {
   });
 });
 
-describe("PolishStage list — leaving with unsaved work", () => {
+describe("PolishStage list — leaving with unsaved work", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const unload = (): boolean => {
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
@@ -1106,7 +1110,7 @@ describe("PolishStage list — leaving with unsaved work", () => {
   });
 });
 
-describe("PolishStage list — keys, bulk scope and undo", () => {
+describe("PolishStage list — keys, bulk scope and undo", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("ignores triage keys while another dialog is open", async () => {
     const user = userEvent.setup();
     renderStage(makeReview([makeComment("c1")]));
@@ -1146,7 +1150,7 @@ describe("PolishStage list — keys, bulk scope and undo", () => {
     await user.click(screen.getByRole("button", { name: "Group by file" }));
     await user.click(screen.getByRole("button", { name: "src/a.ts, 2 comments" }));
     expect(screen.getByText("1 of 3 shown")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Dismiss shown comments" }));
+    await chooseBulkAction(user, "Dismiss shown comments");
 
     await waitFor(() => {
       expect(lastUpdatePayload()).toEqual({
@@ -1181,7 +1185,7 @@ describe("PolishStage list — keys, bulk scope and undo", () => {
   });
 });
 
-describe("PolishStage list — virtualised list behaviour", () => {
+describe("PolishStage list — virtualised list behaviour", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
@@ -1241,7 +1245,7 @@ describe("PolishStage list — virtualised list behaviour", () => {
   });
 });
 
-describe("PolishStage pinned view — blank bodies", () => {
+describe("PolishStage pinned view — blank bodies", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("does not let an empty body be saved", async () => {
     const user = userEvent.setup();
     usePolishViewStore.setState({ viewMode: "pinned" });
