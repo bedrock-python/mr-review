@@ -123,7 +123,11 @@ export const FiltersPopover = ({
           icon={<SlidersHorizontal size={ICON_SIZE.inline} aria-hidden="true" />}
           iconRight={
             activeCount > 0 ? (
-              <CountBadge count={activeCount} tone="accent" label={`${String(activeCount)} set`} />
+              <CountBadge
+                count={activeCount}
+                tone="accent"
+                label={`${String(activeCount)} active`}
+              />
             ) : undefined
           }
         >

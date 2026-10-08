@@ -19,6 +19,12 @@ const SEVERITY_BY_KEY = new Map(
   SEVERITY_ORDER.map((severity) => [SEVERITY_KEY[severity], severity])
 );
 
+/** The menu's heading: what its actions apply to. */
+const describeTarget = (scope: BulkMenuProps["scope"], count: number): string => {
+  if (scope === "shown") return `${String(count)} shown ${count === 1 ? "comment" : "comments"}`;
+  return count === 1 ? "1 comment" : `All ${String(count)} comments`;
+};
+
 const hasModifier = (event: React.KeyboardEvent): boolean =>
   event.altKey || event.ctrlKey || event.metaKey;
 
@@ -34,7 +40,7 @@ export const BulkMenu = ({
   onSetSeverity,
 }: BulkMenuProps): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
-  const target = scope === "all" ? `All ${String(count)} comments` : `${String(count)} shown`;
+  const target = describeTarget(scope, count);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const severity = SEVERITY_BY_KEY.get(event.key);
