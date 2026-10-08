@@ -7,7 +7,23 @@ import { SearchField } from "../SearchField";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
+import { Slider } from "./Slider";
 import { Textarea } from "./Textarea";
+
+describe("Slider", () => {
+  it("is a range named by its Field, drawn neutral while unset", () => {
+    render(
+      <Field label="Temperature" hint="0 — Deterministic">
+        <Slider min={0} max={2} step={0.05} defaultValue={1} isUnset />
+      </Field>
+    );
+
+    const slider = screen.getByRole("slider", { name: "Temperature" });
+    expect(slider).toHaveAccessibleDescription("0 — Deterministic");
+    expect(slider).toHaveAttribute("data-unset", "true");
+    expect(slider).toHaveClass("ui-slider");
+  });
+});
 
 describe("Select width", () => {
   it("fills its container by default and takes its own width in a row when asked", () => {

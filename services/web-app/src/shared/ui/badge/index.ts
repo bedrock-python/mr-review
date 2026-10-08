@@ -5,6 +5,8 @@ export type { Status, StatusBadgeProps } from "./StatusBadge";
 export { CountBadge } from "./CountBadge";
 export type { CountBadgeProps } from "./CountBadge";
 export { Chip } from "./Chip";
+export { Tag } from "./Tag";
+export type { TagProps } from "./Tag";
 export type { ChipProps } from "./Chip";
 export { toneAttribute } from "./tone";
 export type { Tone } from "./tone";

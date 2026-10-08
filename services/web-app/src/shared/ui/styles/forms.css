@@ -171,6 +171,22 @@
     pointer-events: none;
   }
 
+  /* ── Slider ────────────────────────────────────────────────── */
+  .ui-slider {
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .ui-slider:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  /* Unset reads as neutral. fg-2, not fg-3: the browser draws the empty track dark or light
+     against the accent's lightness, and fg-3 would vanish on it. */
+  .ui-slider[data-unset] {
+    accent-color: var(--fg-2);
+  }
+
   /* ── Combobox ──────────────────────────────────────────────── */
   .ui-combobox {
     position: relative;

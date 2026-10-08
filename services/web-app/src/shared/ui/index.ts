@@ -10,23 +10,27 @@ export type {
 } from "./button";
 export { Tooltip, Kbd } from "./tooltip";
 export type { TooltipProps, KbdProps } from "./tooltip";
-export { Field, Input, Textarea, Select, useFieldControl } from "./field";
+export { Field, Input, Textarea, Select, Slider, useFieldControl } from "./field";
 export type {
   FieldProps,
   InputProps,
   TextareaProps,
   SelectProps,
+  SliderProps,
   FieldControlProps,
 } from "./field";
 export { Checkbox, Radio, RadioGroup, Switch } from "./choice";
 export type { CheckboxProps, RadioProps, RadioGroupProps, SwitchProps } from "./choice";
-export { Badge, StatusBadge, CountBadge, Chip, toneAttribute } from "./badge";
+export { Badge, StatusBadge, CountBadge, Chip, Tag, toneAttribute } from "./badge";
+export { Meter } from "./meter";
+export type { MeterProps } from "./meter";
 export type {
   BadgeProps,
   Status,
   StatusBadgeProps,
   CountBadgeProps,
   ChipProps,
+  TagProps,
   Tone,
 } from "./badge";
 export { Card, SelectCard, SelectCardGroup } from "./card";

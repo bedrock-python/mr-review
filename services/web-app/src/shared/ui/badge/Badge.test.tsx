@@ -6,6 +6,18 @@ import { Badge } from "./Badge";
 import { Chip } from "./Chip";
 import { CountBadge } from "./CountBadge";
 import { StatusBadge } from "./StatusBadge";
+import { Tag } from "./Tag";
+
+describe("Tag", () => {
+  it("keeps an identifier as it is and titles it for when it is cut", () => {
+    render(<Tag>claude-Opus-5-5</Tag>);
+
+    const tag = screen.getByText("claude-Opus-5-5");
+    expect(tag).toHaveClass("ui-tag");
+    expect(tag).not.toHaveClass("ui-badge");
+    expect(tag).toHaveAttribute("title", "claude-Opus-5-5");
+  });
+});
 
 describe("Badge", () => {
   it("renders its text in a tone", () => {

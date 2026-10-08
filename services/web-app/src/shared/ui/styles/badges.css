@@ -108,6 +108,65 @@
     color: inherit;
   }
 
+  /* A case-preserving identifier: a model id, a file path. Badge uppercases; this does not. */
+  .ui-tag {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-badge);
+    background: var(--bg-2);
+    color: var(--fg-1);
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    line-height: var(--lh-body);
+    vertical-align: middle;
+  }
+
+  /* ── Meter ─────────────────────────────────────────────────── */
+  :where(.ui-meter) {
+    --tone: var(--accent);
+    --tone-fg: var(--fg-2);
+  }
+  .ui-meter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .ui-meter__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-meter__caption {
+    color: var(--fg-1);
+  }
+  .ui-meter__value {
+    color: var(--fg-2);
+  }
+  .ui-meter[data-tone="warn"] .ui-meter__value,
+  .ui-meter[data-tone="danger"] .ui-meter__value {
+    color: var(--tone-fg);
+  }
+  .ui-meter__track {
+    height: var(--space-1);
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--bg-3);
+  }
+  .ui-meter__bar {
+    height: 100%;
+    border-radius: var(--radius-pill);
+    background: var(--tone);
+  }
+
   .ui-severity-counts {
     display: inline-flex;
     align-items: center;

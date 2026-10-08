@@ -5,6 +5,8 @@ export type { InputProps } from "./Input";
 export { Textarea } from "./Textarea";
 export type { TextareaProps } from "./Textarea";
 export { Select } from "./Select";
+export { Slider } from "./Slider";
+export type { SliderProps } from "./Slider";
 export type { SelectProps } from "./Select";
 export { useFieldControl } from "./fieldContext";
 export type { FieldControlProps } from "./fieldContext";

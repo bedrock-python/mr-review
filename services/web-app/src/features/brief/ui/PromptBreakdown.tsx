@@ -1,5 +1,4 @@
-import { Callout, Eyebrow } from "@shared/ui";
-import { BudgetMeter } from "./BudgetMeter";
+import { Callout, Eyebrow, Meter } from "@shared/ui";
 import type { PromptPreview, PromptSection } from "@entities/review";
 
 const CHARS_PER_TOKEN = 4;
@@ -39,6 +38,11 @@ export type PromptBreakdownProps = {
   preview: PromptPreview;
 };
 
+const PERCENT = 100;
+
+const budgetPercent = (used: number, budget: number): number =>
+  budget > 0 ? Math.round(Math.min(used / budget, 1) * PERCENT) : 0;
+
 /** What the prompt is made of, what the budget cut, and which files were left out. */
 export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactElement => {
   const lossy = preview.sections.filter(hasLoss);
@@ -46,10 +50,15 @@ export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactE
 
   return (
     <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
-      <BudgetMeter
-        used={preview.total_chars}
-        budget={preview.budget_chars}
-        isCut={lossy.length > 0}
+      <Meter
+        label="Prompt budget used"
+        value={preview.total_chars}
+        max={preview.budget_chars}
+        caption={`${preview.total_chars.toLocaleString()} of ${preview.budget_chars.toLocaleString()} characters`}
+        valueText={`${String(budgetPercent(preview.total_chars, preview.budget_chars))}% of the budget`}
+        isValueShown
+        // Something was cut to fit: the bar turns to the warning colour.
+        tone={lossy.length > 0 ? "warn" : "accent"}
       />
       <table
         className="w-full border-collapse font-mono"

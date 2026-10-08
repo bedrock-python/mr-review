@@ -3,6 +3,7 @@ import { Badge } from "./Badge";
 import { Chip } from "./Chip";
 import { CountBadge } from "./CountBadge";
 import { StatusBadge } from "./StatusBadge";
+import { Tag } from "./Tag";
 import type { Tone } from "./tone";
 import type { Meta, StoryObj } from "@storybook/react";
 
@@ -99,6 +100,17 @@ const ChipsDemo = (): React.ReactElement => {
       </div>
     </div>
   );
+};
+
+/** Identifiers keep their case: model ids, file paths. */
+export const Tags: StoryObj = {
+  render: () => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 320 }}>
+      <Tag>claude-opus-5-5</Tag>
+      <Tag>gpt-5-mini</Tag>
+      <Tag>Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8</Tag>
+    </div>
+  ),
 };
 
 export const Chips: StoryObj = {
