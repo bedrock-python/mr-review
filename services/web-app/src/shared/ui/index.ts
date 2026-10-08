@@ -10,10 +10,14 @@ export type {
   LineDecorationRenderer,
 } from "./DiffViewer";
 export { Markdown } from "./Markdown";
-export { Skeleton } from "./Skeleton";
-export type { SkeletonProps } from "./Skeleton";
-export { Spinner } from "./Spinner";
-export type { SpinnerProps } from "./Spinner";
+export { Skeleton, Spinner, StageLoading } from "./loading";
+export type {
+  SkeletonProps,
+  SkeletonRadius,
+  SpinnerProps,
+  SpinnerSize,
+  StageLoadingProps,
+} from "./loading";
 export { SearchField } from "./SearchField";
 export type { SearchFieldProps } from "./SearchField";
 export { ListMessage, ListStatusBar, LoadMoreRow } from "./ListStates";
