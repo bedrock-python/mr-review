@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, memo, Suspense } from "react";
 import { reloadOnStaleChunk } from "@shared/lib";
 import { ErrorBoundary } from "./error-boundary";
 import type { MarkdownProps } from "./MarkdownContent";
@@ -20,11 +20,7 @@ const PlainText = ({ children, className }: MarkdownProps): React.ReactElement =
   </div>
 );
 
-/**
- * Markdown, rendered once the renderer has loaded. The plain text stands in until then, and
- * for good when the renderer cannot be loaded or fails on the text.
- */
-export const Markdown = ({ children, className }: MarkdownProps): React.ReactElement => {
+const MarkdownBase = ({ children, className }: MarkdownProps): React.ReactElement => {
   const plain = (
     <PlainText {...(className === undefined ? {} : { className })}>{children}</PlainText>
   );
@@ -38,5 +34,12 @@ export const Markdown = ({ children, className }: MarkdownProps): React.ReactEle
     </ErrorBoundary>
   );
 };
+
+/**
+ * Markdown, rendered once the renderer has loaded. The plain text stands in until then, and
+ * for good when the renderer cannot be loaded or fails on the text. Memoised on the text:
+ * a list of comments re-renders without parsing every body again.
+ */
+export const Markdown = memo(MarkdownBase);
 
 export type { MarkdownProps };

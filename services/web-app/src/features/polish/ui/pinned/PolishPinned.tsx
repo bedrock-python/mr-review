@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Markdown } from "@shared/ui";
 import { SEV_COLOR } from "../../lib";
 import { PinnedCommentEditor } from "./PinnedCommentEditor";
 import { ReviewDiffViewer } from "./ReviewDiffViewer";
@@ -273,9 +274,7 @@ export const PolishPinned = ({
                       </button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-1)" }}>
-                    {c.body}
-                  </div>
+                  <Markdown>{c.body}</Markdown>
                 </div>
               ))}
             </div>

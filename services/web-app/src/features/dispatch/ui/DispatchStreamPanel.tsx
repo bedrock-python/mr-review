@@ -2,9 +2,11 @@ import { memo } from "react";
 
 import { useStore } from "zustand";
 
+import { SeverityBadge } from "@entities/review";
 import { useStickToBottom } from "@shared/lib";
+import { Markdown } from "@shared/ui";
 
-import type { CommentSeverity, DispatchCommentPreview } from "@entities/review";
+import type { DispatchCommentPreview } from "@entities/review";
 import type { StoreApi } from "zustand/vanilla";
 import type { DispatchSessionState } from "../model/dispatchSession";
 
@@ -14,13 +16,6 @@ export type DispatchRunInfo = {
   providerName: string;
   model: string;
   accentColor: string;
-};
-
-const SEVERITY_COLOR: Record<CommentSeverity, string> = {
-  critical: "var(--c-critical)",
-  major: "var(--c-major)",
-  minor: "var(--c-minor)",
-  suggestion: "var(--c-suggest)",
 };
 
 const STATUS_LABEL: Record<DispatchRunStatus, string> = {
@@ -134,20 +129,7 @@ const CommentPreviewRow = memo(
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            padding: "1px 6px",
-            borderRadius: "var(--radius-1)",
-            background: `color-mix(in oklch, ${SEVERITY_COLOR[comment.severity]} 15%, transparent)`,
-            color: SEVERITY_COLOR[comment.severity],
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {comment.severity}
-        </span>
+        <SeverityBadge severity={comment.severity} />
         {comment.file ? (
           <span
             className="mono"
@@ -166,11 +148,7 @@ const CommentPreviewRow = memo(
           <span style={{ fontSize: 10.5, color: "var(--fg-2)" }}>general note</span>
         )}
       </div>
-      <div
-        style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}
-      >
-        {comment.body}
-      </div>
+      <Markdown>{comment.body}</Markdown>
     </li>
   )
 );

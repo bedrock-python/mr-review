@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Markdown } from "@shared/ui";
 import { SEV_COLOR } from "../../lib";
 import type { Comment } from "@entities/review";
 
@@ -158,16 +159,7 @@ export const PolishThread = ({
                     )}
                   </button>
                 </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    lineHeight: 1.55,
-                    color: "var(--fg-1)",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {c.body}
-                </div>
+                <Markdown>{c.body}</Markdown>
               </div>
             </div>
           ))
