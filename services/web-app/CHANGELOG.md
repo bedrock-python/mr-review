@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/0.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/bedrock-python/mr-review/compare/web-app-v0.2.2...web-app-v0.3.0) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* data export is format 2.0 (version 1 files still import); POST /api/v1/data/export leaves secrets out unless a password (encrypted) or include_plain_secrets is given; an empty token or API key counts as absent on import; the server must run a single worker.
+* the API refuses requests whose Host is not in MR_REVIEW__ALLOWED_HOSTS (default localhost, 127.0.0.1, ::1, api) with 400 — add your LAN hostname/IP or reverse-proxy upstream name when exposing it; saving a brief on an iteration that reached Post returns 409.
+* POST /api/v1/reviews/{id}/post answers {posted, failed, skipped, held_back, completed, results[], review} instead of {posted}, refuses a completed iteration with 409 unless force is set, and comment edits return 409 while a post of the review is running.
+* POST /api/v1/reviews/{id}/dispatch streams typed SSE events (chunk, comment, done, error) with JSON data instead of plain text chunks; dispatching into a posted iteration returns 409.
+* GET /api/v1/hosts/{id}/repos, /repos/{repo_path}/mrs and /inbox return a page envelope {items, page, per_page, has_more} instead of a bare list (the inbox also carries truncated_repos), and MR additions / deletions / file_count are nullable. Upstream VCS errors now map to 400/401/403/404/422/429/502/504 instead of 502/500.
+* compose files publish ports on 127.0.0.1 by default (set MR_REVIEW_BIND=0.0.0.0 to expose on the LAN); the web-app image calls the API same-origin through its /api/ proxy (set API_BASE_URL or API_UPSTREAM for a standalone web-app); the api and all-in-one images start as root and drop to PUID:PGID (they need CHOWN, SETUID and SETGID, or run them with user:); HSTS is opt-in via HSTS_MAX_AGE. See docs/getting-started/installation.md, "Upgrading".
+
+### Features
+
+* design system foundation — tokens, accessible contrast, shared UI primitives, bundled fonts ([#134](https://github.com/bedrock-python/mr-review/issues/134)) ([db9161c](https://github.com/bedrock-python/mr-review/commit/db9161c1b97441cbbe06e406ce3dfd63cbc385e1))
+* keyboard-driven comment polishing with filters, bulk actions and undo ([#124](https://github.com/bedrock-python/mr-review/issues/124)) ([c594996](https://github.com/bedrock-python/mr-review/commit/c5949967afb69d3a85823e2d8050d9203fee10f6))
+* model-aware dispatch settings — effort, output limit, structured output, system prompt ([#129](https://github.com/bedrock-python/mr-review/issues/129)) ([d03ea33](https://github.com/bedrock-python/mr-review/commit/d03ea33bad0e969dc475fb5250139ced6169bb63))
+* paginate repositories, merge requests and the inbox ([#126](https://github.com/bedrock-python/mr-review/issues/126)) ([c8748c7](https://github.com/bedrock-python/mr-review/commit/c8748c75dce248ef3cb81c88415de5c13065196d))
+* review brief options — language, severity floor, comment cap, path filters, line numbers, presets, prompt budget ([#130](https://github.com/bedrock-python/mr-review/issues/130)) ([5773a96](https://github.com/bedrock-python/mr-review/commit/5773a96881cc1af747d44eaeb51d6115022af653))
+* **web:** redesign Settings and export/import on the shared primitives ([#140](https://github.com/bedrock-python/mr-review/issues/140)) ([d7aa5ae](https://github.com/bedrock-python/mr-review/commit/d7aa5aee187fd1e6fab63a9585ddf93c543e5c84))
+* **web:** redesign the app shell, sidebar and MR list on the shared primitives ([#138](https://github.com/bedrock-python/mr-review/issues/138)) ([531e61b](https://github.com/bedrock-python/mr-review/commit/531e61b28332cd0a4a4801de6714af2117db9ddd))
+* **web:** redesign the Dispatch stage on the shared primitives ([#136](https://github.com/bedrock-python/mr-review/issues/136)) ([6ea1db2](https://github.com/bedrock-python/mr-review/commit/6ea1db2e086099c8b77e680498e585049beb1693))
+* **web:** redesign the Pick and Brief stages on the shared primitives ([#135](https://github.com/bedrock-python/mr-review/issues/135)) ([1ab965a](https://github.com/bedrock-python/mr-review/commit/1ab965a41709cbdd6438df6ad8b4555b14ac05fa))
+* **web:** redesign the Polish stage on the shared primitives ([#137](https://github.com/bedrock-python/mr-review/issues/137)) ([7575201](https://github.com/bedrock-python/mr-review/commit/7575201424a6c8e41cede27c548380712bbe3337))
+* **web:** redesign the Post stage and history panels on the shared primitives ([#139](https://github.com/bedrock-python/mr-review/issues/139)) ([9c56862](https://github.com/bedrock-python/mr-review/commit/9c568626d4f066c6e0fc55fa740e084c3f739c85))
+
+
+### Bug Fixes
+
+* harden the deployments — security headers, same-origin API, data dir ownership, loopback ports ([#127](https://github.com/bedrock-python/mr-review/issues/127)) ([cc4cba2](https://github.com/bedrock-python/mr-review/commit/cc4cba282f64b2d6b0db198615656d3f960e07db))
+* make the data store safe under concurrency and export/import lossless ([#133](https://github.com/bedrock-python/mr-review/issues/133)) ([bc62013](https://github.com/bedrock-python/mr-review/commit/bc62013d3bbb7b932daf1dd90183f10afa1964ab))
+* parse AI review comments reliably and stream them live ([#125](https://github.com/bedrock-python/mr-review/issues/125)) ([126c938](https://github.com/bedrock-python/mr-review/commit/126c938ce2176520dc4455ac43a4b98e9ac30602))
+* post review comments exactly once, report what landed, anchor them on the right lines ([#131](https://github.com/bedrock-python/mr-review/issues/131)) ([4e7fea9](https://github.com/bedrock-python/mr-review/commit/4e7fea975e004598fe22e303bd65a5cd34975b7f))
+* web app reliability — stage in the URL, safe cache persistence, lazy stages, host allowlist ([#132](https://github.com/bedrock-python/mr-review/issues/132)) ([312727b](https://github.com/bedrock-python/mr-review/commit/312727b13ff5875dc7aaab98be620ba11ccb9413))
+
 ## [0.2.2](https://github.com/bedrock-python/mr-review/compare/web-app-v0.2.1...web-app-v0.2.2) (2026-08-15)
 
 
