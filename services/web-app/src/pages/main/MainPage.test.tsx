@@ -12,6 +12,10 @@ import { INTEGRATION_TEST_TIMEOUT_MS, createTestQueryClient } from "@shared/lib/
 import { MainPage } from "./MainPage";
 import type { Comment, Review } from "@entities/review";
 
+// The Polish stage is its own lazily loaded chunk: under a busy machine (parallel test
+// files) it takes longer than Testing Library's 1 s default to arrive.
+const LAZY_STAGE_WAIT = { timeout: 5000 };
+
 const HOST_ID = "33333333-3333-4333-8333-333333333333";
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -129,7 +133,7 @@ describe("MainPage", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     await waitFor(() => {
       expect(focusedCommentId()).toBe(C1);
-    });
+    }, LAZY_STAGE_WAIT);
     // Closed panels are not in the page at all, so nothing claims to be an open dialog.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(document.querySelector('[aria-modal="true"]')).toBeNull();
@@ -196,7 +200,7 @@ describe("MainPage", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     );
     await waitFor(() => {
       expect(focusedCommentId()).toBe(C1);
-    });
+    }, LAZY_STAGE_WAIT);
 
     useAppStore.setState({ iterationHistoryOpen: true });
     await screen.findByRole("dialog", { name: "Iterations" });
