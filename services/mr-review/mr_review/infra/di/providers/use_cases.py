@@ -19,6 +19,7 @@ from mr_review.infra.ai.openai_compat import OpenAICompatProvider
 from mr_review.infra.repositories.ai_provider import FileAIProviderRepository
 from mr_review.infra.repositories.host import FileHostRepository
 from mr_review.infra.repositories.review import FileReviewRepository
+from mr_review.infra.repositories.review_preset import FileReviewPresetRepository
 from mr_review.infra.vcs.cache import VCSCache
 from mr_review.use_cases.ai_providers.create_ai_provider import CreateAIProviderUseCase
 from mr_review.use_cases.ai_providers.delete_ai_provider import DeleteAIProviderUseCase
@@ -42,6 +43,11 @@ from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
 from mr_review.use_cases.mrs.list_inbox_mrs import ListInboxMRsUseCase
 from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
+from mr_review.use_cases.review_presets.create_review_preset import CreateReviewPresetUseCase
+from mr_review.use_cases.review_presets.delete_review_preset import DeleteReviewPresetUseCase
+from mr_review.use_cases.review_presets.get_review_preset import GetReviewPresetUseCase
+from mr_review.use_cases.review_presets.list_review_presets import ListReviewPresetsUseCase
+from mr_review.use_cases.review_presets.update_review_preset import UpdateReviewPresetUseCase
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
@@ -55,6 +61,7 @@ from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCa
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
+from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
@@ -256,12 +263,47 @@ class UseCaseProvider(Provider):
         review_repo: FileReviewRepository,
         host_repo: FileHostRepository,
         vcs_cache: VCSCache,
+        preset_repo: FileReviewPresetRepository,
     ) -> GetReviewPromptUseCase:
         return GetReviewPromptUseCase(
             review_repo=review_repo,
             host_repo=host_repo,
             vcs_factory=_make_vcs_factory(vcs_cache),
+            preset_repo=preset_repo,
         )
+
+    @provide
+    def get_list_excluded_files_use_case(
+        self,
+        review_repo: FileReviewRepository,
+        host_repo: FileHostRepository,
+        vcs_cache: VCSCache,
+    ) -> ListExcludedFilesUseCase:
+        return ListExcludedFilesUseCase(
+            review_repo=review_repo,
+            host_repo=host_repo,
+            vcs_factory=_make_vcs_factory(vcs_cache),
+        )
+
+    @provide
+    def get_list_review_presets_use_case(self, repo: FileReviewPresetRepository) -> ListReviewPresetsUseCase:
+        return ListReviewPresetsUseCase(repo)
+
+    @provide
+    def get_get_review_preset_use_case(self, repo: FileReviewPresetRepository) -> GetReviewPresetUseCase:
+        return GetReviewPresetUseCase(repo)
+
+    @provide
+    def get_create_review_preset_use_case(self, repo: FileReviewPresetRepository) -> CreateReviewPresetUseCase:
+        return CreateReviewPresetUseCase(repo)
+
+    @provide
+    def get_update_review_preset_use_case(self, repo: FileReviewPresetRepository) -> UpdateReviewPresetUseCase:
+        return UpdateReviewPresetUseCase(repo)
+
+    @provide
+    def get_delete_review_preset_use_case(self, repo: FileReviewPresetRepository) -> DeleteReviewPresetUseCase:
+        return DeleteReviewPresetUseCase(repo)
 
     @provide
     def get_dispatch_review_use_case(
@@ -271,6 +313,7 @@ class UseCaseProvider(Provider):
         ai_provider_repo: FileAIProviderRepository,
         vcs_cache: VCSCache,
         fence_registry: AIFenceRegistry,
+        preset_repo: FileReviewPresetRepository,
     ) -> DispatchReviewUseCase:
         return DispatchReviewUseCase(
             review_repo=review_repo,
@@ -278,6 +321,7 @@ class UseCaseProvider(Provider):
             ai_provider_repo=ai_provider_repo,
             vcs_factory=_make_vcs_factory(vcs_cache),
             ai_dispatcher_factory=_make_ai_dispatcher_factory(fence_registry),
+            preset_repo=preset_repo,
         )
 
     @provide

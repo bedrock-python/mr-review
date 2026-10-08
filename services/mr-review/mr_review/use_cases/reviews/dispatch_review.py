@@ -15,6 +15,7 @@ from mr_review.core.ai.protocols import AIDispatcherFactory
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.ai_providers.repositories import AIProviderRepository
 from mr_review.core.hosts.repositories import HostRepository
+from mr_review.core.review_presets.repositories import ReviewPresetRepository
 from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage, Review
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
@@ -26,21 +27,12 @@ from mr_review.use_cases.reviews.ai_response_parser import (
     StreamingCommentParser,
     parse_ai_response,
 )
-from mr_review.use_cases.reviews.context_files import (
-    CONCURRENCY,
-    collect_commit_history,
-    collect_context_files,
-    collect_full_files,
-    collect_related_code,
-    collect_test_files,
-)
 from mr_review.use_cases.reviews.iteration_comments import (
     ensure_iteration_editable,
     find_iteration_index,
     replace_iteration,
 )
-from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
-from mr_review.use_cases.reviews.source_resolver import resolve_source
+from mr_review.use_cases.reviews.prompt_assembly import assemble_prompt, dispatch_target_number
 
 _log = logging.getLogger(__name__)
 
@@ -78,6 +70,8 @@ class DispatchCompleted:
     truncated: bool
     # The answer was not used — unreadable, cut off or empty — and the iteration kept what it had.
     kept_previous: bool
+    # Parsed comments the brief's minimum severity or comment cap dropped from what was stored.
+    filtered: int = 0
 
 
 DispatchEvent = DispatchChunk | DispatchCommentPreview | DispatchCompleted
@@ -87,14 +81,6 @@ DispatchEvent = DispatchChunk | DispatchCommentPreview | DispatchCompleted
 class _Started:
     iteration_id: UUID
     baseline: DispatchBaseline
-
-
-async def _noop_dict() -> dict[str, str]:
-    return {}
-
-
-async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
-    return {}
 
 
 async def _close_stream(stream: AsyncIterator[object]) -> None:
@@ -182,12 +168,14 @@ class DispatchReviewUseCase:
         ai_provider_repo: AIProviderRepository,
         vcs_factory: VCSProviderFactory,
         ai_dispatcher_factory: AIDispatcherFactory,
+        preset_repo: ReviewPresetRepository | None = None,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
         self._ai_provider_repo = ai_provider_repo
         self._vcs_factory = vcs_factory
         self._ai_dispatcher_factory = ai_dispatcher_factory
+        self._preset_repo = preset_repo
 
     async def execute(
         self,
@@ -199,8 +187,9 @@ class DispatchReviewUseCase:
         """Build the prompt and return the event stream; the review is first written when it starts.
 
         Raises ``ValueError`` for an unknown review, host, provider or iteration,
-        ``DispatchModelMissingError`` when no model is named and the provider has none, and
-        ``IterationLockedError`` for an iteration that was already posted.
+        ``DispatchModelMissingError`` when no model is named and the provider has none,
+        ``IterationLockedError`` for an iteration that was already posted, and
+        ``AllFilesExcludedError`` when the brief's path filters leave none of the changed files.
         """
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
@@ -223,49 +212,14 @@ class DispatchReviewUseCase:
         else:
             cfg = review.iterations[-1].brief_config if review.iterations else BriefConfig()
 
-        provider = self._vcs_factory(host)
-        resolved = await resolve_source(review, provider)
-        diff_files = resolved.diff_files
-        ref = resolved.ref
-
-        semaphore = asyncio.Semaphore(CONCURRENCY)
-
-        context_contents, full_files, test_files, related_code, commit_history = await asyncio.gather(
-            collect_context_files(
-                provider=provider,
-                repo_path=review.repo_path,
-                requested_paths=cfg.context_files,
-                ref=ref,
-                semaphore=semaphore,
-            )
-            if cfg.include_context
-            else _noop_dict(),
-            collect_full_files(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_full_files
-            else _noop_dict(),
-            collect_test_files(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_test_context
-            else _noop_dict(),
-            collect_related_code(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_related_code
-            else _noop_dict(),
-            collect_commit_history(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_commit_history
-            else _noop_commit_history(),
-        )
-
-        diff_text = format_diff(diff_files)
-        prompt = build_prompt(
+        assembled = await assemble_prompt(
+            review,
+            self._vcs_factory(host),
             cfg,
-            diff_text,
-            resolved.title,
-            resolved.description,
-            context_contents,
-            full_files=full_files,
-            test_files=test_files,
-            related_code=related_code,
-            commit_history=commit_history,
+            iteration_number=dispatch_target_number(review, target),
+            presets=self._preset_repo,
         )
+        prompt = assembled.prompt.text
 
         return self._stream_and_save(
             review_id=review_id,
@@ -369,6 +323,7 @@ class DispatchReviewUseCase:
             json_error=result.json_error,
             truncated=result.truncated,
             kept_previous=not outcome.applied,
+            filtered=outcome.filtered,
         )
 
     async def _settle_interrupted(self, review_id: UUID, target: _Started, raw: str) -> None:

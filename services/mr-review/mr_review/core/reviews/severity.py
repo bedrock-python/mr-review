@@ -91,3 +91,17 @@ def normalize_severity(value: object) -> Severity | None:
         return None
     level, negated = found
     return _NEGATED[level] if negated else level
+
+
+# Most to least important.
+SEVERITY_ORDER: Final[tuple[Severity, ...]] = ("critical", "major", "minor", "suggestion")
+
+
+def severity_rank(severity: Severity) -> int:
+    """0 for ``critical`` up to 3 for ``suggestion``: the lower the rank, the more important."""
+    return SEVERITY_ORDER.index(severity)
+
+
+def severities_at_least(minimum: Severity) -> tuple[Severity, ...]:
+    """The severities at or above ``minimum``, most important first."""
+    return SEVERITY_ORDER[: severity_rank(minimum) + 1]

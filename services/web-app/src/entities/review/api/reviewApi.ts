@@ -3,11 +3,15 @@ import { ApiError, httpClient } from "@shared/api";
 import { env } from "@shared/config";
 import { readEventStream } from "@shared/lib";
 import { ReviewSchema } from "../model/review.schema";
+import { ExcludedFilesSchema, PromptPreviewSchema } from "../model/prompt.schema";
 import { parseDispatchStreamEvent } from "./parseDispatchStreamEvent";
 import type { DispatchRequest, DispatchStreamEvent } from "../model/dispatch.schema";
+import type { ExcludedFiles, PromptPreview } from "../model/prompt.schema";
 import type { Review, BriefConfig, Comment } from "../model/review.schema";
 
 const HTTP_NOT_FOUND = 404;
+// Building a prompt fetches context files from the VCS host first; that can take a while.
+const PROMPT_TIMEOUT_MS = 120_000;
 
 const CommentParseErrorSchema = z.object({
   index: z.number(),
@@ -19,6 +23,8 @@ export const ImportResponseResultSchema = z.object({
   imported: z.number(),
   errors: z.array(CommentParseErrorSchema).default([]),
   json_error: z.string().nullable().default(null),
+  /** Parsed comments dropped by the brief's minimum severity or comment cap. */
+  filtered: z.number().int().nonnegative().optional(),
 });
 
 export type ImportResponseResult = z.infer<typeof ImportResponseResultSchema>;
@@ -102,6 +108,32 @@ export const reviewApi = {
       iteration_id: iterationId ?? null,
     });
     return res.data;
+  },
+
+  // The prompt with a breakdown of what each part takes and what the budget cut or left out.
+  getPromptPreview: async (
+    reviewId: string,
+    briefConfig?: BriefConfig,
+    iterationId?: string
+  ): Promise<PromptPreview> => {
+    const res = await httpClient.post<unknown>(
+      `/api/v1/reviews/${reviewId}/prompt/preview`,
+      { brief_config: briefConfig ?? null, iteration_id: iterationId ?? null },
+      { timeout: PROMPT_TIMEOUT_MS }
+    );
+    return PromptPreviewSchema.parse(res.data);
+  },
+
+  // Which changed files the brief's include/exclude patterns leave out; no context is fetched.
+  // Fields left out of `briefConfig` take their defaults.
+  getExcludedFiles: async (
+    reviewId: string,
+    briefConfig?: Partial<BriefConfig>
+  ): Promise<ExcludedFiles> => {
+    const res = await httpClient.post<unknown>(`/api/v1/reviews/${reviewId}/excluded-files`, {
+      brief_config: briefConfig ?? null,
+    });
+    return ExcludedFilesSchema.parse(res.data);
   },
 
   // Runs the review through an AI provider over SSE. Yields the raw text and

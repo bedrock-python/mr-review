@@ -3,8 +3,19 @@ import { PatchStatusSchema, SuggestedPatchSchema } from "./patch.schema";
 
 export const BriefPresetSchema = z.enum(["thorough", "security", "style", "performance"]);
 
+export const SeveritySchema = z.enum(["critical", "major", "minor", "suggestion"]);
+
+// Sized for a ~200k-token model at ~4 characters per token; the server caps it to this range.
+export const DEFAULT_PROMPT_BUDGET_CHARS = 600_000;
+export const MIN_PROMPT_BUDGET_CHARS = 20_000;
+export const MAX_PROMPT_BUDGET_CHARS = 4_000_000;
+export const MAX_COMMENTS_LIMIT = 200;
+
+// Fields added after the first release default here, so briefs stored or cached by older
+// versions still parse.
 export const BriefConfigSchema = z.object({
   preset: BriefPresetSchema,
+  custom_preset_id: z.string().uuid().nullable().default(null),
   include_diff: z.boolean(),
   include_description: z.boolean(),
   include_context: z.boolean().default(true),
@@ -14,9 +25,17 @@ export const BriefConfigSchema = z.object({
   include_commit_history: z.boolean(),
   custom_instructions: z.string(),
   context_files: z.array(z.string()).default([]),
+  focus_areas: z.array(z.string()).default([]),
+  output_language: z.string().default(""),
+  min_severity: SeveritySchema.default("suggestion"),
+  max_comments: z.number().int().positive().nullable().default(null),
+  include_paths: z.array(z.string()).default([]),
+  exclude_paths: z.array(z.string()).default([]),
+  use_default_excludes: z.boolean().default(true),
+  annotate_line_numbers: z.boolean().default(true),
+  include_previous_comments: z.boolean().default(true),
+  prompt_budget_chars: z.number().int().positive().default(DEFAULT_PROMPT_BUDGET_CHARS),
 });
-
-export const SeveritySchema = z.enum(["critical", "major", "minor", "suggestion"]);
 
 export const CommentStatusSchema = z.enum(["kept", "dismissed"]);
 
@@ -74,6 +93,7 @@ export type ReviewStage = "pick" | IterationStage;
 
 export const DEFAULT_BRIEF_CONFIG: BriefConfig = {
   preset: "thorough",
+  custom_preset_id: null,
   include_diff: true,
   include_description: true,
   include_context: true,
@@ -83,9 +103,22 @@ export const DEFAULT_BRIEF_CONFIG: BriefConfig = {
   include_commit_history: false,
   custom_instructions: "",
   context_files: [],
+  focus_areas: [],
+  output_language: "",
+  min_severity: "suggestion",
+  max_comments: null,
+  include_paths: [],
+  exclude_paths: [],
+  use_default_excludes: true,
+  annotate_line_numbers: true,
+  include_previous_comments: true,
+  prompt_budget_chars: DEFAULT_PROMPT_BUDGET_CHARS,
 };
 
 export const getReviewBriefConfig = (review: Review): BriefConfig => {
   const last = review.iterations[review.iterations.length - 1];
-  return last?.brief_config ?? DEFAULT_BRIEF_CONFIG;
+  if (!last) return DEFAULT_BRIEF_CONFIG;
+  // A review restored from the persisted query cache may predate newer brief fields.
+  const parsed = BriefConfigSchema.safeParse(last.brief_config);
+  return parsed.success ? parsed.data : { ...DEFAULT_BRIEF_CONFIG, ...last.brief_config };
 };

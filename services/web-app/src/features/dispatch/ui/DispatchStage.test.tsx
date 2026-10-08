@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
+import { ApiError } from "@shared/api";
 import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { DispatchStage } from "./DispatchStage";
 import type * as ReviewApiModule from "@entities/review/api/reviewApi";
@@ -798,3 +799,46 @@ describe("DispatchStage — copy & paste import", { timeout: INTEGRATION_TEST_TI
     );
   });
 });
+
+describe(
+  "DispatchStage — every changed file excluded",
+  { timeout: INTEGRATION_TEST_TIMEOUT_MS },
+  () => {
+    const EXCLUDED =
+      "All 2 changed files are excluded by the path filters, so there is nothing to review.";
+
+    beforeEach(resetMocks);
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("says why there is no prompt to copy", async () => {
+      api.getPrompt.mockRejectedValue(new ApiError(EXCLUDED, 422));
+      const user = userEvent.setup();
+      renderStage();
+
+      await user.click(await screen.findByRole("button", { name: "Copy & paste" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        `The prompt could not be built: ${EXCLUDED}`
+      );
+    });
+
+    it("shows the server's refusal when a run is started", async () => {
+      api.dispatchStream.mockImplementation(async function* (): AsyncGenerator<
+        DispatchStreamEvent,
+        void,
+        undefined
+      > {
+        await Promise.reject(new Error(EXCLUDED));
+        yield* [];
+      });
+      const user = userEvent.setup();
+      renderStage();
+
+      await user.click(await screen.findByRole("button", { name: /Generate with Claude/ }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(EXCLUDED);
+    });
+  }
+);

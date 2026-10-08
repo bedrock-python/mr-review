@@ -198,6 +198,7 @@ async def test__dispatch__well_formed_answer__chunk_comment_and_done_events_in_o
         "json_error": None,
         "truncated": False,
         "kept_previous": False,
+        "filtered": 0,
     }
 
 

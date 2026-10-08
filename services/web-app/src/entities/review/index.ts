@@ -24,7 +24,15 @@ export {
   CONTEXT_LARGE_CHARS,
   reviewKeys,
   DEFAULT_BRIEF_CONFIG,
+  DEFAULT_PROMPT_BUDGET_CHARS,
+  MIN_PROMPT_BUDGET_CHARS,
+  MAX_PROMPT_BUDGET_CHARS,
+  MAX_COMMENTS_LIMIT,
   getReviewBriefConfig,
+  ExcludedFileSchema,
+  ExcludedFilesSchema,
+  PromptPreviewSchema,
+  PromptSectionSchema,
   PatchStatusSchema,
   PatchStatsSchema,
   SuggestedPatchSchema,
@@ -64,6 +72,10 @@ export type {
   DispatchRequest,
   DispatchResult,
   DispatchStreamEvent,
+  ExcludedFile,
+  ExcludedFiles,
+  PromptPreview,
+  PromptSection,
 } from "./model";
 export { useReviewDiff, reviewDiffKey } from "./model";
 export type { NewCommentInput } from "./api";

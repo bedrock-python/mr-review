@@ -5,7 +5,7 @@ from uuid import UUID
 from mr_review.core.hosts.repositories import HostRepository
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
-from mr_review.use_cases.reviews.context_files import CONTEXT_EMBED_CHARS, collect_context_files, merge_context
+from mr_review.use_cases.reviews.context_files import collect_context_files, merge_context
 from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 
@@ -20,11 +20,9 @@ class GetReviewContextUseCase:
         self._host_repo = host_repo
         self._vcs_factory = vcs_factory
 
-    async def execute(self, review_id: UUID) -> tuple[str, bool]:
-        """Return (merged_context_md, is_large).
-
-        is_large is True when total chars >= CONTEXT_EMBED_CHARS.
-        """
+    async def execute(self, review_id: UUID) -> str:
+        """The review's project context files merged into one markdown text, uncut — how much of
+        it fits in a prompt is decided when the prompt is built."""
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
             raise ValueError(f"Review {review_id} not found")
@@ -41,7 +39,4 @@ class GetReviewContextUseCase:
             requested_paths=review.brief_config.context_files,
             ref=resolved.ref,
         )
-
-        merged = merge_context(context_contents)
-        is_large = len(merged) >= CONTEXT_EMBED_CHARS
-        return merged, is_large
+        return merge_context(context_contents)

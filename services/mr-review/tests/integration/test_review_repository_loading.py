@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import yaml
-from mr_review.core.reviews.entities import IterationStage
+from mr_review.core.reviews.entities import DEFAULT_PROMPT_BUDGET_CHARS, IterationStage
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration
@@ -77,3 +77,58 @@ async def test__review_repo__missing_stage__defaults_to_brief(
 
     assert loaded is not None
     assert loaded.iterations[0].stage == IterationStage.brief
+
+
+async def test__review_repo__brief_from_an_older_version__new_options_take_their_defaults(
+    data_dir: Path, review_repo: FileReviewRepository
+) -> None:
+    review_id = await _stored_review_id(review_repo)
+
+    def edit(iteration: dict[str, Any]) -> None:
+        iteration["brief_config"] = {
+            "preset": "security",
+            "include_diff": True,
+            "include_description": False,
+            "include_full_files": False,
+            "include_test_context": False,
+            "include_related_code": False,
+            "include_commit_history": False,
+            "custom_instructions": "Mind the cache",
+        }
+
+    _edit_first_iteration(data_dir, review_id, edit)
+
+    loaded = await review_repo.get_by_id(review_id)
+
+    assert loaded is not None
+    brief = loaded.iterations[0].brief_config
+    assert (brief.preset, brief.include_description, brief.custom_instructions) == (
+        "security",
+        False,
+        "Mind the cache",
+    )
+    assert brief.custom_preset_id is None
+    assert brief.focus_areas == []
+    assert brief.output_language == ""
+    assert (brief.min_severity, brief.max_comments) == ("suggestion", None)
+    assert (brief.include_paths, brief.exclude_paths, brief.use_default_excludes) == ([], [], True)
+    assert brief.annotate_line_numbers is True
+    assert brief.include_previous_comments is True
+    assert brief.prompt_budget_chars == DEFAULT_PROMPT_BUDGET_CHARS
+
+
+async def test__review_repo__brief_field_no_longer_valid__defaults_and_the_review_loads(
+    data_dir: Path, review_repo: FileReviewRepository
+) -> None:
+    review_id = await _stored_review_id(review_repo)
+
+    def edit(iteration: dict[str, Any]) -> None:
+        iteration["brief_config"] = {"preset": "retired-preset", "max_comments": 0, "custom_instructions": "Keep"}
+
+    _edit_first_iteration(data_dir, review_id, edit)
+
+    loaded = await review_repo.get_by_id(review_id)
+
+    assert loaded is not None
+    brief = loaded.iterations[0].brief_config
+    assert (brief.preset, brief.max_comments, brief.custom_instructions) == ("thorough", None, "Keep")

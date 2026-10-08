@@ -11,7 +11,7 @@
 | Compose | `deploy/all-in-one/docker-compose.yml` (one container) · `deploy/standard/docker-compose.yml` (API and UI apart) |
 | Requires | Docker with the Compose plugin. No Python, no Node, no database, no accounts |
 | Ports | all-in-one `17240 → 8000` · standard UI `17242 → 8080` (proxies `/api/` to the API), API `17241 → 8000` — all published on `127.0.0.1` |
-| State | one host directory mounted at `/data`: `hosts.yaml`, `ai_providers.yaml`, `reviews/<uuid>.yaml` |
+| State | one host directory mounted at `/data`: `hosts.yaml`, `ai_providers.yaml`, `review_presets.yaml`, `reviews/<uuid>.yaml` |
 | Env prefix | `MR_REVIEW__`, `__` between levels — `MR_REVIEW__SERVER__PORT` |
 | AI providers | `claude` (Anthropic Messages API) · `openai` and `openai_compat` (any OpenAI chat-completions endpoint) |
 | VCS hosts | `gitlab`, `github`, `gitea`, `forgejo`, `bitbucket` |
@@ -53,7 +53,8 @@ not create the access tokens, and it does not merge, approve or close anything.
 
 ## Mental model
 
-Four nouns, and each of them is a row in a YAML file under the data directory.
+Four nouns, and each of them is a row in a YAML file under the data directory — plus the
+review presets users save, a fifth file with no bearing on anything else.
 
 * A **host** is one VCS instance: a name, a `type` (`gitlab`, `github`, `gitea`, `forgejo`,
   `bitbucket`), a `base_url` and a token. Adding one and testing it are two separate calls;
@@ -65,20 +66,30 @@ Four nouns, and each of them is a row in a YAML file under the data directory.
   or `BranchDiffSource(base_ref=…, head_ref=…)`. A review is created empty.
 * An **iteration** is one pass over that source: a `brief_config`, the provider and model it
   was dispatched to, and the comments that came back. A review is a list of them.
+* A **review preset** (`review_presets.yaml`) is a saved review intent: a name, a
+  description, `instructions` that open the prompt in place of a built-in preset's text,
+  and an optional partial `brief_config` the Brief applies when the preset is picked. A
+  brief points at one by `custom_preset_id`; when it is deleted, the brief's built-in
+  `preset` stands in.
 
 The pipeline is the iteration's `stage`, and it only moves forward:
 
 `brief` → `dispatch` → `polish` → `post`
 
-* **brief** — `BriefConfig` decides what goes into the prompt: a preset (`thorough`,
-  `security`, `style`, `performance`), the toggles below, and free-text
-  `custom_instructions`. `POST /reviews/{id}/prompt` returns the exact prompt as text
-  without calling anything.
+* **brief** — `BriefConfig` decides what the model is asked and what goes into the prompt:
+  a preset (`thorough`, `security`, `style`, `performance`, or a saved one), focus areas,
+  the comment language, a minimum severity and a comment cap, the context toggles, path
+  filters and a size budget — see [What goes into the prompt](#what-goes-into-the-prompt).
+  `POST /reviews/{id}/prompt` returns the exact prompt as text without calling anything;
+  `POST /reviews/{id}/prompt/preview` returns it with a size breakdown.
 * **dispatch** — `POST /reviews/{id}/dispatch` streams the model's output back over SSE,
   announces each comment as soon as its JSON object is complete, and, when the stream
   closes, parses the whole answer and stores its comments with the raw answer on the
-  iteration — unless the answer is unusable, see rule 14. The provider's fence caps how
-  many dispatches to that provider can be in flight at once.
+  iteration — unless the answer is unusable, see rule 14. Comments below the brief's
+  `min_severity`, and beyond its `max_comments` (the most severe are kept), are dropped
+  before they are stored — on dispatch (salvaged comments included), import and reparse
+  alike. The provider's fence caps how many dispatches to that provider can be in flight
+  at once.
 * **polish** — `PATCH /reviews/{id}` edits comment bodies, severities, `status`
   (`kept` / `dismissed`) and the anchor: `file` and `line` count only when present, and an
   explicit `"file": null` turns the comment into a general note. `POST` and `DELETE` on
@@ -114,7 +125,7 @@ The dispatch stream sends these SSE events, every `data` line being single-line 
 |---|---|
 | `chunk` | the next piece of model text, as a JSON string |
 | `comment` | `{index, file, line, severity, body}` — a comment that just completed; a preview without an id |
-| `done` | `{iteration_id, comments, errors, json_error, truncated, kept_previous}` — once, after the iteration is written |
+| `done` | `{iteration_id, comments, errors, json_error, truncated, kept_previous, filtered}` — once, after the iteration is written |
 | `error` | `{message}` — the stream ends here and no `done` follows |
 
 `: ping` comment lines may appear in between. `comments` counts what the iteration holds
@@ -125,7 +136,10 @@ reasoning block. `kept_previous` is `true` when the answer was not used (rule 14
 counted are the ones the iteration already had, and the answer exists only in the streamed
 `chunk` text. A refusal — Claude's `stop_reason: refusal`, OpenAI's `refusal` under structured
 output, or an endpoint's content filter — ends the stream with `error` instead, saying so, and
-is settled like any other failed run.
+is settled like any other failed run. `filtered` (newer than the other keys; read it as `0`
+when absent) counts the parsed comments the brief's minimum severity or comment cap left out
+of what was written. The `import-response` and `reparse` answers carry the same `filtered`
+next to `imported`.
 
 ## Wiring
 
@@ -357,7 +371,9 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}` | GET, PATCH, DELETE | Read, edit brief and comments, delete |
 | `/api/v1/reviews/{id}/iterations` | POST | Start another pass |
 | `/api/v1/reviews/{id}/diff`, `/api/v1/reviews/{id}/context` | GET | The diff and the collected context as text |
-| `/api/v1/reviews/{id}/prompt` | POST | The exact prompt, without calling the model |
+| `/api/v1/reviews/{id}/prompt` | POST | The exact prompt as text, without calling the model — for an unsaved `brief_config` too |
+| `/api/v1/reviews/{id}/prompt/preview` | POST | The same prompt as JSON with `total_chars`, `estimated_tokens` (characters ÷ 4, an estimate), `budget_chars`, per-part `sections` (characters, files included, cut short, left out, binary skipped), `excluded_files` and `preset_missing` |
+| `/api/v1/reviews/{id}/excluded-files` | POST | Which changed files a `brief_config`'s path filters leave out, and why — the diff only, no context fetched |
 | `/api/v1/reviews/{id}/dispatch` | POST | Run the review, streamed as SSE (`chunk`, `comment`, `done` or `error`); 409 once posted |
 | `/api/v1/reviews/{id}/import-response` | POST | Paste a model's answer in by hand |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/raw-response` | GET | The stored model answer as text; 404 if none |
@@ -365,7 +381,10 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/post` | POST | Post `kept` comments to the merge request |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments` | POST | Add a comment (`file`, `line`, `severity`, `body`); the server assigns the id and answers 201 with the review |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
-| `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file |
+| `/api/v1/review-presets` | GET, POST | Saved review presets, oldest first; create one (`name`, `description`, `instructions`, `brief_config`). A name taken by another preset, ignoring case, is a 409; an unknown or invalid `brief_config` field is a 422 |
+| `/api/v1/review-presets/builtin` | GET | The four built-in presets with the instructions each puts in the prompt (read-only) |
+| `/api/v1/review-presets/{id}` | GET, PATCH, DELETE | Read, change (omitted fields stay; `brief_config` is replaced whole), delete |
+| `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file — review presets are not part of it yet |
 
 ### Pagination
 
@@ -460,22 +479,65 @@ answered from it. Gitea hands the tree out 1000 entries a page; up to 100 pages 
 
 ### What goes into the prompt
 
-The `BriefConfig` fields, with the caps the collectors enforce:
+The `BriefConfig` fields, with the caps the collectors enforce. Every field has a default,
+so a brief stored by an older version loads unchanged, the newer options at their defaults; a
+stored field that no longer validates falls back to its default instead of making the review
+unreadable.
 
-| Field | Default | Cost |
+| Field | Default | What it does |
 |---|---|---|
-| `preset` | `thorough` | also `security`, `style`, `performance` |
+| `preset` | `thorough` | also `security`, `style`, `performance` — the instructions that open the prompt |
+| `custom_preset_id` | `null` | a saved review preset whose `instructions` replace the built-in preset's; empty instructions or a deleted preset fall back to `preset` |
+| `custom_instructions` | `""` | appended verbatim under "Additional Instructions" |
+| `focus_areas` | `[]` | a checklist the model must go through explicitly (at most 30, 200 characters each) |
+| `output_language` | `""` | the language for comment bodies; empty asks for nothing, so the model follows the code and the MR (at most 64 characters) |
+| `min_severity` | `suggestion` | the model is asked for nothing less severe, and anything less severe in the answer is dropped when it is stored |
+| `max_comments` | `null` | 1–200: the model is asked for at most this many, and only the most severe this many are stored (ties keep the earlier one; the answer's order is kept) |
 | `include_diff` | `true` | the diff itself |
 | `include_description` | `true` | title and description |
-| `include_context` | `true` | the files named in `context_files`, at most 20 |
-| `include_full_files` | `false` | whole contents of the first 15 changed files, 50 000 characters each |
-| `include_test_context` | `false` | test files found beside the changed ones, at most 20 |
-| `include_related_code` | `false` | files the changed ones import, at most 20 |
+| `include_context` | `true` | the files named in `context_files` (or the usual convention files when empty), at most 20 |
+| `include_full_files` | `false` | whole contents of the first 15 changed files that were not deleted — including files whose diff the host sent empty (too large, binary, rename-only); binary content is then dropped |
+| `include_test_context` | `false` | at most 20 test files beside the changed ones, those named after a changed file first |
+| `include_related_code` | `false` | at most 20 files that the first 30 changed Python and JS/TS files import (relative imports only) |
 | `include_commit_history` | `false` | the last 8 commits touching each of the first 50 changed files |
-| `custom_instructions` | `""` | appended verbatim |
+| `include_paths` | `[]` | glob patterns; when non-empty only matching changed files are reviewed |
+| `exclude_paths` | `[]` | glob patterns of changed files to leave out, read after the defaults; `!pattern` takes a file back in (`!/go.sum`), the last match deciding |
+| `use_default_excludes` | `true` | also leave out lockfiles (`*.lock`, `package-lock.json`, `pnpm-lock.yaml`, `go.sum`, …), `*.min.js`, `*.min.css`, `*.map`, `vendor/`, `node_modules/`, `dist/`, `*_pb2.py`, `*.pb.go` and binary assets |
+| `annotate_line_numbers` | `true` | every added and unchanged diff line reads `<marker><new-file line> \| <code>`, and the model is told `line` must be one of those numbers |
+| `include_previous_comments` | `true` | from iteration 2 on, the previous iteration's kept comments are listed as already reported |
+| `prompt_budget_chars` | `600000` | 20 000–4 000 000; the prompt's size cap — sized for a ~200k-token model |
 
-Context fetches run five at a time with a pause between batches, to stay under host rate
-limits. Every one of them is an API call against the VCS host, so the optional toggles cost
+Path patterns work like `.gitignore` (checked against real git): a pattern with no slash, or
+only a trailing one, matches at any depth (`*.snap`, `docs`, `gen/`); any other slash ties it
+to the repository root (`src/generated` matches `src/generated/a.py`, not
+`tools/src/generated/b.py`); a pattern that matches a directory covers everything in it, so
+`include_paths: ["services/api"]` reviews that directory; a trailing `/` matches directories
+only; `*`, `?` and `[...]` stay within a path segment, `**` as a whole segment spans them;
+`\` escapes the next character, `#` starts a comment; the last matching pattern decides. Two
+deliberate differences from git: a leading `./` means the root, and `!pattern` takes a file
+back in even when its directory is excluded (`!/vendor/keep.go` against the default
+`vendor/`). Your patterns are case-sensitive, as git is on Linux; the built-in defaults ignore
+case (`*.png` covers `Shot.PNG`). Excluded files are left out of the diff sent to the model
+and of every context collector. When a change has files but the patterns leave none,
+`/prompt`, `/prompt/preview` and `/dispatch` answer 422 instead of building an empty review.
+
+The budget: the output format always goes in; the task text — the preset's or saved
+instructions, the additional instructions, the focus areas — takes at most a quarter of the
+budget and is cut from the end beyond that, so the diff always keeps most of the room. The
+rest is added in priority order — the diff, the MR description, the previous comments,
+project context, full files, tests, related code, commit history — file by file while it
+fits. The first file that does not fit is cut at a line break (when at least 2 000 characters
+of it fit) with a `… [cut: N of M characters shown]` marker, the rest of that part is left
+out with a `[Left out to fit the prompt budget: …]` note naming the files, and the parts
+below it get whatever room remains. Every file is also capped at 50 000 characters, and
+file content that looks binary — NUL bytes, or more than 30% U+FFFD from bytes that are not
+UTF-8 — is skipped; source in a legacy 8-bit encoding (cp1252, cp1251), which comes back
+with a few replacement characters, is kept. Hunk headers in the prompt, and in
+`GET /reviews/{id}/diff`, count the lines actually written under them. The preview reports
+all of it per part.
+
+Context fetches share one semaphore, five calls wide, and each starts as soon as a slot frees
+up. Every one of them is an API call against the VCS host, so the optional toggles cost
 wall-clock time before the model is called at all.
 
 For a merge request, files are read at its head commit, which the target repository has even
@@ -669,8 +731,8 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 | 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 401 | `Claude rejected the API key (401): …` — listing or previewing an AI provider's models with a key the endpoint refuses |
-| 409 | Posting a review whose source is a branch diff, or dispatching, re-parsing, adding or deleting comments on an iteration that was posted |
-| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key |
+| 409 | Posting a review whose source is a branch diff, dispatching, re-parsing, adding or deleting comments on an iteration that was posted, or a review preset name that is already taken |
+| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config`; a prompt or dispatch whose path filters exclude every changed file |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
 | 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
 | 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |

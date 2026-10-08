@@ -36,10 +36,11 @@ async def test__import_response__comments_parsed__raw_answer_stored_on_the_itera
     iteration = make_iteration(stage=IterationStage.brief)
     repo = _repo(make_review(iterations=[iteration]))
 
-    result = await ImportResponseUseCase(repo).execute(uuid4(), _ANSWER, iteration_id=iteration.id)
+    outcome = await ImportResponseUseCase(repo).execute(uuid4(), _ANSWER, iteration_id=iteration.id)
 
     saved = _saved(repo).iterations[0]
-    assert len(result.comments) == 1
+    assert len(outcome.result.comments) == 1
+    assert outcome.stored == 1
     assert saved.raw_response == _ANSWER
     assert saved.stage == IterationStage.polish
 
@@ -47,9 +48,10 @@ async def test__import_response__comments_parsed__raw_answer_stored_on_the_itera
 async def test__import_response__nothing_parsed__review_untouched() -> None:
     repo = _repo(make_review(iterations=[make_iteration()]))
 
-    result = await ImportResponseUseCase(repo).execute(uuid4(), "no json here")
+    outcome = await ImportResponseUseCase(repo).execute(uuid4(), "no json here")
 
-    assert result.json_error is not None
+    assert outcome.result.json_error is not None
+    assert outcome.stored == 0
     repo.update.assert_not_awaited()
 
 

@@ -87,6 +87,7 @@ Everything is files under the data directory, mounted from `DATA_DIR` on the hos
 ```
 hosts.yaml            VCS hosts and their tokens
 ai_providers.yaml     AI providers and their API keys
+review_presets.yaml   review presets saved from the Brief
 reviews/<uuid>.yaml   one file per review
 ```
 

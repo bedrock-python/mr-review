@@ -1,12 +1,23 @@
+"""Fetching what a prompt is built from, besides the diff: project context files, full contents of
+changed files, tests and imported code next to them, and recent commits.
+
+Collectors return whole file contents; how much of them fits in the prompt is the prompt
+builder's call. Every fetch is a call to the VCS host: they share one semaphore, ``CONCURRENCY``
+wide, and are capped per collector.
+"""
+
 from __future__ import annotations
 
 import asyncio
 import os
-import random
+import posixpath
 import re
-from typing import Any
+from collections.abc import Callable, Coroutine, Iterable, Sequence
+from dataclasses import dataclass, field
+from typing import Final
 
 from mr_review.core.mrs.entities import DiffFile
+from mr_review.core.reviews.entities import BriefConfig
 from mr_review.core.vcs.protocols import VCSProvider
 
 _DEFAULT_CONTEXT_PATHS = [
@@ -23,36 +34,40 @@ _READABLE_EXTENSIONS = {".md", ".mdc", ".txt", ".rst"}
 
 _MAX_FILES = 20
 
-# Context is embedded in the prompt when total chars are below this threshold;
-# above it the caller should offer context.md as a separate download file.
-CONTEXT_EMBED_CHARS = 40_000 * 4  # ~40k tokens, same scale as diff warn threshold
+# Concurrent requests to the VCS host per prompt; the semaphore alone paces them.
+CONCURRENCY: Final = 5
 
-# Rate-limit guard: max concurrent GitLab API requests and inter-batch delay.
-CONCURRENCY = 5
-_BATCH_DELAY_S = 0.15  # seconds between batches
-_JITTER_S = 0.05  # ±50 ms jitter to avoid thundering herd
+_MAX_FULL_FILES: Final = 15
+# Directories listed (recursively) while looking for tests next to the changed files.
+_MAX_TEST_DIRS: Final = 12
+_ROOT_TEST_DIRS: Final = ("tests", "test", "__tests__", "spec", "specs")
+# Test files whose name contains a changed file's stem come first; shorter stems match too much.
+_MIN_STEM_CHARS: Final = 3
+# Changed files read to find what they import, and import targets tried.
+_MAX_RELATED_SOURCES: Final = 30
+_MAX_COMMITS_PER_FILE = 8
+_MAX_COMMIT_HISTORY_FILES = 50
+
+PathAllowed = Callable[[str], bool]
 
 
-async def _rate_limited_gather(
-    coros: list[Any],
-    semaphore: asyncio.Semaphore,
-) -> list[Any]:
-    """Run coroutines with a shared semaphore, draining in CONCURRENCY-sized batches
-    with a small sleep between batches to respect GitLab rate limits."""
+def _allow_all(_path: str) -> bool:
+    return True
 
-    async def _guarded(coro: Any) -> Any:
+
+async def _gather_limited[T](
+    coros: Iterable[Coroutine[object, object, T]], semaphore: asyncio.Semaphore
+) -> list[T | BaseException]:
+    """Run every coroutine at once, each holding a slot of ``semaphore`` while it runs.
+
+    A failure is returned in its slot of the result instead of being raised.
+    """
+
+    async def _guarded(coro: Coroutine[object, object, T]) -> T:
         async with semaphore:
             return await coro
 
-    results: list[Any] = []
-    for i in range(0, len(coros), CONCURRENCY):
-        batch = coros[i : i + CONCURRENCY]
-        batch_results = await asyncio.gather(*[_guarded(c) for c in batch], return_exceptions=True)
-        results.extend(batch_results)
-        if i + CONCURRENCY < len(coros):
-            jitter = random.uniform(-_JITTER_S, _JITTER_S)  # noqa: S311
-            await asyncio.sleep(_BATCH_DELAY_S + jitter)
-    return results
+    return await asyncio.gather(*(_guarded(c) for c in coros), return_exceptions=True)
 
 
 def merge_context(context_contents: dict[str, str]) -> str:
@@ -67,9 +82,9 @@ async def _resolve_path(
     path: str,
     ref: str,
 ) -> list[str]:
-    # Runs inside _rate_limited_gather, which already holds a semaphore slot for
-    # this coroutine — acquiring the same semaphore again here would deadlock once
-    # every slot is held by an outer acquisition.
+    # Runs inside _gather_limited, which already holds a semaphore slot for this coroutine —
+    # acquiring the same semaphore again here would deadlock once every slot is held by an
+    # outer acquisition.
     ext = os.path.splitext(path)[1].lower()
     content = await provider.get_file(repo_path, path, ref)
     if content is not None:
@@ -93,23 +108,22 @@ def _deduplicate(items: list[str], limit: int) -> list[str]:
 async def _fetch_contents(
     provider: VCSProvider,
     repo_path: str,
-    paths: list[str],
+    paths: Sequence[str],
     ref: str,
     semaphore: asyncio.Semaphore,
-    max_chars: int | None = None,
 ) -> dict[str, str]:
-    async def _fetch(file_path: str) -> tuple[str, str | None]:
-        content = await provider.get_file(repo_path, file_path, ref)
-        return file_path, content
+    """``{path: content}`` for the paths that exist, in the order given."""
 
-    results = await _rate_limited_gather([_fetch(p) for p in paths], semaphore)
+    async def _fetch(file_path: str) -> tuple[str, str | None]:
+        return file_path, await provider.get_file(repo_path, file_path, ref)
+
     out: dict[str, str] = {}
-    for item in results:
-        if isinstance(item, Exception):
+    for item in await _gather_limited((_fetch(p) for p in paths), semaphore):
+        if isinstance(item, BaseException):
             continue
         path, content = item
-        if content is not None:
-            out[path] = content[:max_chars] if max_chars else content
+        if isinstance(content, str):
+            out[path] = content
     return out
 
 
@@ -129,8 +143,9 @@ async def collect_context_files(
     paths_to_resolve = requested_paths if requested_paths else _DEFAULT_CONTEXT_PATHS
     semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
 
-    resolve_coros = [_resolve_path(provider, repo_path, p, ref) for p in paths_to_resolve]
-    resolve_results = await _rate_limited_gather(resolve_coros, semaphore)
+    resolve_results = await _gather_limited(
+        (_resolve_path(provider, repo_path, p, ref) for p in paths_to_resolve), semaphore
+    )
     resolved: list[str] = []
     for item in resolve_results:
         if isinstance(item, list):
@@ -140,24 +155,14 @@ async def collect_context_files(
     return await _fetch_contents(provider, repo_path, unique, ref, semaphore)
 
 
-_MAX_FULL_FILE_CHARS = 50_000
-_MAX_FULL_FILES = 15
+def is_deleted(diff_file: DiffFile) -> bool:
+    """Whether the change removes the file: its diff has lines and every one of them is removed.
 
-_TEST_PATTERNS = re.compile(
-    r"(^|[/_-])(test_|_test\.|\.test\.|\.spec\.|__tests__)",
-    re.IGNORECASE,
-)
-_TEST_DIR_NAMES = {"tests", "test", "__tests__", "spec", "specs"}
-
-# Import patterns for Python and JS/TS
-_PYTHON_IMPORT_RE = re.compile(
-    r"^(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))",
-    re.MULTILINE,
-)
-_JS_IMPORT_RE = re.compile(
-    r"""(?:^import\s+.*?from\s+|require\s*\(\s*)['"]([^'"]+)['"]""",
-    re.MULTILINE,
-)
+    A file whose diff came back empty — a host collapses large or generated files, binary and
+    rename-only changes have no lines — still exists and is worth reading in full.
+    """
+    lines = [line for hunk in diff_file.hunks for line in hunk.lines]
+    return bool(lines) and all(line.type == "removed" for line in lines)
 
 
 async def collect_full_files(
@@ -167,24 +172,19 @@ async def collect_full_files(
     ref: str = "HEAD",
     semaphore: asyncio.Semaphore | None = None,
 ) -> dict[str, str]:
-    """Fetch full content of every changed file (not deleted) in parallel."""
-    targets = [df.path for df in diff_files[:_MAX_FULL_FILES]]
-    semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
+    """Full contents of the first ``_MAX_FULL_FILES`` changed files that were not deleted.
 
-    async def _fetch(path: str) -> tuple[str, str | None]:
-        content = await provider.get_file(repo_path, path, ref)
-        return path, content
+    Binary content is dropped later, when the prompt is built.
+    """
+    targets = [df.path for df in diff_files if not is_deleted(df)][:_MAX_FULL_FILES]
+    return await _fetch_contents(provider, repo_path, targets, ref, semaphore or asyncio.Semaphore(CONCURRENCY))
 
-    results = await _rate_limited_gather([_fetch(p) for p in targets], semaphore)
 
-    result: dict[str, str] = {}
-    for item in results:
-        if isinstance(item, Exception):
-            continue
-        path, content = item
-        if content is not None:
-            result[path] = content[:_MAX_FULL_FILE_CHARS]
-    return result
+_TEST_PATTERNS = re.compile(
+    r"(^|[/_-])(test_|_test\.|\.test\.|\.spec\.|__tests__)",
+    re.IGNORECASE,
+)
+_TEST_DIR_NAMES = {"tests", "test", "__tests__", "spec", "specs"}
 
 
 def _is_test_path(path: str) -> bool:
@@ -196,31 +196,45 @@ def _is_test_path(path: str) -> bool:
     return bool(_TEST_PATTERNS.search(basename))
 
 
-def _candidate_test_dirs(diff_files: list[DiffFile]) -> list[str]:
-    checked: set[str] = set()
-    dirs: list[str] = []
+def _candidate_test_dirs(diff_files: Sequence[DiffFile]) -> list[str]:
+    """Directories to list for tests: each changed file's directory, or the usual top-level test
+    directories for files at the root.
+
+    Listings are recursive, so a directory inside another candidate adds nothing and is dropped.
+    """
+    ordered: list[str] = []
     for df in diff_files:
-        dir_path = os.path.dirname(df.path)
-        for name in [""] + list(_TEST_DIR_NAMES):
-            d = os.path.join(dir_path, name).replace("\\", "/").rstrip("/") if name else dir_path
-            if d not in checked:
-                checked.add(d)
-                dirs.append(d or ".")
-    return dirs
+        directory = posixpath.dirname(df.path)
+        for candidate in (directory,) if directory else _ROOT_TEST_DIRS:
+            if candidate not in ordered:
+                ordered.append(candidate)
+    covered = [d for d in ordered if not any(d.startswith(other + "/") for other in ordered)]
+    return covered[:_MAX_TEST_DIRS]
 
 
-def _filter_test_paths(dir_results: list[Any]) -> list[str]:
-    paths: list[str] = []
+def _stem(path: str) -> str:
+    return posixpath.basename(path).split(".", 1)[0].lower()
+
+
+def _rank_test_paths(listings: Sequence[object], diff_files: Sequence[DiffFile], allowed: PathAllowed) -> list[str]:
+    """Test files from the listings, those named after a changed file first, at most ``_MAX_FILES``."""
+    stems = {stem for df in diff_files if len(stem := _stem(df.path)) >= _MIN_STEM_CHARS}
+    found: list[str] = []
     seen: set[str] = set()
-    for item in dir_results:
-        if isinstance(item, Exception):
+    for item in listings:
+        if not isinstance(item, list):
             continue
-        _, files = item
-        for fp in files:
-            if _is_test_path(fp) and fp not in seen:
-                seen.add(fp)
-                paths.append(fp)
-    return paths[:_MAX_FILES]
+        for path in item:
+            if isinstance(path, str) and path not in seen and _is_test_path(path) and allowed(path):
+                seen.add(path)
+                found.append(path)
+
+    def _named_after_change(path: str) -> bool:
+        name = posixpath.basename(path).lower()
+        return any(stem in name for stem in stems)
+
+    found.sort(key=lambda path: not _named_after_change(path))
+    return found[:_MAX_FILES]
 
 
 async def collect_test_files(
@@ -229,77 +243,92 @@ async def collect_test_files(
     diff_files: list[DiffFile],
     ref: str = "HEAD",
     semaphore: asyncio.Semaphore | None = None,
+    allowed: PathAllowed = _allow_all,
 ) -> dict[str, str]:
-    """Find and fetch test files adjacent to each changed file."""
+    """Find and fetch test files next to the changed files."""
     semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
+    listings = await _gather_limited(
+        (provider.list_directory(repo_path, d, ref) for d in _candidate_test_dirs(diff_files)), semaphore
+    )
+    test_paths = _rank_test_paths(listings, diff_files, allowed)
+    return await _fetch_contents(provider, repo_path, test_paths, ref, semaphore)
 
-    candidate_dirs = _candidate_test_dirs(diff_files)
 
-    async def _list(d: str) -> tuple[str, list[str]]:
-        files = await provider.list_directory(repo_path, d, ref)
-        return d, files
-
-    dir_results = await _rate_limited_gather([_list(d) for d in candidate_dirs], semaphore)
-    test_paths = _filter_test_paths(dir_results)
-    return await _fetch_contents(provider, repo_path, test_paths, ref, semaphore, _MAX_FULL_FILE_CHARS)
+# Import patterns for Python and JS/TS
+_PYTHON_IMPORT_RE = re.compile(
+    r"^(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))",
+    re.MULTILINE,
+)
+_JS_IMPORT_RE = re.compile(
+    r"""(?:^import\s+.*?from\s+|require\s*\(\s*)['"]([^'"]+)['"]""",
+    re.MULTILINE,
+)
+_PYTHON_EXTENSIONS: Final = frozenset({".py"})
+_JS_EXTENSIONS: Final = frozenset({".ts", ".tsx", ".js", ".jsx", ".mjs"})
+_JS_RESOLVE_EXTENSIONS: Final = (".ts", ".tsx", ".js", ".jsx")
 
 
 def _extract_imports(path: str, content: str) -> list[str]:
     """Return module names imported in the file (best-effort)."""
     ext = os.path.splitext(path)[1].lower()
-    if ext == ".py":
+    if ext in _PYTHON_EXTENSIONS:
         matches = _PYTHON_IMPORT_RE.findall(content)
         return [m[0] or m[1] for m in matches if m[0] or m[1]]
-    if ext in {".ts", ".tsx", ".js", ".jsx", ".mjs"}:
+    if ext in _JS_EXTENSIONS:
         return _JS_IMPORT_RE.findall(content)
     return []
 
 
-def _module_to_path(importing_file: str, module: str) -> str | None:
-    """Convert a relative import to a file path (best-effort, no FS access)."""
+def _python_module_files(importing_file: str, module: str) -> list[str]:
+    """Files a relative Python import may name: ``from ..pkg.mod import x`` read from
+    ``a/b/c.py`` is ``a/pkg/mod.py`` or the package ``a/pkg/mod/__init__.py``."""
+    dots = len(module) - len(module.lstrip("."))
+    if dots == 0:
+        return []  # absolute imports: third-party, or a package root this code cannot know
+    base = posixpath.dirname(importing_file)
+    for _ in range(dots - 1):
+        base = posixpath.dirname(base)
+    rest = module[dots:].replace(".", "/")
+    target = posixpath.join(base, rest) if rest else base
+    if not rest:
+        return [posixpath.join(target, "__init__.py")]
+    return [f"{target}.py", posixpath.join(target, "__init__.py")]
+
+
+def _js_module_files(importing_file: str, module: str) -> list[str]:
     if not module.startswith("."):
-        return None  # skip third-party / absolute modules
-    base_dir = os.path.dirname(importing_file)
-    raw = os.path.normpath(os.path.join(base_dir, module)).replace("\\", "/")
-    return raw
+        return []  # packages, aliases
+    target = posixpath.normpath(posixpath.join(posixpath.dirname(importing_file), module))
+    if os.path.splitext(target)[1].lower() in _JS_EXTENSIONS:
+        return [target]
+    return [target + ext for ext in _JS_RESOLVE_EXTENSIONS]
 
 
-_RELATED_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx"}
+def _module_files(importing_file: str, module: str) -> list[str]:
+    """Repository files an import in ``importing_file`` may resolve to, most likely first."""
+    if os.path.splitext(importing_file)[1].lower() in _PYTHON_EXTENSIONS:
+        return _python_module_files(importing_file, module)
+    return _js_module_files(importing_file, module)
 
 
-def _module_variants(candidate_base: str) -> list[str]:
-    ext = os.path.splitext(candidate_base)[1].lower()
-    if ext in _RELATED_EXTENSIONS:
-        return [candidate_base]
-    return [candidate_base + e for e in _RELATED_EXTENSIONS]
-
-
-def _collect_from_source(
-    importing_path: str,
-    content: str,
+def _import_candidates(
+    source_results: Sequence[object],
     already_changed: set[str],
-    seen: set[str],
-    candidates: list[str],
-) -> None:
-    for module in _extract_imports(importing_path, content):
-        candidate_base = _module_to_path(importing_path, module)
-        if candidate_base is None:
-            continue
-        for v in _module_variants(candidate_base):
-            if v not in already_changed and v not in seen:
-                seen.add(v)
-                candidates.append(v)
-
-
-def _import_candidates(source_results: list[Any], already_changed: set[str]) -> list[str]:
+    allowed: PathAllowed,
+) -> list[str]:
     candidates: list[str] = []
     seen: set[str] = set()
     for item in source_results:
-        if isinstance(item, Exception):
+        if not isinstance(item, tuple):
             continue
         importing_path, content = item
-        if content is not None:
-            _collect_from_source(importing_path, content, already_changed, seen, candidates)
+        if not isinstance(importing_path, str) or not isinstance(content, str):
+            continue
+        for module in _extract_imports(importing_path, content):
+            for path in _module_files(importing_path, module):
+                if path not in already_changed and path not in seen and allowed(path):
+                    seen.add(path)
+                    candidates.append(path)
     return candidates[:_MAX_FILES]
 
 
@@ -309,22 +338,23 @@ async def collect_related_code(
     diff_files: list[DiffFile],
     ref: str = "HEAD",
     semaphore: asyncio.Semaphore | None = None,
+    allowed: PathAllowed = _allow_all,
 ) -> dict[str, str]:
-    """Fetch files that are imported by any changed file."""
+    """Fetch files the changed Python and JS/TS files import (relative imports only)."""
     already_changed = {df.path for df in diff_files}
     semaphore = semaphore or asyncio.Semaphore(CONCURRENCY)
+    sources = [
+        df.path
+        for df in diff_files
+        if not is_deleted(df) and os.path.splitext(df.path)[1].lower() in _PYTHON_EXTENSIONS | _JS_EXTENSIONS
+    ][:_MAX_RELATED_SOURCES]
 
     async def _fetch_source(path: str) -> tuple[str, str | None]:
-        content = await provider.get_file(repo_path, path, ref)
-        return path, content
+        return path, await provider.get_file(repo_path, path, ref)
 
-    source_results = await _rate_limited_gather([_fetch_source(df.path) for df in diff_files], semaphore)
-    candidate_paths = _import_candidates(source_results, already_changed)
-    return await _fetch_contents(provider, repo_path, candidate_paths, ref, semaphore, _MAX_FULL_FILE_CHARS)
-
-
-_MAX_COMMITS_PER_FILE = 8
-_MAX_COMMIT_HISTORY_FILES = 50
+    source_results = await _gather_limited((_fetch_source(path) for path in sources), semaphore)
+    candidate_paths = _import_candidates(source_results, already_changed, allowed)
+    return await _fetch_contents(provider, repo_path, candidate_paths, ref, semaphore)
 
 
 async def collect_commit_history(
@@ -345,6 +375,62 @@ async def collect_commit_history(
         commits = await provider.get_commits(repo_path, df.path, ref=ref, limit=_MAX_COMMITS_PER_FILE)
         return df.path, commits
 
-    results = await _rate_limited_gather([_fetch(df) for df in capped_files], semaphore)
+    results = await _gather_limited((_fetch(df) for df in capped_files), semaphore)
+    return {
+        path: commits for item in results if not isinstance(item, BaseException) for path, commits in [item] if commits
+    }
 
-    return {path: commits for item in results if not isinstance(item, Exception) for path, commits in [item] if commits}
+
+@dataclass(frozen=True, slots=True)
+class GatheredContext:
+    """Everything fetched for a prompt besides the diff and the MR's own text."""
+
+    context_files: dict[str, str] = field(default_factory=dict)
+    full_files: dict[str, str] = field(default_factory=dict)
+    test_files: dict[str, str] = field(default_factory=dict)
+    related_code: dict[str, str] = field(default_factory=dict)
+    commit_history: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+
+
+async def _nothing() -> dict[str, str]:
+    return {}
+
+
+async def _no_history() -> dict[str, list[dict[str, str]]]:
+    return {}
+
+
+async def gather_context(
+    provider: VCSProvider,
+    repo_path: str,
+    diff_files: list[DiffFile],
+    config: BriefConfig,
+    ref: str,
+    allowed: PathAllowed = _allow_all,
+) -> GatheredContext:
+    """Run the collectors the brief turns on, together, over the changed files under review."""
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    context_files, full_files, test_files, related_code, commit_history = await asyncio.gather(
+        collect_context_files(provider, repo_path, config.context_files, ref, semaphore)
+        if config.include_context
+        else _nothing(),
+        collect_full_files(provider, repo_path, diff_files, ref, semaphore)
+        if config.include_full_files
+        else _nothing(),
+        collect_test_files(provider, repo_path, diff_files, ref, semaphore, allowed)
+        if config.include_test_context
+        else _nothing(),
+        collect_related_code(provider, repo_path, diff_files, ref, semaphore, allowed)
+        if config.include_related_code
+        else _nothing(),
+        collect_commit_history(provider, repo_path, diff_files, ref, semaphore)
+        if config.include_commit_history
+        else _no_history(),
+    )
+    return GatheredContext(
+        context_files=context_files,
+        full_files=full_files,
+        test_files=test_files,
+        related_code=related_code,
+        commit_history=commit_history,
+    )

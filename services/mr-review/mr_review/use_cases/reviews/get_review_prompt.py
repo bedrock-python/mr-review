@@ -1,34 +1,29 @@
 from __future__ import annotations
 
-import asyncio
 from uuid import UUID
 
 from mr_review.core.hosts.repositories import HostRepository
-from mr_review.core.reviews.entities import BriefConfig, Review
+from mr_review.core.review_presets.repositories import ReviewPresetRepository
+from mr_review.core.reviews.entities import BriefConfig, Iteration, Review
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
-from mr_review.use_cases.reviews.context_files import (
-    CONCURRENCY,
-    collect_commit_history,
-    collect_context_files,
-    collect_full_files,
-    collect_related_code,
-    collect_test_files,
-)
-from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
-from mr_review.use_cases.reviews.source_resolver import resolve_source
+from mr_review.use_cases.reviews.prompt_assembly import AssembledPrompt, assemble_prompt, dispatch_target_number
 
 
 class GetReviewPromptUseCase:
+    """The prompt a dispatch would send, built exactly as dispatch builds it, without calling a model."""
+
     def __init__(
         self,
         review_repo: ReviewRepository,
         host_repo: HostRepository,
         vcs_factory: VCSProviderFactory,
+        preset_repo: ReviewPresetRepository | None = None,
     ) -> None:
         self._review_repo = review_repo
         self._host_repo = host_repo
         self._vcs_factory = vcs_factory
+        self._preset_repo = preset_repo
 
     async def execute(
         self,
@@ -36,7 +31,8 @@ class GetReviewPromptUseCase:
         *,
         brief_config: BriefConfig | None = None,
         iteration_id: UUID | None = None,
-    ) -> str:
+    ) -> AssembledPrompt:
+        """``brief_config`` previews a brief that is not saved yet; without it the iteration's own is used."""
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
             raise ValueError(f"Review {review_id} not found")
@@ -45,62 +41,21 @@ class GetReviewPromptUseCase:
         if host is None:
             raise ValueError(f"Host {review.host_id} not found")
 
-        brief_config = brief_config or self._resolve_brief_config(review, review_id, iteration_id)
-
-        provider = self._vcs_factory(host)
-        resolved = await resolve_source(review, provider)
-        diff_files = resolved.diff_files
-        cfg = brief_config
-        ref = resolved.ref
-
-        semaphore = asyncio.Semaphore(CONCURRENCY)
-
-        async def _noop_dict() -> dict[str, str]:
-            return {}
-
-        async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
-            return {}
-
-        context_contents, full_files, test_files, related_code, commit_history = await asyncio.gather(
-            collect_context_files(
-                provider=provider,
-                repo_path=review.repo_path,
-                requested_paths=cfg.context_files,
-                ref=ref,
-                semaphore=semaphore,
-            )
-            if cfg.include_context
-            else _noop_dict(),
-            collect_full_files(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_full_files
-            else _noop_dict(),
-            collect_test_files(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_test_context
-            else _noop_dict(),
-            collect_related_code(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_related_code
-            else _noop_dict(),
-            collect_commit_history(provider, review.repo_path, diff_files, ref, semaphore)
-            if cfg.include_commit_history
-            else _noop_commit_history(),
+        iteration = self._find_iteration(review, iteration_id)
+        config = brief_config or (iteration.brief_config if iteration is not None else review.brief_config)
+        return await assemble_prompt(
+            review,
+            self._vcs_factory(host),
+            config,
+            iteration_number=dispatch_target_number(review, iteration),
+            presets=self._preset_repo,
         )
 
-        return build_prompt(
-            brief_config,
-            format_diff(diff_files),
-            resolved.title,
-            resolved.description,
-            context_contents if context_contents else None,
-            full_files=full_files,
-            test_files=test_files,
-            related_code=related_code,
-            commit_history=commit_history,
-        )
-
-    def _resolve_brief_config(self, review: Review, review_id: UUID, iteration_id: UUID | None) -> BriefConfig:
+    @staticmethod
+    def _find_iteration(review: Review, iteration_id: UUID | None) -> Iteration | None:
         if iteration_id is None:
-            return review.brief_config
+            return None
         iteration = next((it for it in review.iterations if it.id == iteration_id), None)
         if iteration is None:
-            raise ValueError(f"Iteration {iteration_id} not found on review {review_id}")
-        return iteration.brief_config
+            raise ValueError(f"Iteration {iteration_id} not found on review {review.id}")
+        return iteration

@@ -7,6 +7,10 @@ Two rules keep a user's work safe:
   error, client gone) leaves them as they were;
 * ``raw_response`` is always the answer the iteration's current comments were read from, so that
   re-parsing it can never rebuild comments from the fragment of an answer that was not used.
+
+Parsed comments are stored within the iteration's brief: below its minimum severity they are
+dropped, and past its comment cap only the most severe are kept. The general comment holding an
+unreadable answer is never filtered.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from uuid import UUID
 
 from mr_review.core.reviews.entities import Comment, Iteration, IterationStage
 from mr_review.use_cases.reviews.ai_response_parser import ParseResult
+from mr_review.use_cases.reviews.comment_limits import LimitedComments, limit_comments
 
 # Answers above this size are stored as their head and tail: review listings read every stored
 # answer, and a runaway generation must not make them slow.
@@ -61,13 +66,29 @@ class SettledAnswer:
     iteration: Iteration
     # False when the answer was not used and the iteration kept what it had.
     applied: bool
+    # Parsed comments the brief's minimum severity or comment cap left out of what was stored.
+    filtered: int = 0
 
 
-def _store_answer(iteration: Iteration, comments: list[Comment], raw: str) -> SettledAnswer:
+def within_brief(iteration: Iteration, comments: list[Comment]) -> LimitedComments:
+    """``comments`` within the iteration's minimum severity and comment cap."""
+    brief = iteration.brief_config
+    return limit_comments(comments, brief.min_severity, brief.max_comments)
+
+
+def _store_answer(iteration: Iteration, comments: LimitedComments, raw: str) -> SettledAnswer:
     updated = iteration.model_copy(
-        update={"stage": IterationStage.polish, "comments": comments, "raw_response": bounded_raw_response(raw)}
+        update={
+            "stage": IterationStage.polish,
+            "comments": comments.comments,
+            "raw_response": bounded_raw_response(raw),
+        }
     )
-    return SettledAnswer(iteration=updated, applied=True)
+    return SettledAnswer(iteration=updated, applied=True, filtered=comments.filtered)
+
+
+def _unfiltered(comments: list[Comment]) -> LimitedComments:
+    return LimitedComments(comments=comments, filtered=0)
 
 
 def settle_dispatched_answer(
@@ -86,9 +107,12 @@ def settle_dispatched_answer(
     and an iteration with comments keeps them and returns to its baseline.
     """
     if finished and result.json_error is None and not result.truncated:
-        return _store_answer(iteration, result.comments, raw)
-    salvaged = result.comments_to_store() if finished else result.comments
-    if not iteration.comments and salvaged:
+        return _store_answer(iteration, within_brief(iteration, result.comments), raw)
+    if finished and result.json_error is not None:
+        salvaged = _unfiltered(result.comments_to_store())
+    else:
+        salvaged = within_brief(iteration, result.comments)
+    if not iteration.comments and salvaged.comments:
         return _store_answer(iteration, salvaged, raw)
     kept = iteration.model_copy(
         update={"stage": baseline.stage, "ai_provider_id": baseline.ai_provider_id, "model": baseline.model}
@@ -104,8 +128,8 @@ def settle_reparsed_answer(iteration: Iteration, result: ParseResult) -> Settled
     """
     raw = iteration.raw_response or ""
     if result.json_error is None:
-        return _store_answer(iteration, result.comments, raw)
+        return _store_answer(iteration, within_brief(iteration, result.comments), raw)
     fallback = result.comments_to_store()
     if not iteration.comments and fallback:
-        return _store_answer(iteration, fallback, raw)
+        return _store_answer(iteration, _unfiltered(fallback), raw)
     return SettledAnswer(iteration=iteration, applied=False)
