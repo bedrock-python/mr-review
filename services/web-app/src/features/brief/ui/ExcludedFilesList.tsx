@@ -56,7 +56,7 @@ export const ExcludedFilesList = ({
                 variant="ghost"
                 size="sm"
                 className="shrink-0"
-                aria-label={`Review ${file.path} anyway`}
+                aria-label={`Review anyway: ${file.path}`}
                 onClick={() => {
                   onReviewAnyway(`!/${escapeGlob(file.path)}`);
                 }}

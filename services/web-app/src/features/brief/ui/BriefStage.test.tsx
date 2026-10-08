@@ -458,7 +458,7 @@ describe("BriefStage — advanced", () => {
 
       await user.click(await screen.findByRole("button", { name: /Advanced/ }));
       await user.click(
-        await screen.findByRole("button", { name: "Review app/[slug]/page.tsx anyway" })
+        await screen.findByRole("button", { name: "Review anyway: app/[slug]/page.tsx" })
       );
 
       await waitFor(() => {
@@ -491,6 +491,13 @@ describe("BriefStage — advanced", () => {
     });
     const user = userEvent.setup();
     renderStage({ ...DEFAULT_BRIEF_CONFIG, include_paths: ["docs/**"] });
+    // The footer re-renders when the check runs again for the loaded brief's own filters.
+    await waitFor(() => {
+      expect(api.getExcludedFiles).toHaveBeenLastCalledWith(
+        REVIEW_ID,
+        expect.objectContaining({ include_paths: ["docs/**"] })
+      );
+    });
 
     await user.click(await screen.findByRole("button", { name: "Edit path filters" }));
 
@@ -526,7 +533,7 @@ describe("BriefStage — advanced", () => {
         expect(toggle).toHaveTextContent("1 of 2 changed files excluded");
       });
       await user.click(toggle);
-      await user.click(screen.getByRole("button", { name: "Review uv.lock anyway" }));
+      await user.click(screen.getByRole("button", { name: "Review anyway: uv.lock" }));
 
       await waitFor(() => {
         expect(lastSavedBrief().exclude_paths).toEqual(["!/uv.lock"]);
