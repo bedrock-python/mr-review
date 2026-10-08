@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { systemApi } from "@shared/api";
+import { getApiErrorStatus } from "@shared/lib";
 import { useCheckUpdate } from "./useCheckUpdate";
 import type { ComponentUpdateInfo, UpdateInfo } from "../api";
 
@@ -32,10 +33,26 @@ export type Versions = {
   isAnyUpdateAvailable: boolean;
   /** Looking for updates (GitHub) right now. */
   isChecking: boolean;
-  /** GitHub could not be asked: offline or air-gapped. The versions are still known. */
-  hasCheckFailed: boolean;
+  /**
+   * Why the last look for updates failed: GitHub out of reach (offline, air-gapped) or its
+   * rate limit; null when it did not. The versions are still known either way.
+   */
+  checkFailure: CheckFailure | null;
   /** How this install is run, which decides how it is updated. */
   deploymentMode: DeploymentMode;
+};
+
+export type CheckFailure = "unreachable" | "rate-limited";
+
+const HTTP_FORBIDDEN = 403;
+const HTTP_TOO_MANY_REQUESTS = 429;
+
+// GitHub answers an exhausted anonymous rate limit with 403 (or 429).
+const checkFailureOf = (error: unknown): CheckFailure => {
+  const status = getApiErrorStatus(error);
+  return status === HTTP_FORBIDDEN || status === HTTP_TOO_MANY_REQUESTS
+    ? "rate-limited"
+    : "unreachable";
 };
 
 // The same query as Settings' storage section, so the two share one request.
@@ -59,7 +76,9 @@ export const useVersions = (): Versions => {
     staleTime: Infinity,
     meta: { silent: true },
   });
-  const { data: updates, isFetching, isError } = useCheckUpdate();
+  const { data: updates, isFetching, isError, error } = useCheckUpdate();
+  // After a failed look, the last answer may be old: nothing is called up to date on it.
+  const isCheckCurrent = !isError;
   const frontendUpdate = updateOf(updates?.frontend);
   const backendUpdate = updateOf(updates?.backend);
 
@@ -68,17 +87,17 @@ export const useVersions = (): Versions => {
       component: "frontend",
       current: __APP_VERSION__,
       update: frontendUpdate,
-      isChecked: isCompared(updates?.frontend),
+      isChecked: isCheckCurrent && isCompared(updates?.frontend),
     },
     backend: {
       component: "backend",
       current: system?.backend_version ?? null,
       update: backendUpdate,
-      isChecked: isCompared(updates?.backend),
+      isChecked: isCheckCurrent && isCompared(updates?.backend),
     },
     isAnyUpdateAvailable: frontendUpdate !== null || backendUpdate !== null,
     isChecking: isFetching,
-    hasCheckFailed: isError,
+    checkFailure: isError ? checkFailureOf(error) : null,
     deploymentMode: updates?.deploymentMode ?? system?.deployment_mode ?? "standard",
   };
 };

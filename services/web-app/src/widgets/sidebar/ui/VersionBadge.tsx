@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useVersions, VersionsDialog } from "@features/check-update";
 import { Tooltip } from "@shared/ui";
 
@@ -8,17 +8,19 @@ import { Tooltip } from "@shared/ui";
  */
 export const VersionBadge = (): React.ReactElement => {
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const versions = useVersions();
-  const web = versions.frontend.current;
+  const web = versions.frontend.current ?? "unknown";
   const api = versions.backend.current;
-  const name = `Versions: web app ${web ?? "unknown"}, API ${api ?? "unknown"}${
-    versions.isAnyUpdateAvailable ? ", update available" : ""
-  }`;
+  const visibleText = api === null ? `web ${web}` : `web ${web} · api ${api}`;
+  // Starts with what the button shows, so speech input can name it by what is on screen.
+  const name = `${visibleText} — versions${versions.isAnyUpdateAvailable ? ", update available" : ""}`;
 
   return (
     <>
       <Tooltip content={versions.isAnyUpdateAvailable ? "Update available" : "Versions"}>
         <button
+          ref={buttonRef}
           type="button"
           aria-label={name}
           onClick={() => {
@@ -44,6 +46,7 @@ export const VersionBadge = (): React.ReactElement => {
         onClose={() => {
           setIsOpen(false);
         }}
+        returnFocusRef={buttonRef}
       />
     </>
   );

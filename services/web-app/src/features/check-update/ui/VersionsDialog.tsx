@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Dialog, ICON_SIZE, StatusBadge } from "@shared/ui";
 import { COMPONENT_LABEL, updateKeys } from "../model";
 import { ChangelogModal } from "./ChangelogModal";
-import type { ComponentVersion, Versions } from "../model";
+import type { CheckFailure, ComponentVersion, Versions } from "../model";
+
+const CHECK_FAILURE_TEXT: Record<CheckFailure, string> = {
+  unreachable: "Could not reach GitHub to look for updates.",
+  "rate-limited": "GitHub's rate limit was reached. Try again later.",
+};
 
 const UNKNOWN_VERSION = "unknown";
 
@@ -39,6 +44,11 @@ export type VersionsDialogProps = {
   versions: Versions;
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Where focus goes back when the release notes close. They open from this dialog as it
+   * closes, so the control they came from is gone by then.
+   */
+  returnFocusRef: React.RefObject<HTMLElement | null>;
 };
 
 /** Both versions, what is newer, and a way to look again. */
@@ -46,9 +56,22 @@ export const VersionsDialog = ({
   versions,
   isOpen,
   onClose,
+  returnFocusRef,
 }: VersionsDialogProps): React.ReactElement => {
   const queryClient = useQueryClient();
   const [changelogFor, setChangelogFor] = useState<ComponentVersion | null>(null);
+  const wasChangelogOpen = useRef(false);
+
+  // After the notes are gone (and their focus trap with them), back to where it started.
+  useEffect(() => {
+    if (changelogFor !== null) {
+      wasChangelogOpen.current = true;
+      return;
+    }
+    if (!wasChangelogOpen.current) return;
+    wasChangelogOpen.current = false;
+    returnFocusRef.current?.focus();
+  }, [changelogFor, returnFocusRef]);
 
   const handleCheck = (): void => {
     void queryClient.invalidateQueries({ queryKey: updateKeys.all });
@@ -85,9 +108,9 @@ export const VersionsDialog = ({
             />
           ))}
         </dl>
-        {versions.hasCheckFailed && (
+        {versions.checkFailure !== null && (
           <p className="text-fg-2 m-0 mt-(--space-2) text-(length:--fs-meta)">
-            Could not reach GitHub to look for updates.
+            {CHECK_FAILURE_TEXT[versions.checkFailure]}
           </p>
         )}
       </Dialog>
@@ -97,6 +120,7 @@ export const VersionsDialog = ({
           component={changelogFor.update}
           deploymentMode={versions.deploymentMode}
           isOpen
+          shouldRestoreFocus={false}
           onClose={() => {
             setChangelogFor(null);
           }}

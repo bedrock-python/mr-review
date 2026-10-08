@@ -1,10 +1,12 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { AxiosError, AxiosHeaders } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkUpdateApi } from "@features/check-update/api";
 import { systemApi } from "@shared/api";
 import { renderWithQueryClient } from "@shared/lib/test-utils";
 import { VersionBadge } from "./VersionBadge";
+import type { UpdateInfo } from "@features/check-update";
 import type { SystemInfo } from "@shared/api";
 
 const SYSTEM_INFO: SystemInfo = {
@@ -28,6 +30,29 @@ const release = (tag: string) => ({
   prerelease: false,
 });
 
+const updateInfo = (isUpdateAvailable: boolean): UpdateInfo => ({
+  backend: {
+    current: "0.2.1",
+    latest: isUpdateAvailable ? "0.3.0" : "0.2.1",
+    isUpdateAvailable,
+    release: release(isUpdateAvailable ? "mr-review-v0.3.0" : "mr-review-v0.2.1"),
+  },
+  frontend: null,
+  isAnyUpdateAvailable: isUpdateAvailable,
+  deploymentMode: "standard",
+});
+
+const githubError = (status: number): AxiosError => {
+  const config = { headers: new AxiosHeaders() };
+  return new AxiosError("Request failed", "ERR_BAD_REQUEST", config, null, {
+    status,
+    statusText: "",
+    headers: {},
+    config,
+    data: {},
+  });
+};
+
 describe("VersionBadge", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -39,8 +64,9 @@ describe("VersionBadge", () => {
     const user = userEvent.setup();
     renderWithQueryClient(<VersionBadge />);
 
+    // The name starts with what the button shows.
     const badge = await screen.findByRole("button", {
-      name: "Versions: web app 0.0.0-test, API 0.2.1",
+      name: "web 0.0.0-test · api 0.2.1 — versions",
     });
     expect(badge).toHaveTextContent("web 0.0.0-test·api 0.2.1");
 
@@ -56,35 +82,50 @@ describe("VersionBadge", () => {
     expect(within(dialog).queryByText("Up to date")).not.toBeInTheDocument();
   });
 
-  it("says which part has a newer release and shows what is new in it", async () => {
+  it("stops calling a version up to date when a later look fails", async () => {
     vi.spyOn(systemApi, "getInfo").mockResolvedValue(SYSTEM_INFO);
-    vi.spyOn(checkUpdateApi, "checkForUpdate").mockResolvedValue({
-      backend: {
-        current: "0.2.1",
-        latest: "0.3.0",
-        isUpdateAvailable: true,
-        release: release("mr-review-v0.3.0"),
-      },
-      frontend: null,
-      isAnyUpdateAvailable: true,
-      deploymentMode: "standard",
-    });
+    const check = vi
+      .spyOn(checkUpdateApi, "checkForUpdate")
+      .mockResolvedValueOnce(updateInfo(false))
+      .mockRejectedValueOnce(githubError(403));
     const user = userEvent.setup();
     renderWithQueryClient(<VersionBadge />);
 
-    await user.click(
-      await screen.findByRole("button", {
-        name: "Versions: web app 0.0.0-test, API 0.2.1, update available",
-      })
-    );
+    await user.click(await screen.findByRole("button", { name: /— versions$/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Versions" });
+    expect(await within(dialog).findByText("Up to date")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Check for updates" }));
+
+    expect(
+      await within(dialog).findByText("GitHub's rate limit was reached. Try again later.")
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText("Up to date")).not.toBeInTheDocument();
+    expect(check).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows what is new in the part that has a newer release, then returns to the badge", async () => {
+    vi.spyOn(systemApi, "getInfo").mockResolvedValue(SYSTEM_INFO);
+    vi.spyOn(checkUpdateApi, "checkForUpdate").mockResolvedValue(updateInfo(true));
+    const user = userEvent.setup();
+    renderWithQueryClient(<VersionBadge />);
+
+    const badge = await screen.findByRole("button", {
+      name: "web 0.0.0-test · api 0.2.1 — versions, update available",
+    });
+    await user.click(badge);
     const dialog = await screen.findByRole("dialog", { name: "Versions" });
     expect(within(dialog).getByText("v0.3.0 available")).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "What's new" }));
 
-    expect(
-      await screen.findByRole("dialog", { name: "What's new in API v0.3.0" })
-    ).toBeInTheDocument();
+    const notes = await screen.findByRole("dialog", { name: "What's new in API v0.3.0" });
     expect(screen.queryByRole("dialog", { name: "Versions" })).not.toBeInTheDocument();
+
+    await user.click(within(notes).getByRole("button", { name: "Done" }));
+
+    await waitFor(() => {
+      expect(badge).toHaveFocus();
+    });
   });
 });

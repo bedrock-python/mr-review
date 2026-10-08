@@ -12,6 +12,8 @@ type ChangelogModalProps = {
   deploymentMode: UpdateInfo["deploymentMode"];
   isOpen: boolean;
   onClose: () => void;
+  /** Off when the caller puts focus back itself (it opened from a dialog now closed). */
+  shouldRestoreFocus?: boolean;
 };
 
 const UPDATE_COMMAND = "docker compose pull && docker compose up -d";
@@ -24,6 +26,7 @@ export const ChangelogModal = ({
   deploymentMode,
   isOpen,
   onClose,
+  shouldRestoreFocus = true,
 }: ChangelogModalProps): React.ReactElement => {
   const [isCopied, setIsCopied] = useState(false);
   const resetTimer = useRef<number | undefined>(undefined);
@@ -56,6 +59,7 @@ export const ChangelogModal = ({
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
+      shouldRestoreFocus={shouldRestoreFocus}
       size="lg"
       title={`What's new in ${componentLabel} v${component.latest}`}
       description={`You're on v${component.current}.`}
