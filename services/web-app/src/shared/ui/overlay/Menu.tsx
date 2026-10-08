@@ -1,7 +1,6 @@
 import { useId } from "react";
 import * as MenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { cn } from "@shared/lib";
-import { Kbd } from "@shared/ui";
+import { Kbd } from "../tooltip";
 
 const SIDE_OFFSET_PX = 4;
 const COLLISION_PADDING_PX = 8;
@@ -43,13 +42,10 @@ export const Menu = ({
         sideOffset={SIDE_OFFSET_PX}
         collisionPadding={COLLISION_PADDING_PX}
         aria-label={ariaLabel}
+        // Radix names the menu by its trigger; an explicit name must win over that.
+        {...(ariaLabel === undefined ? {} : { "aria-labelledby": undefined })}
         onKeyDown={onKeyDown}
-        className={cn(
-          "z-(--z-popover) min-w-[220px] p-(--space-1)",
-          "border-border-strong bg-bg-2 rounded-(--radius-card) border",
-          "shadow-(--shadow-pop)",
-          "data-[state=open]:animate-[ui-fade-in_var(--dur-base)_var(--ease-out)]"
-        )}
+        className="ui-menu"
       >
         {children}
       </MenuPrimitive.Content>
@@ -80,24 +76,14 @@ export const MenuItem = ({
     disabled={isDisabled}
     aria-label={ariaLabel}
     onSelect={onSelect}
-    className={cn(
-      "flex min-h-(--control-md) cursor-pointer items-center gap-(--space-2) px-(--space-2) select-none",
-      "text-fg-1 rounded-(--radius-control) text-(length:--fs-control)",
-      "data-[highlighted]:bg-bg-3 data-[highlighted]:text-fg-0",
-      "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50",
-      // Items take the focus ring inside: the menu clips anything outside them.
-      "focus-visible:-outline-offset-2"
-    )}
+    className="ui-menu__item"
   >
     {icon !== undefined && (
-      <span
-        className="text-fg-2 inline-flex w-(--icon-inline) shrink-0 justify-center"
-        aria-hidden="true"
-      >
+      <span className="ui-menu__icon" aria-hidden="true">
         {icon}
       </span>
     )}
-    <span className="min-w-0 flex-1 truncate">{children}</span>
+    <span className="ui-menu__label">{children}</span>
     {shortcut !== undefined && (
       <span aria-hidden="true">
         <Kbd>{shortcut}</Kbd>
@@ -116,10 +102,7 @@ export const MenuGroup = ({ label, children }: MenuGroupProps): React.ReactEleme
   const labelId = useId();
   return (
     <MenuPrimitive.Group aria-labelledby={labelId}>
-      <MenuPrimitive.Label
-        id={labelId}
-        className="ui-eyebrow px-(--space-2) pt-(--space-2) pb-(--space-1)"
-      >
+      <MenuPrimitive.Label id={labelId} className="ui-eyebrow ui-menu__group-label">
         {label}
       </MenuPrimitive.Label>
       {children}
@@ -128,5 +111,5 @@ export const MenuGroup = ({ label, children }: MenuGroupProps): React.ReactEleme
 };
 
 export const MenuSeparator = (): React.ReactElement => (
-  <MenuPrimitive.Separator className="bg-border -mx-(--space-1) my-(--space-1) h-px" />
+  <MenuPrimitive.Separator className="ui-menu__separator" />
 );

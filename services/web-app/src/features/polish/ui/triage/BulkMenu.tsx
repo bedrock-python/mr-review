@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import { SeverityDot } from "@entities/review";
-import { Button, ICON_SIZE } from "@shared/ui";
+import { Button, ICON_SIZE, Menu, MenuGroup, MenuItem, MenuSeparator } from "@shared/ui";
 import { SEVERITY_KEY, SEVERITY_LABEL, SEVERITY_ORDER } from "../../lib";
-import { Menu, MenuGroup, MenuItem, MenuSeparator } from "../overlay";
 import type { CommentSeverity } from "@entities/review";
 
 type BulkMenuProps = {

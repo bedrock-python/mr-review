@@ -6,11 +6,11 @@ import {
   Field,
   ICON_SIZE,
   IconButton,
+  Popover,
   SegmentedControl,
   Select,
   Switch,
 } from "@shared/ui";
-import { Popover } from "../overlay";
 import type { StatusFilter as StatusFilterValue } from "../../lib";
 
 export type FileFilterOption = { value: string; label: string; count: number };

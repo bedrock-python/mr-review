@@ -45,6 +45,8 @@ export { StageFooter } from "./stage-footer";
 export type { StageFooterProps } from "./stage-footer";
 export { Disclosure } from "./disclosure";
 export type { DisclosureProps } from "./disclosure";
+export { Menu, MenuGroup, MenuItem, MenuSeparator, Popover } from "./overlay";
+export type { MenuGroupProps, MenuItemProps, MenuProps, PopoverProps } from "./overlay";
 export { Dialog } from "./dialog";
 export type { DialogProps } from "./dialog";
 export { Drawer } from "./drawer";
