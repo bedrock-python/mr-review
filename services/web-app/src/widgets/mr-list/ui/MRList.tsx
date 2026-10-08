@@ -42,6 +42,15 @@ const MRListSkeleton = (): React.ReactElement => (
   </div>
 );
 
+type PausedMessageParams = { isFiltered: boolean; isInbox: boolean; scope: InboxScope };
+
+/** Why auto-loading stopped: several pages in a row added nothing to the list. */
+const getPausedMessage = ({ isFiltered, isInbox, scope }: PausedMessageParams): string => {
+  if (isFiltered) return "No matches in the pages loaded so far";
+  if (isInbox && scope === "all") return "No open merge requests in the last repositories checked";
+  return "Nothing new in the last pages loaded";
+};
+
 const getRowKey = (row: MRListRow): string => row.key;
 const estimateRowSize = (row: MRListRow): number =>
   row.kind === "inbox" ? ESTIMATED_INBOX_ROW_PX : ESTIMATED_REPO_ROW_PX;
@@ -107,7 +116,7 @@ export const MRList = (): React.ReactElement => {
     isIdle: !list.isFetching && !list.isPlaceholderData,
     fetchNextPage: list.fetchNextPage,
     errorMessage: `${getVcsErrorMessage(list.error)} more merge requests`,
-    pausedMessage: "No matches in the pages loaded so far",
+    pausedMessage: getPausedMessage({ isFiltered, isInbox, scope }),
   };
 
   const renderFooter = (): React.ReactNode => {

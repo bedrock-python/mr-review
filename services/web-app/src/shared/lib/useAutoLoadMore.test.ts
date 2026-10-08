@@ -63,15 +63,26 @@ describe("useAutoLoadMore", () => {
     expect(loadMore).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps loading through empty pages the server marks has_more", () => {
+  it("pauses after several empty pages, even when the server says has_more", () => {
+    // e.g. the "All" inbox over many repositories without open MRs: without the pause the
+    // list end stays on screen and every page of repositories is walked automatically.
     const { loadMore, rerender, result } = setup({ loadedCount: 0, visibleCount: 0 });
-    const emptyPages = MAX_BARREN_AUTO_PAGES + 3;
-    for (let page = 2; page <= emptyPages; page += 1) {
+    for (let page = 2; page <= MAX_BARREN_AUTO_PAGES + 3; page += 1) {
       rerender({ canLoadMore: false, pageCount: page - 1, loadedCount: 0, visibleCount: 0 });
       rerender({ canLoadMore: true, pageCount: page, loadedCount: 0, visibleCount: 0 });
     }
-    expect(result.current.isAutoLoadPaused).toBe(false);
-    expect(loadMore).toHaveBeenCalledTimes(emptyPages);
+    expect(result.current.isAutoLoadPaused).toBe(true);
+    expect(loadMore).toHaveBeenCalledTimes(MAX_BARREN_AUTO_PAGES);
+  });
+
+  it("counts empty and fully hidden pages alike toward the pause", () => {
+    const { result, rerender } = setup({ loadedCount: 0, visibleCount: 0, pageCount: 0 });
+    // Alternate empty pages and pages whose items all get hidden.
+    for (let page = 1; page <= MAX_BARREN_AUTO_PAGES; page += 1) {
+      const loadedCount = Math.floor(page / 2) * PAGE_SIZE;
+      rerender({ pageCount: page, loadedCount, visibleCount: 0 });
+    }
+    expect(result.current.isAutoLoadPaused).toBe(true);
   });
 
   it("pauses after several pages whose items were all filtered out", () => {

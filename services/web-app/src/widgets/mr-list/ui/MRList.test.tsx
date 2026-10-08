@@ -1,8 +1,10 @@
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_BUSY_REPO, MOCK_HOST_ID, getMockMRs, mrHandlers } from "@shared/api/mocks";
+import { MAX_BARREN_AUTO_PAGES } from "@shared/lib";
 import {
   getAt,
   getVirtualScrollContainer,
@@ -226,6 +228,41 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
       "aria-pressed",
       "true"
     );
+  });
+
+  it("stops walking repositories after a few empty pages and offers Load more", async () => {
+    // The "All" inbox over many repositories without open MRs: every page is empty but
+    // has_more. Auto-loading used to request page after page with nobody looking.
+    const inboxPages = (): string[] =>
+      requests
+        .filter((url) => url.pathname.endsWith("/inbox"))
+        .map((url) => url.searchParams.get("page") ?? "");
+    server.use(
+      http.get("*/api/v1/hosts/:hostId/inbox", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page"));
+        return HttpResponse.json({
+          items: [],
+          page,
+          per_page: 30,
+          has_more: true,
+          truncated_repos: [],
+        });
+      })
+    );
+    renderWithQueryClient(<MRList />);
+
+    const loadMore = await screen.findByRole("button", { name: "Load more" });
+    expect(
+      screen.getByText("No open merge requests in the last repositories checked")
+    ).toBeInTheDocument();
+    expect(inboxPages()).toEqual(
+      Array.from({ length: MAX_BARREN_AUTO_PAGES }, (_, index) => String(index + 1))
+    );
+
+    await userEvent.click(loadMore);
+    await waitFor(() => {
+      expect(inboxPages()).toHaveLength(MAX_BARREN_AUTO_PAGES + 1);
+    });
   });
 
   it("navigates to the MR's own repository", async () => {

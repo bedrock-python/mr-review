@@ -32,6 +32,49 @@ afterAll(() => {
 
 const repoPage = (items: Repo[]): RepoPage => ({ items, page: 1, per_page: 50, has_more: false });
 
+describe("stale infinite lists", () => {
+  it("restart from their first page instead of refetching every page loaded before", async () => {
+    // Remounting a list after staleTime used to replay every loaded page (dozens of inbox
+    // pages, each a fan-out over repositories upstream). It now starts over from page 1.
+    const queryClient = createTestQueryClient();
+    const filters = { state: "all" as const, q: "", perPage: 30 };
+    const key = mrKeys.list(MOCK_HOST_ID, MOCK_BUSY_REPO, filters);
+    const stalePage = (page: number) => ({ items: [], page, per_page: 30, has_more: true });
+    queryClient.setQueryData(
+      key,
+      { pages: [1, 2, 3, 4].map(stalePage), pageParams: [1, 2, 3, 4] },
+      { updatedAt: Date.now() - 60 * 60 * 1000 }
+    );
+
+    const { result } = renderHook(
+      () => useInfiniteMRs(MOCK_HOST_ID, MOCK_BUSY_REPO, { state: "all" }),
+      { wrapper: createQueryClientWrapper(queryClient) }
+    );
+
+    await waitFor(() => {
+      expect(result.current.isFetching).toBe(false);
+    });
+    expect(requests.map((url) => url.searchParams.get("page"))).toEqual(["1"]);
+    expect(result.current.data?.pages).toHaveLength(1);
+  });
+
+  it("keep every loaded page while still fresh", () => {
+    const queryClient = createTestQueryClient();
+    const filters = { state: "all" as const, q: "", perPage: 30 };
+    const key = mrKeys.list(MOCK_HOST_ID, MOCK_BUSY_REPO, filters);
+    const freshPage = (page: number) => ({ items: [], page, per_page: 30, has_more: true });
+    queryClient.setQueryData(key, { pages: [1, 2, 3].map(freshPage), pageParams: [1, 2, 3] });
+
+    const { result } = renderHook(
+      () => useInfiniteMRs(MOCK_HOST_ID, MOCK_BUSY_REPO, { state: "all" }),
+      { wrapper: createQueryClientWrapper(queryClient) }
+    );
+
+    expect(result.current.data?.pages).toHaveLength(3);
+    expect(requests).toHaveLength(0);
+  });
+});
+
 describe("useInfiniteMRs", () => {
   it("walks the pages until has_more is false", async () => {
     const queryClient = createTestQueryClient();

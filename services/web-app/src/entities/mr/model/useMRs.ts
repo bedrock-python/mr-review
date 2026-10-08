@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { FIRST_PAGE, getNextPageParam } from "@shared/api";
+import { FIRST_PAGE, getNextPageParam, useRestartStaleInfiniteQuery } from "@shared/api";
 import { mrApi, REPOS_PAGE_SIZE, MRS_PAGE_SIZE, INBOX_PAGE_SIZE } from "../api/mrApi";
 import type { InfiniteData, QueryKey, UseInfiniteQueryResult } from "@tanstack/react-query";
 import type { InboxMRPage, InboxScope, MRPage, MRStateFilter, Repo, RepoPage } from "./mr.schema";
@@ -61,8 +61,10 @@ export const useInfiniteRepos = (
 ): InfiniteListResult<RepoPage> => {
   const filters: RepoListFilters = { q: query?.trim() ?? "", perPage: REPOS_PAGE_SIZE };
   const isQueryAllowed = filters.q === "" || filters.q.length >= MIN_REPO_QUERY_LENGTH;
+  const queryKey = mrKeys.repoList(hostId ?? "", filters);
+  useRestartStaleInfiniteQuery(queryKey, LIST_STALE_TIME_MS);
   return useInfiniteQuery({
-    queryKey: mrKeys.repoList(hostId ?? "", filters),
+    queryKey,
     queryFn: ({ pageParam, signal }) => {
       if (hostId === null) return Promise.reject(new Error("hostId is null"));
       return mrApi.listRepos(
@@ -90,8 +92,10 @@ export const useInfiniteMRs = (
   { state, query }: UseInfiniteMRsParams
 ): InfiniteListResult<MRPage> => {
   const filters: MRListFilters = { state, q: query?.trim() ?? "", perPage: MRS_PAGE_SIZE };
+  const queryKey = mrKeys.list(hostId ?? "", repoPath ?? "", filters);
+  useRestartStaleInfiniteQuery(queryKey, LIST_STALE_TIME_MS);
   return useInfiniteQuery({
-    queryKey: mrKeys.list(hostId ?? "", repoPath ?? "", filters),
+    queryKey,
     queryFn: ({ pageParam, signal }) => {
       if (hostId === null || repoPath === null) return Promise.reject(new Error("null params"));
       return mrApi.listMRs(
@@ -116,8 +120,10 @@ export const useInfiniteInboxMRs = (
   scope: InboxScope
 ): InfiniteListResult<InboxMRPage> => {
   const filters: InboxListFilters = { scope, perPage: INBOX_PAGE_SIZE };
+  const queryKey = mrKeys.inboxList(hostId ?? "", filters);
+  useRestartStaleInfiniteQuery(queryKey, LIST_STALE_TIME_MS);
   return useInfiniteQuery({
-    queryKey: mrKeys.inboxList(hostId ?? "", filters),
+    queryKey,
     queryFn: ({ pageParam, signal }) => {
       if (hostId === null) return Promise.reject(new Error("hostId is null"));
       return mrApi.listInboxMRs(

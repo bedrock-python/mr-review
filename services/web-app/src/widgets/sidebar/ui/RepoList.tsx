@@ -101,7 +101,7 @@ export const RepoList = ({
     isIdle: !isFetching && !isPlaceholderData,
     fetchNextPage: loadNextPage,
     errorMessage: `${getVcsErrorMessage(error)} more repositories`,
-    pausedMessage: "New repositories are in collapsed groups",
+    pausedMessage: "No new repositories shown in the last pages — some may be in collapsed groups",
   };
 
   const renderFooter = (): React.ReactNode => {

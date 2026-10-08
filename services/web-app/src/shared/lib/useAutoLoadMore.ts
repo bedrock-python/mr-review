@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 
 /**
- * Consecutive pages whose items were all hidden by client-side filtering before
- * auto-loading pauses. A client-side filter that matches nothing would otherwise
- * keep the list end on screen and walk every page of the upstream host.
+ * Consecutive pages that added no visible row — empty, or every item hidden by a
+ * client-side filter — before auto-loading pauses and the list offers "Load more".
+ * Without it, a list whose end stays on screen walks every page of the upstream
+ * host: a filter that matches nothing, or the "All" inbox over hundreds of
+ * repositories without open merge requests (each page a fan-out upstream).
  */
 export const MAX_BARREN_AUTO_PAGES = 3;
 
@@ -24,7 +26,7 @@ export type UseAutoLoadMoreParams = {
 };
 
 export type UseAutoLoadMoreResult = {
-  /** Auto-loading stopped after several pages whose items were all filtered out. */
+  /** Auto-loading stopped after several pages that added no visible row. */
   isAutoLoadPaused: boolean;
 };
 
@@ -43,14 +45,13 @@ const advanceGuard = (guard: BarrenGuard, input: GuardInput): BarrenGuard => {
     return { ...input, barrenPages: 0 };
   }
   if (input.pageCount > guard.pageCount) {
-    // The server may return short or even empty pages while has_more is true
-    // (pages are cut by upstream batches); such pages are not the filter's fault
-    // and must keep loading, so only pages whose items all got hidden count.
+    // A page counts as barren whether it came back empty (the server may answer
+    // has_more with nothing in it) or all its items got hidden: either way the
+    // user saw nothing new, and the next page costs the host the same.
     const hasVisibleGrowth = input.visibleCount > guard.visibleCount;
-    const hasHiddenItems = input.loadedCount > guard.loadedCount;
-    let barrenPages = guard.barrenPages;
-    if (hasVisibleGrowth) barrenPages = 0;
-    else if (hasHiddenItems) barrenPages += 1;
+    const barrenPages = hasVisibleGrowth
+      ? 0
+      : guard.barrenPages + (input.pageCount - guard.pageCount);
     return { ...input, barrenPages };
   }
   if (input.visibleCount !== guard.visibleCount || input.loadedCount !== guard.loadedCount) {
