@@ -62,7 +62,6 @@ export const StageBar = (): React.ReactElement => {
   const { data: review } = useReview(activeReviewId);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const activeIndex = STAGE_ORDER[activeStage];
   const iteration = resolveIteration(review, activeIterationId);
   const progressIndex = progressIndexOf(iteration);
   // Furthest stage that may be opened. Brief is always open: it starts the review (or its
@@ -72,15 +71,21 @@ export const StageBar = (): React.ReactElement => {
     STAGE_ORDER[iteration?.stage ?? "pick"],
     canStartBrief ? STAGE_ORDER.brief : 0
   );
-  const furthestOpenIndex = Math.max(reachedIndex, activeIndex);
 
   const isLocked = (stage: ReviewStage, index: number): boolean =>
     !isStageAvailable(stage, review) || (index > reachedIndex && stage !== activeStage);
 
-  /** Why a locked tab cannot be opened, shown as its tooltip. */
-  const lockReason = (stage: ReviewStage): string => {
+  /**
+   * Why a locked tab cannot be opened, shown as its tooltip: the first stage before it that
+   * the review has not got past yet, wherever the open stage is.
+   */
+  const lockReason = (stage: ReviewStage, index: number): string => {
     if (!isStageAvailable(stage, review)) return "Not available for a branch diff";
-    return `Finish ${STAGES[furthestOpenIndex]?.label ?? "the previous stage"} first`;
+    const prerequisite = STAGES.slice(0, index).find(
+      (candidate, candidateIndex) =>
+        candidateIndex >= progressIndex && isStageAvailable(candidate.id, review)
+    );
+    return `Finish ${prerequisite?.label ?? "the previous stage"} first`;
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number): void => {
@@ -118,7 +123,7 @@ export const StageBar = (): React.ReactElement => {
             )}
 
             {/* Always wrapped, so locking a tab never remounts it under the user's focus */}
-            <Tooltip content={lockReason(stage.id)} side="bottom" isDisabled={!locked}>
+            <Tooltip content={lockReason(stage.id, index)} side="bottom" isDisabled={!locked}>
               <button
                 ref={(element) => {
                   tabRefs.current[index] = element;

@@ -403,8 +403,24 @@ describe(
       await user.keyboard("{ArrowRight}");
 
       expect(tab("Polish")).toHaveFocus();
-      // The open stage is the one to finish, not the server's last one behind it.
-      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Dispatch first");
+      // The first stage the review has not got past: the brief was not dispatched yet.
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Brief first");
+    });
+
+    it("names the unfinished stage before a locked tab, not the open stage after it", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(reviewApi, "get").mockResolvedValue(review([iteration({ stage: "brief" })]));
+      renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=post&it=${IT_1}`);
+      const post = await screen.findByRole("tab", { name: /Post/, selected: true });
+      await waitFor(() => {
+        expect(tab("Polish")).toHaveAttribute("aria-disabled", "true");
+      });
+
+      post.focus();
+      await user.keyboard("{ArrowLeft}");
+
+      expect(tab("Polish")).toHaveFocus();
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Brief first");
     });
 
     it("marks nothing done on a merge request that has no review yet", () => {
