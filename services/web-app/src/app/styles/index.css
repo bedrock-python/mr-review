@@ -391,6 +391,12 @@
     opacity: 1;
   }
 
+  /* Native checkboxes, radios and sliders in the accent instead of the browser's blue */
+  input,
+  progress {
+    accent-color: var(--accent);
+  }
+
   ::selection {
     background: color-mix(in oklch, var(--accent) 32%, transparent);
   }
