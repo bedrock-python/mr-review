@@ -1,5 +1,5 @@
 import { getDiffStats } from "@entities/mr";
-import { ROW_FOCUS_ATTR, cn, formatAge } from "@shared/lib";
+import { ROW_FOCUS_ATTR, cn, formatRelative } from "@shared/lib";
 import { StatusBadge } from "@shared/ui";
 import type { MR, PipelineStatus } from "@entities/mr";
 
@@ -69,7 +69,7 @@ export const MRItemHeadline = ({
       title={`Updated ${formatDate(mr.updated_at)} · opened ${formatDate(mr.created_at)}`}
       className="text-fg-2 shrink-0 pt-px text-(length:--fs-meta) tabular-nums"
     >
-      {formatAge(mr.updated_at)}
+      {formatRelative(mr.updated_at)}
     </time>
   </div>
 );
