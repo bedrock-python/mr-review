@@ -31,8 +31,7 @@
 
   .ui-input,
   .ui-textarea,
-  .ui-select,
-  .field {
+  .ui-select {
     width: 100%;
     min-width: 0;
     height: var(--control-md);
@@ -58,11 +57,9 @@
   }
   .ui-input:hover:not(:disabled, :focus),
   .ui-textarea:hover:not(:disabled, :focus),
-  .ui-select:hover:not(:disabled, :focus),
-  .field:hover:not(:disabled, :focus) {
+  .ui-select:hover:not(:disabled, :focus) {
     border-color: var(--border-control-hover);
   }
-  textarea.field,
   .ui-textarea {
     height: auto;
     padding: 6px 10px;
@@ -72,16 +69,14 @@
   /* The same ring as the base rule, restated so this layer's box-shadow resets don't win */
   .ui-input:focus-visible,
   .ui-textarea:focus-visible,
-  .ui-select:focus-visible,
-  .field:focus-visible {
+  .ui-select:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: -1px;
     box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
   .ui-input[aria-invalid="true"],
   .ui-textarea[aria-invalid="true"],
-  .ui-select[aria-invalid="true"],
-  .field[aria-invalid="true"] {
+  .ui-select[aria-invalid="true"] {
     border-color: var(--c-critical);
   }
   .ui-input:disabled,
@@ -152,6 +147,11 @@
     width: 100%;
     min-width: 0;
   }
+  /* In a row of controls: as wide as its longest option, not the whole row */
+  .ui-select-shell--auto {
+    width: auto;
+    flex-shrink: 0;
+  }
   .ui-select {
     appearance: none;
     padding-right: 28px;
@@ -164,6 +164,95 @@
     transform: translateY(-50%);
     color: var(--fg-2);
     pointer-events: none;
+  }
+
+  /* ── Slider ────────────────────────────────────────────────── */
+  .ui-slider {
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .ui-slider:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  /* Unset reads as neutral. fg-2, not fg-3: the browser draws the empty track dark or light
+     against the accent's lightness, and fg-3 would vanish on it. */
+  .ui-slider[data-unset] {
+    accent-color: var(--fg-2);
+  }
+
+  /* ── Combobox ──────────────────────────────────────────────── */
+  .ui-combobox {
+    position: relative;
+  }
+  .ui-combobox__chevron {
+    flex-shrink: 0;
+    color: var(--fg-2);
+  }
+  .ui-combobox__list {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    right: 0;
+    z-index: var(--z-popover);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-1);
+    overflow-y: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-pop);
+  }
+  .ui-combobox__list[hidden] {
+    display: none;
+  }
+  .ui-combobox__option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    min-height: var(--control-md);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    color: var(--fg-1);
+    font-size: var(--fs-control);
+    cursor: pointer;
+  }
+  .ui-combobox__option--mono {
+    font-family: var(--font-mono);
+  }
+  .ui-combobox__option:hover {
+    background: var(--bg-hover);
+  }
+  .ui-combobox__option[aria-selected="true"] {
+    color: var(--fg-0);
+    font-weight: var(--fw-medium);
+  }
+  /* Highlighted from the keyboard: Enter takes it */
+  .ui-combobox__option[data-active] {
+    background: var(--bg-3);
+    color: var(--fg-0);
+    box-shadow: inset var(--indicator-width) 0 0 var(--accent-fg);
+  }
+  .ui-combobox__check {
+    display: inline-flex;
+    width: var(--icon-inline);
+    flex-shrink: 0;
+    color: var(--accent-fg);
+  }
+  .ui-combobox__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-combobox__empty {
+    margin: 0;
+    padding: var(--space-3);
+    color: var(--fg-2);
+    font-size: var(--fs-control);
+    text-align: center;
   }
 
   /* ── Checkbox / Radio / Switch ─────────────────────────────── */

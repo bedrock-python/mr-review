@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import { Keyboard, Search, X } from "lucide-react";
-import { cn } from "@shared/lib";
+import { cn, useFittingLayout } from "@shared/lib";
 import { ICON_SIZE, IconButton, Input, Kbd, Toolbar, ToolbarSpacer } from "@shared/ui";
-import { EMPTY_FILTERS, SEVERITY_ORDER, isFiltering, useFittingLayout } from "../../lib";
+import { EMPTY_FILTERS, SEVERITY_ORDER, isFiltering } from "../../lib";
 import { BulkMenu } from "./BulkMenu";
 import { FileFilter, FiltersPopover, GroupToggle, StatusFilter } from "./ListFilters";
 import { NewCommentButton } from "./NewCommentButton";

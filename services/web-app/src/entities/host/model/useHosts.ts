@@ -15,6 +15,9 @@ export const useHosts = (): ReturnType<
     queryKey: hostKeys.lists(),
     queryFn: hostApi.list,
     staleTime: 15 * 60 * 1000,
+    // With nothing loaded, Settings' list and the workspace say it failed; a failed refetch
+    // over a cached list still toasts, since those screens just keep showing it.
+    meta: { silent: "when-empty" },
   });
 };
 

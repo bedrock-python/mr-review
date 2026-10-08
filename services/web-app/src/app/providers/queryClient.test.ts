@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { mrKeys } from "@entities/mr";
+import { describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { ApiError } from "@shared/api";
 import {
   QUERY_CACHE_STORAGE_KEY,
@@ -43,6 +43,8 @@ const readPersisted = (storage: Storage): PersistedCache | null => {
 };
 
 const PERSIST_WAIT = { timeout: 3000 };
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 describe("setupQueryPersistence", () => {
   it("writes hosts, providers and the update check, and nothing with code or reviews", async () => {
@@ -117,26 +119,12 @@ describe("shouldToastQueryError", () => {
     expect(shouldToastQueryError(new Error("boom"), { silent: true })).toBe(false);
   });
 
-  it("stays quiet for the lists and the merge request, which show their errors in place", () => {
-    const error = new ApiError("GitLab answered 502 Bad Gateway", 502);
-    const repoPath = "group/repo";
+  it("for a query silent only when empty, stays quiet until data is loaded", () => {
+    const meta = { silent: "when-empty" };
 
-    expect(
-      shouldToastQueryError(error, undefined, mrKeys.repoList("h1", { q: "", perPage: 50 }))
-    ).toBe(false);
-    expect(
-      shouldToastQueryError(
-        error,
-        undefined,
-        mrKeys.list("h1", repoPath, { state: "opened", q: "", perPage: 30 })
-      )
-    ).toBe(false);
-    expect(
-      shouldToastQueryError(error, undefined, mrKeys.inboxList("h1", { scope: "all", perPage: 30 }))
-    ).toBe(false);
-    expect(shouldToastQueryError(error, undefined, mrKeys.detail("h1", repoPath, 12))).toBe(false);
-    // The changes of a merge request have no error state of their own in every stage.
-    expect(shouldToastQueryError(error, undefined, mrKeys.diff("h1", repoPath, 12))).toBe(true);
+    expect(shouldToastQueryError(new Error("boom"), meta, false)).toBe(false);
+    expect(shouldToastQueryError(new Error("boom"), meta, true)).toBe(true);
+    expect(shouldToastQueryError(new Error("boom"), { silent: true }, true)).toBe(false);
   });
 
   it("stays quiet only for the statuses a query handles itself", () => {
@@ -144,5 +132,24 @@ describe("shouldToastQueryError", () => {
 
     expect(shouldToastQueryError(new ApiError("gone", 404), meta)).toBe(false);
     expect(shouldToastQueryError(new ApiError("broken", 500), meta)).toBe(true);
+  });
+});
+
+describe("the global error toast", () => {
+  it("skips a 'when-empty' query with nothing loaded, and toasts its failed refetch", async () => {
+    const client = createAppQueryClient();
+    const options = {
+      queryKey: ["hosts", "list"],
+      queryFn: (): Promise<string[]> => Promise.reject(new Error("Backend unavailable")),
+      meta: { silent: "when-empty" },
+      retry: false,
+    };
+
+    await client.fetchQuery(options).catch(() => undefined);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    client.setQueryData(["hosts", "list"], ["h1"]);
+    await client.fetchQuery({ ...options, staleTime: 0 }).catch(() => undefined);
+    expect(toast.error).toHaveBeenCalledWith("Backend unavailable");
   });
 });

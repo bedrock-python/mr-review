@@ -15,6 +15,7 @@ import {
 import {
   EmptyState,
   ICON_SIZE,
+  ListLoadError,
   SegmentedControl,
   Skeleton,
   StageLoading,
@@ -65,7 +66,10 @@ export const DispatchStage = (): React.ReactElement => {
   const { activeReviewId } = useNav();
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const { data: review } = useReview(activeReviewId);
-  const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = useAIProviders();
+  const providersQuery = useAIProviders();
+  const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = providersQuery;
+  // Failed with nothing cached: that is not "no providers configured".
+  const hasProvidersFailed = providersQuery.isError && providersQuery.data === undefined;
   const [mode, setMode] = useState<Mode>("auto");
   // Held here, not in Copy & paste: switching modes must not lose a pasted response.
   const responseDraft = useResponseDraft(activeReviewId, activeIterationId);
@@ -188,7 +192,18 @@ export const DispatchStage = (): React.ReactElement => {
           <ProvidersSkeleton />
         </StageBody>
       )}
-      {mode === "auto" && !isProvidersPending && (
+      {mode === "auto" && hasProvidersFailed && (
+        <StageBody>
+          <ListLoadError
+            error={providersQuery.error}
+            what="AI providers"
+            onRetry={() => {
+              void providersQuery.refetch();
+            }}
+          />
+        </StageBody>
+      )}
+      {mode === "auto" && !isProvidersPending && !hasProvidersFailed && (
         <AutoDispatch
           activeReviewId={activeReviewId}
           providers={providers}

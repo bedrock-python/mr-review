@@ -148,7 +148,7 @@ export const ReviewItem = ({
         // No tooltip: its name says what it does, and an open tooltip would take the first Esc.
         tooltip={false}
         icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
-        className="mr-3 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+        className="mr-(--space-2) opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
         onClick={() => {
           setIsConfirming(true);
         }}

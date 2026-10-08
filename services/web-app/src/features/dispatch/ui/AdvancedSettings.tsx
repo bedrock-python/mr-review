@@ -1,8 +1,4 @@
-import { useId, useState } from "react";
-
-import { ChevronDown, ChevronRight } from "lucide-react";
-
-import { Badge, Button, Field, ICON_SIZE, Input, Switch, Textarea } from "@shared/ui";
+import { Badge, Button, Disclosure, Field, Input, Switch, Textarea } from "@shared/ui";
 
 import {
   defaultMaxOutputTokens,
@@ -32,8 +28,6 @@ export const AdvancedSettings = ({
   onChange,
   isDisabled,
 }: AdvancedSettingsProps): React.ReactElement => {
-  const [isOpen, setIsOpen] = useState(false);
-  const panelId = useId();
   const cap = caps?.max_output_tokens ?? MAX_OUTPUT_TOKENS;
   const defaultOutput = defaultMaxOutputTokens(settings, caps);
   const outputPlaceholder = defaultOutput
@@ -47,102 +41,88 @@ export const AdvancedSettings = ({
     settings.structuredOutput !== null,
     settings.systemPrompt.trim() !== "",
   ].filter(Boolean).length;
-  const Chevron = isOpen ? ChevronDown : ChevronRight;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-expanded={isOpen}
-        aria-controls={panelId}
-        icon={<Chevron size={ICON_SIZE.inline} aria-hidden="true" />}
-        iconRight={changed > 0 ? <Badge tone="accent">{changed} changed</Badge> : undefined}
-        onClick={() => {
-          setIsOpen((open) => !open);
-        }}
-        // The chevron lines up with the settings above, not the button's padding.
-        style={{ alignSelf: "flex-start", marginLeft: "calc(-1 * var(--space-2))" }}
+    <Disclosure
+      variant="inline"
+      headingLevel="none"
+      title="Advanced"
+      summary={changed > 0 ? <Badge tone="accent">{changed} changed</Badge> : undefined}
+    >
+      <div
+        className="pt-(--space-2)"
+        style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
       >
-        Advanced
-      </Button>
-
-      {isOpen && (
-        <div
-          id={panelId}
-          style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}
+        <Field
+          label="Max output tokens"
+          hint={`Model maximum ${caps?.max_output_tokens ? formatTokens(caps.max_output_tokens) : "unknown"}; reasoning counts toward the limit. Empty uses the default.`}
         >
-          <Field
-            label="Max output tokens"
-            hint={`Model maximum ${caps?.max_output_tokens ? formatTokens(caps.max_output_tokens) : "unknown"}; reasoning counts toward the limit. Empty uses the default.`}
-          >
-            <Input
-              type="number"
-              isMono
-              min={MIN_OUTPUT_TOKENS}
-              max={cap}
-              step={OUTPUT_TOKENS_STEP}
-              placeholder={outputPlaceholder}
-              value={settings.maxOutputTokens ?? ""}
-              disabled={isDisabled}
-              onChange={(e) => {
-                const parsed = parseInt(e.target.value, 10);
-                onChange({ maxOutputTokens: Number.isFinite(parsed) ? parsed : null });
-              }}
-            />
-          </Field>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "var(--space-3)",
+          <Input
+            type="number"
+            isMono
+            min={MIN_OUTPUT_TOKENS}
+            max={cap}
+            step={OUTPUT_TOKENS_STEP}
+            placeholder={outputPlaceholder}
+            value={settings.maxOutputTokens ?? ""}
+            disabled={isDisabled}
+            onChange={(e) => {
+              const parsed = parseInt(e.target.value, 10);
+              onChange({ maxOutputTokens: Number.isFinite(parsed) ? parsed : null });
             }}
-          >
-            <Switch
-              label="Structured output"
-              description={
-                supportsStructured
-                  ? `Constrains the answer to the review JSON schema. Default for this provider: ${structuredDefault ? "on" : "off"}. Turn it off if the endpoint rejects it.`
-                  : "Not supported by this model."
-              }
-              checked={isStructured}
-              disabled={isDisabled || !supportsStructured}
-              onCheckedChange={(checked) => {
-                onChange({ structuredOutput: checked });
-              }}
-            />
-            {settings.structuredOutput !== null && supportsStructured && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={isDisabled}
-                onClick={() => {
-                  onChange({ structuredOutput: null });
-                }}
-              >
-                Use the provider default
-              </Button>
-            )}
-          </div>
+          />
+        </Field>
 
-          <Field
-            label="System prompt"
-            hint="Replaces the built-in system prompt for runs with this provider."
-          >
-            <Textarea
-              rows={SYSTEM_PROMPT_ROWS}
-              value={settings.systemPrompt}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "var(--space-3)",
+          }}
+        >
+          <Switch
+            label="Structured output"
+            description={
+              supportsStructured
+                ? `Constrains the answer to the review JSON schema. Default for this provider: ${structuredDefault ? "on" : "off"}. Turn it off if the endpoint rejects it.`
+                : "Not supported by this model."
+            }
+            checked={isStructured}
+            disabled={isDisabled || !supportsStructured}
+            onCheckedChange={(checked) => {
+              onChange({ structuredOutput: checked });
+            }}
+          />
+          {settings.structuredOutput !== null && supportsStructured && (
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={isDisabled}
-              placeholder="Empty: the built-in reviewer prompt"
-              onChange={(e) => {
-                onChange({ systemPrompt: e.target.value });
+              onClick={() => {
+                onChange({ structuredOutput: null });
               }}
-            />
-          </Field>
+            >
+              Use the provider default
+            </Button>
+          )}
         </div>
-      )}
-    </div>
+
+        <Field
+          label="System prompt"
+          hint="Replaces the built-in system prompt for runs with this provider."
+        >
+          <Textarea
+            rows={SYSTEM_PROMPT_ROWS}
+            value={settings.systemPrompt}
+            disabled={isDisabled}
+            placeholder="Empty: the built-in reviewer prompt"
+            onChange={(e) => {
+              onChange({ systemPrompt: e.target.value });
+            }}
+          />
+        </Field>
+      </div>
+    </Disclosure>
   );
 };

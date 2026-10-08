@@ -1,6 +1,8 @@
 export { hostApi } from "./api";
 export type { TestConnectionResult } from "./api";
 export { ColorPicker } from "./ui";
+export { getTokenLink, HOST_TYPE_LABELS } from "./lib";
+export type { TokenLink } from "./lib";
 export {
   HostSchema,
   HostTypeSchema,

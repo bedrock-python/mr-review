@@ -10,6 +10,7 @@ import httpx
 import pytest
 from mr_review.core.vcs.entities import InlineComment, LineAnchor, PostedNote, PostFailure, PostResult
 from mr_review.core.vcs.protocols import VCSProvider
+from mr_review.infra.vcs._posting import describe_status_error, failure_from
 from mr_review.infra.vcs.bitbucket import BitbucketProvider
 from mr_review.infra.vcs.gitea import GiteaProvider
 from mr_review.infra.vcs.github import GitHubProvider
@@ -336,4 +337,72 @@ async def test__bitbucket__refused_comment__reports_the_hosts_message() -> None:
     )
     provider = BitbucketProvider(client=transport.client(), base_url="", token="user:app-password")
 
-    assert await provider.post_general_note("ws/repo", 7, "x") == PostFailure(reason="400 Bad Request: Bad request")
+    # The host's message only repeats the status phrase, so it is said once.
+    assert await provider.post_general_note("ws/repo", 7, "x") == PostFailure(reason="400 Bad Request")
+
+
+async def test__bitbucket__refused_comment__own_words_follow_the_status() -> None:
+    transport = RoutedTransport(
+        {_BB_COMMENTS: json_response({"type": "error", "error": {"message": "content is empty"}}, status_code=400)}
+    )
+    provider = BitbucketProvider(client=transport.client(), base_url="", token="user:app-password")
+
+    assert await provider.post_general_note("ws/repo", 7, "x") == PostFailure(
+        reason="400 Bad Request: content is empty"
+    )
+
+
+# ── Failure reasons ──────────────────────────────────────────────────────────
+
+_FAILED_URL = "https://gitlab.example.com/api/v4/projects/1/merge_requests/2/discussions"
+
+
+def _status_error(status: int, *, json: Any = None, text: str | None = None) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", _FAILED_URL)
+    if json is not None:
+        response = httpx.Response(status, json=json, request=request)
+    else:
+        response = httpx.Response(status, text=text or "", request=request)
+    return httpx.HTTPStatusError("failed", request=request, response=response)
+
+
+def test__describe_status_error__host_message_repeats_status__said_once() -> None:
+    exc = _status_error(500, json={"message": "500 Internal Server Error"})
+
+    assert describe_status_error(exc) == "500 Internal Server Error"
+
+
+def test__describe_status_error__plain_text_repeating_status__said_once() -> None:
+    exc = _status_error(502, text="502 Bad Gateway: upstream timed out")
+
+    assert describe_status_error(exc) == "502 Bad Gateway: upstream timed out"
+
+
+def test__describe_status_error__message_is_only_the_phrase__status_once() -> None:
+    exc = _status_error(503, text="Service Unavailable")
+
+    assert describe_status_error(exc) == "503 Service Unavailable"
+
+
+def test__describe_status_error__own_message__prefixed_with_status() -> None:
+    exc = _status_error(422, json={"message": {"base": ["line_code can't be blank"]}})
+
+    assert describe_status_error(exc) == "422 Unprocessable Entity: {'base': [\"line_code can't be blank\"]}"
+
+
+def test__describe_status_error__message_with_a_longer_number__still_prefixed() -> None:
+    exc = _status_error(500, text="5000 comments is over the limit")
+
+    assert describe_status_error(exc) == "500 Internal Server Error: 5000 comments is over the limit"
+
+
+def test__describe_status_error__empty_body__status_alone() -> None:
+    assert describe_status_error(_status_error(404)) == "404 Not Found"
+
+
+def test__failure_from__server_error__ambiguous_reason_without_repeated_status() -> None:
+    failure = failure_from(_status_error(500, json={"message": "500 Internal Server Error"}))
+
+    assert failure.kind == "ambiguous"
+    assert failure.reason.startswith("500 Internal Server Error; the host may have posted it anyway")
+    assert failure.reason.count("500") == 1

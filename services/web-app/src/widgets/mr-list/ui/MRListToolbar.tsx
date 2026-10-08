@@ -22,9 +22,6 @@ export type MRListToolbarProps = {
 const isSortKey = (value: string): value is MRSortKey =>
   SORT_OPTIONS.some((option) => option.value === value);
 
-/** The segment spans the row, one equal part per option. */
-const STRETCHED_SEGMENT = "flex w-full [&>button]:flex-1";
-
 /**
  * Two rows over the list: which merge requests (the relationship in the inbox, the state in a
  * repository), then search, order and the draft filter.
@@ -53,7 +50,7 @@ export const MRListToolbar = ({
           options={SCOPE_OPTIONS}
           value={scope}
           onValueChange={onScopeChange}
-          className={STRETCHED_SEGMENT}
+          isFullWidth
         />
       ) : (
         <SegmentedControl
@@ -62,7 +59,7 @@ export const MRListToolbar = ({
           options={STATE_OPTIONS}
           value={state}
           onValueChange={onStateChange}
-          className={STRETCHED_SEGMENT}
+          isFullWidth
         />
       )}
     </Toolbar>
@@ -80,7 +77,7 @@ export const MRListToolbar = ({
         onChange={(event) => {
           if (isSortKey(event.target.value)) onSortChange(event.target.value);
         }}
-        className="w-auto shrink-0"
+        isFullWidth={false}
       >
         {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

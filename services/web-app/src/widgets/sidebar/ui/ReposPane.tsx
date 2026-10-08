@@ -3,7 +3,7 @@ import { Server } from "lucide-react";
 import { useNav } from "@app/navigation";
 import { MIN_REPO_QUERY_LENGTH } from "@entities/mr";
 import { useHosts, useToggleFavouriteRepo } from "@entities/host";
-import { EmptyState, ICON_SIZE } from "@shared/ui";
+import { EmptyState, ICON_SIZE, ListStatusBar, RefreshErrorNote } from "@shared/ui";
 import { useDebouncedSearch, useStableCallback } from "@shared/lib";
 import { AddRepoByUrlModal } from "@features/add-repo-by-url";
 import { useRepoListRows } from "../model/useRepoListRows";
@@ -12,8 +12,6 @@ import { HostStatus } from "./HostStatus";
 import { InboxEntry } from "./InboxEntry";
 import { RepoList } from "./RepoList";
 import { ReposPaneHeader } from "./ReposPaneHeader";
-import { ReposRefreshError } from "./ReposRefreshError";
-import { ReposStatusLine } from "./ReposStatusLine";
 import { VersionBadge } from "./VersionBadge";
 
 /** Width of the pane; the navigator is this plus the merge request list. */
@@ -43,6 +41,7 @@ const NoHostSelected = (): React.ReactElement => {
 
 export const ReposPane = (): React.ReactElement => {
   const [isAddRepoOpen, setIsAddRepoOpen] = useState(false);
+  const [isAutoLoadPaused, setIsAutoLoadPaused] = useState(false);
   const [collapsedState, setCollapsedState] = useState<CollapsedNamespaces>(() => ({
     hostId: null,
     paths: new Set(),
@@ -136,7 +135,8 @@ export const ReposPane = (): React.ReactElement => {
       )}
 
       {isListVisible && hasRefreshFailed && (
-        <ReposRefreshError
+        <RefreshErrorNote
+          what="the repositories"
           message={reposQuery.error.message}
           onRetry={() => {
             void reposQuery.refetch();
@@ -156,18 +156,22 @@ export const ReposPane = (): React.ReactElement => {
           onSelectRepo={handleSelectRepo}
           onToggleFavourite={handleToggleFavourite}
           onToggleNamespace={handleToggleNamespace}
+          onAutoLoadPausedChange={setIsAutoLoadPaused}
         />
       )}
 
       {isListVisible && reposQuery.data !== undefined && (
-        <ReposStatusLine
+        <ListStatusBar
           loadedCount={repos.length}
           hasNextPage={reposQuery.hasNextPage}
           isFetchingNextPage={reposQuery.isFetchingNextPage}
+          isAutoLoadPaused={isAutoLoadPaused}
         />
       )}
 
-      <div className="border-border mt-auto flex min-h-(--control-lg) shrink-0 items-center justify-between gap-(--space-2) border-t px-(--space-3)">
+      {/* Wraps rather than cuts: in a mono theme "can't reach host" and both versions do not
+          fit the pane's width on one line, and the host's state must be read whole. */}
+      <div className="border-border mt-auto flex min-h-(--control-lg) shrink-0 flex-wrap items-center justify-between gap-x-(--space-2) border-t px-(--space-3) py-(--space-1)">
         {selectedHostId === null ? (
           <span />
         ) : (

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Field, SegmentedControl, Switch } from "@shared/ui";
+import { Badge, Button, Card, Field, SegmentedControl, Slider, Switch } from "@shared/ui";
 
 import {
   activeReasoningMode,
@@ -8,7 +8,6 @@ import {
   REASONING_BUDGET_STEP,
 } from "../model/dispatchSettings";
 import { AdvancedSettings } from "./AdvancedSettings";
-import { RangeInput } from "./RangeInput";
 
 import type { ModelCapabilities, ReasoningEffort } from "@entities/ai-provider";
 import type { ProviderDispatchSettings } from "../model/dispatchSettings";
@@ -166,7 +165,7 @@ const ReasoningControls = ({
             </span>
           }
         >
-          <RangeInput
+          <Slider
             min={budgetMin}
             max={budgetMax}
             step={REASONING_BUDGET_STEP}
@@ -238,7 +237,7 @@ const TemperatureControl = ({
         </span>
       }
     >
-      <RangeInput
+      <Slider
         min={0}
         max={max}
         step={TEMPERATURE_STEP}
@@ -247,9 +246,8 @@ const TemperatureControl = ({
         onChange={(e) => {
           onChange({ temperature: parseFloat(e.target.value) });
         }}
-        // Unset reads as neutral: the thumb sits mid-scale but no temperature is sent. fg-2, not
-        // fg-3: the browser draws the empty track dark or light against the accent's lightness.
-        style={isUnset ? { accentColor: "var(--fg-2)" } : undefined}
+        // Unset reads as neutral: the thumb sits mid-scale but no temperature is sent.
+        isUnset={isUnset}
       />
     </Field>
   );

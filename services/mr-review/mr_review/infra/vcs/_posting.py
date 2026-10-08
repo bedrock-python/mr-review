@@ -41,12 +41,27 @@ def _shorten(text: str) -> str:
     return text if len(text) <= _MAX_REASON_CHARS else text[: _MAX_REASON_CHARS - 1] + "…"
 
 
+def _starts_with_status(message: str, status_code: int) -> bool:
+    """Whether the host's message opens with the status code ("500 Internal Server Error")."""
+    code = str(status_code)
+    return message.startswith(code) and not message[len(code) : len(code) + 1].isdigit()
+
+
 def describe_status_error(exc: httpx.HTTPStatusError) -> str:
-    """``"<status> <phrase>: <host's message>"``, kept short."""
+    """``"<status> <phrase>: <host's message>"``, kept short.
+
+    A message that already says the status is not prefixed with it again: GitLab answers a 500
+    with ``{"message": "500 Internal Server Error"}``, which would otherwise read
+    "500 Internal Server Error: 500 Internal Server Error".
+    """
     response = exc.response
-    message = _host_message(response)
+    message = _host_message(response).strip()
     reason = f"{response.status_code} {response.reason_phrase}".strip()
-    return _shorten(f"{reason}: {message}" if message else reason)
+    if not message or message.lower() == response.reason_phrase.lower():
+        return _shorten(reason)
+    if _starts_with_status(message, response.status_code):
+        return _shorten(message)
+    return _shorten(f"{reason}: {message}")
 
 
 def describe_http_error(exc: httpx.HTTPError) -> str:

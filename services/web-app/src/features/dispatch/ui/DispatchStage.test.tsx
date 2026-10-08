@@ -39,6 +39,9 @@ const stage = vi.hoisted(() => ({ setStage: vi.fn() }));
 const providersQuery = vi.hoisted(() => ({
   data: undefined as AIProvider[] | undefined,
   isPending: false,
+  isError: false,
+  error: null as Error | null,
+  refetch: vi.fn(),
 }));
 
 // Capabilities per model id; a model missing here has none loaded (every control is offered).
@@ -224,6 +227,8 @@ const resetMocks = (): void => {
   api.getContext.mockResolvedValue("");
   providersQuery.data = [PROVIDER];
   providersQuery.isPending = false;
+  providersQuery.isError = false;
+  providersQuery.error = null;
 };
 
 const renderStage = (): { rerender: () => void; unmount: () => void } => {
@@ -916,6 +921,21 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     await generate(user);
 
     expect(dispatchedRequest().model).toBe("my-gateway-model");
+  });
+
+  it("says the provider list failed instead of claiming none are configured", async () => {
+    providersQuery.data = undefined;
+    providersQuery.isError = true;
+    providersQuery.error = new Error("Backend unavailable");
+    const user = userEvent.setup();
+    renderStage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load AI providers");
+    expect(alert).toHaveTextContent("Backend unavailable");
+    expect(screen.queryByText("No AI providers configured")).not.toBeInTheDocument();
+    await user.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(providersQuery.refetch).toHaveBeenCalled();
   });
 
   it("sends the advanced settings", async () => {

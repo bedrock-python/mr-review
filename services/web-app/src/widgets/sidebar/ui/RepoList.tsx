@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { Book, SearchX } from "lucide-react";
-import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList, Skeleton } from "@shared/ui";
-import { describeLoadError, formatLoadError } from "@shared/lib";
+import { EmptyState, ICON_SIZE, InfiniteVirtualList, ListLoadError, Skeleton } from "@shared/ui";
+import { formatLoadError } from "@shared/lib";
 import {
   REPO_ROW_HEIGHT,
   getRepoRowHeight,
@@ -34,18 +34,6 @@ const ReposSkeleton = (): React.ReactElement => (
   </div>
 );
 
-/** What failed, in the host's words; a rejected token is named as such. */
-const LoadError = ({
-  error,
-  onRetry,
-}: {
-  error: Error | null;
-  onRetry: () => void;
-}): React.ReactElement => {
-  const { title, message } = describeLoadError(error, "repositories");
-  return <ErrorState size="sm" title={title} message={message} onRetry={onRetry} />;
-};
-
 export type RepoListProps = {
   rows: RepoListRow[];
   loadedCount: number;
@@ -57,6 +45,7 @@ export type RepoListProps = {
   onSelectRepo: (repoPath: string) => void;
   onToggleFavourite: (repoPath: string) => void;
   onToggleNamespace: (fullPath: string) => void;
+  onAutoLoadPausedChange: (isAutoLoadPaused: boolean) => void;
 };
 
 export const RepoList = ({
@@ -70,6 +59,7 @@ export const RepoList = ({
   onSelectRepo,
   onToggleFavourite,
   onToggleNamespace,
+  onAutoLoadPausedChange,
 }: RepoListProps): React.ReactElement => {
   const { data, error, isError, isFetching, isPending, isPlaceholderData, fetchNextPage, refetch } =
     reposQuery;
@@ -136,7 +126,9 @@ export const RepoList = ({
 
   const renderFooter = (): React.ReactNode => {
     if (isPending && isFetching) return <ReposSkeleton />;
-    if (isError && data === undefined) return <LoadError error={error} onRetry={handleRetry} />;
+    if (isError && data === undefined) {
+      return <ListLoadError error={error} what="repositories" onRetry={handleRetry} />;
+    }
     if (data !== undefined && loadedCount === 0 && !isPlaceholderData) {
       return isSearching ? (
         <EmptyState
@@ -170,6 +162,7 @@ export const RepoList = ({
       pagination={pagination}
       isStale={isPlaceholderData}
       footer={renderFooter()}
+      onAutoLoadPausedChange={onAutoLoadPausedChange}
     />
   );
 };

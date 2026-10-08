@@ -1,6 +1,9 @@
 import { RotateCw, TriangleAlert } from "lucide-react";
 import { cn } from "@shared/lib";
-import { Button } from "../button";
+// The class, not the Button component: the app's error boundary renders this from the entry
+// chunk, and Button brings the tooltip (Radix, floating-ui) with it.
+import { buttonClassName } from "../button/buttonClassName";
+import { ICON_SIZE } from "../ICON_SIZE";
 
 export type ErrorStateProps = {
   /** What could not be done: "Could not load merge requests". */
@@ -39,16 +42,17 @@ export const ErrorState = ({
     )}
   >
     <span className="ui-state__icon" aria-hidden="true">
-      <TriangleAlert size={size === "sm" ? 14 : 18} />
+      <TriangleAlert size={size === "sm" ? ICON_SIZE.inline : ICON_SIZE.state} />
     </span>
     <p className="ui-state__title">{title}</p>
     {message !== undefined && <p className="ui-state__description">{message}</p>}
     {(onRetry !== undefined || actions !== undefined) && (
       <div className="ui-state__actions">
         {onRetry !== undefined && (
-          <Button size="sm" icon={<RotateCw size={12} aria-hidden="true" />} onClick={onRetry}>
+          <button type="button" className={buttonClassName({ size: "sm" })} onClick={onRetry}>
+            <RotateCw size={ICON_SIZE.inline} aria-hidden="true" />
             {retryLabel}
-          </Button>
+          </button>
         )}
         {actions}
       </div>

@@ -3,7 +3,7 @@
 /** The open row: a raised fill and an accent bar on its leading edge. */
 export const LIST_ROW_ACTIVE: React.CSSProperties = {
   background: "var(--bg-2)",
-  boxShadow: "inset 2px 0 0 var(--accent)",
+  boxShadow: "inset var(--indicator-width) 0 0 var(--accent)",
 };
 
 /** One line of a row: items in a row, allowed to shrink. */

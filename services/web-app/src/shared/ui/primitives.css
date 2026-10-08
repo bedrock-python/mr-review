@@ -12,8 +12,6 @@
    - Colour comes from a tone: `data-tone="accent|critical|major|minor|
      suggestion|danger|warn|info|success"` sets --tone (dots, fills),
      --tone-fg (text), --tone-tint (12% fill) and --tone-line (40% border).
-   - The legacy `.field` / `.field-label` share the Input / eyebrow rules, so
-     the Brief forms already look like the primitives.
    ───────────────────────────────────────────────────────────── */
 
 @import "./styles/base.css";
@@ -26,3 +24,4 @@
 @import "./styles/layout.css";
 @import "./styles/overlays.css";
 @import "./styles/toaster.css";
+@import "./styles/markdown.css";

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
-import { Button, Dialog, ICON_SIZE } from "@shared/ui";
+import { Button, ConfirmDialog, ICON_SIZE } from "@shared/ui";
 
 import { focusTargetAfterRow } from "../lib/focusTargets";
 
@@ -36,7 +36,7 @@ export const RowActions = ({
   const focusAfterRemoval = useRef<HTMLElement | null>(null);
 
   const close = (): void => {
-    if (!isRemoving) setIsConfirming(false);
+    setIsConfirming(false);
   };
 
   const handleRemoved = (): void => {
@@ -69,10 +69,10 @@ export const RowActions = ({
       </Button>
       <Button
         variant="ghost"
+        tone="danger"
         size="sm"
         icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
         aria-label={`Remove ${name}`}
-        style={{ color: "var(--c-danger-fg)" }}
         disabled={isRemoved}
         onClick={() => {
           setIsConfirming(true);
@@ -80,30 +80,18 @@ export const RowActions = ({
       >
         Remove
       </Button>
-      <Dialog
+      <ConfirmDialog
         isOpen={isConfirming}
-        onClose={close}
-        size="sm"
+        onCancel={close}
+        onConfirm={() => {
+          onRemove(handleRemoved);
+        }}
         title={`Remove ${name}?`}
         description={consequence}
+        confirmLabel={`Remove ${kind}`}
+        isPending={isRemoving}
+        isConfirmDisabled={isRemoved}
         shouldRestoreFocus={!isRemoved}
-        footer={
-          <>
-            <Button variant="ghost" onClick={close} disabled={isRemoving}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              isLoading={isRemoving}
-              disabled={isRemoved}
-              onClick={() => {
-                onRemove(handleRemoved);
-              }}
-            >
-              Remove {kind}
-            </Button>
-          </>
-        }
       />
     </>
   );

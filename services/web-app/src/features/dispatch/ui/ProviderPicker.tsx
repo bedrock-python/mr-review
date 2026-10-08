@@ -16,9 +16,9 @@ const THREE_UP_MIN_WIDTH_PX = 200;
  * Tokens, so each theme keeps it at 3:1 against its surfaces.
  */
 const PROVIDER_HUE: Record<ProviderType, string> = {
-  claude: "var(--c-major)",
-  openai: "var(--c-add)",
-  openai_compat: "var(--c-suggest)",
+  claude: "var(--provider-anthropic)",
+  openai: "var(--provider-openai)",
+  openai_compat: "var(--provider-compat)",
 };
 
 const PROVIDER_ICON: Record<ProviderType, typeof Asterisk> = {

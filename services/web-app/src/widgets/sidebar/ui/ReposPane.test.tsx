@@ -285,8 +285,8 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     expect(screen.getAllByRole("button", { name: "api-1" })).toHaveLength(2);
     const selected = screen.getAllByRole("button", { name: "api-1", pressed: true });
     expect(selected).toHaveLength(1);
-    expect(getAt(selected, 0).parentElement).toHaveClass("row-btn", "active");
-    expect(document.querySelectorAll(".row-btn.active")).toHaveLength(1);
+    // Nothing else in the pane is pressed: one row is marked as the open one.
+    expect(screen.getAllByRole("button", { pressed: true })).toEqual(selected);
 
     const namespace = screen.getByRole("button", { name: "platform", expanded: true });
     await userEvent.click(namespace);
@@ -301,8 +301,7 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     renderWithQueryClient(<ReposPane />);
     await waitForFirstPage();
 
-    const inbox = screen.getByRole("button", { name: "Inbox", pressed: true });
-    expect(inbox.parentElement).toHaveClass("row-btn", "active");
+    expect(screen.getByRole("button", { name: "Inbox", pressed: true })).toBeInTheDocument();
 
     await userEvent.click(getAt(screen.getAllByRole("button", { name: "api-1" }), 0));
     expect(nav.setRepo).toHaveBeenCalledWith(MOCK_HOST_ID, MOCK_BUSY_REPO);

@@ -48,22 +48,54 @@ describe("ReviewPresetsManager", () => {
     expect(within(list).getByText("Public API")).toBeInTheDocument();
     expect(within(list).getByText("Exported names only · sets 1 brief option")).toBeInTheDocument();
     expect(within(list).getByText("Review only the public API.")).toBeInTheDocument();
+
+    const builtins = screen.getByRole("button", { name: "Built-in presets" });
+    expect(builtins).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(builtins);
     expect(screen.getByText("Focus on security.")).toBeInTheDocument();
   });
 
-  it("deletes a preset only after a second, confirming click", async () => {
+  it("deletes a preset only after the confirmation dialog, which Cancel leaves", async () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPresetsManager />);
 
-    await user.click(await screen.findByRole("button", { name: "Delete preset Public API" }));
+    const remove = await screen.findByRole("button", { name: "Delete preset Public API" });
+    await user.click(remove);
+    let dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(remove).toHaveFocus();
+
+    await user.click(remove);
     expect(presetApi.delete).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm deleting preset Public API" }));
+    dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete preset" }));
 
     await waitFor(() => {
       expect(presetApi.delete).toHaveBeenCalledWith(PRESET.id);
     });
     await waitFor(() => {
       expect(screen.queryByText("Public API")).not.toBeInTheDocument();
+    });
+    // The only preset is gone: focus goes on under the list, not to the page.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Built-in presets" })).toHaveFocus();
+    });
+  });
+
+  it("moves focus to the next preset's Edit once one is deleted", async () => {
+    const other = { ...PRESET, id: "44444444-4444-4444-8444-444444444444", name: "Migrations" };
+    presetApi.list.mockResolvedValue([PRESET, other]);
+    const user = userEvent.setup();
+    renderWithQueryClient(<ReviewPresetsManager />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete preset Public API" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete preset" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit preset Migrations" })).toHaveFocus();
     });
   });
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Button } from "@shared/ui";
+import { Button, Tag } from "@shared/ui";
 
 // A row of tags stays one or two lines; the rest are a click away.
 const MODEL_PREVIEW_LIMIT = 5;
@@ -13,23 +13,6 @@ const listStyle: React.CSSProperties = {
   margin: 0,
   padding: 0,
   listStyle: "none",
-};
-
-/** A model id as a tag: mono and case kept, since ids are case-sensitive (a Badge uppercases). */
-const tagStyle: React.CSSProperties = {
-  display: "block",
-  maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  padding: "0 var(--space-2)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-badge)",
-  background: "var(--bg-2)",
-  color: "var(--fg-1)",
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--fs-meta)",
-  lineHeight: "var(--lh-body)",
 };
 
 const emptyStyle: React.CSSProperties = { fontSize: "var(--fs-meta)", color: "var(--fg-2)" };
@@ -49,9 +32,7 @@ export const ModelTags = ({ models }: { models: string[] }): React.ReactElement 
     <ul aria-label="Models" style={listStyle}>
       {visible.map((model) => (
         <li key={model} style={{ minWidth: 0, maxWidth: "100%" }}>
-          <span style={tagStyle} title={model}>
-            {model}
-          </span>
+          <Tag className="block">{model}</Tag>
         </li>
       ))}
       {hiddenCount > 0 && (

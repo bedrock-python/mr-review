@@ -1,8 +1,12 @@
 import { cn, useRovingRadioGroup } from "@shared/lib";
+import type { RovingRadioActivation } from "@shared/lib";
 
 export type SegmentedOption<T extends string> = {
   value: T;
-  label: React.ReactNode;
+  /** The visible label; may be omitted for an icon-only option that has an `aria-label`. */
+  label?: React.ReactNode;
+  /** The option's name when it shows only an icon ("Tree view"); also its tooltip. */
+  "aria-label"?: string;
   /** A 14px icon before the label. */
   icon?: React.ReactNode;
   /** A count after the label, in mono. */
@@ -19,8 +23,14 @@ export type SegmentedControlProps<T extends string> = {
   /** Name of the choice ("View", "Status"); or `aria-labelledby` a visible label. */
   "aria-label"?: string;
   "aria-labelledby"?: string;
+  /** A hint for the whole group: what the choice changes. */
+  "aria-describedby"?: string;
   /** 24px (sm) or 30px (md). */
   size?: "sm" | "md";
+  /** Spans its row, one equal part per option. */
+  isFullWidth?: boolean;
+  /** "manual" when choosing is costly or hard to undo: arrows only move, Space/Enter choose. */
+  activation?: RovingRadioActivation;
   className?: string;
 };
 
@@ -34,6 +44,8 @@ export const SegmentedControl = <T extends string>({
   value,
   onValueChange,
   size = "md",
+  isFullWidth = false,
+  activation = "automatic",
   className,
   ...aria
 }: SegmentedControlProps<T>): React.ReactElement => {
@@ -42,20 +54,27 @@ export const SegmentedControl = <T extends string>({
     value,
     onValueChange,
     orientation: "horizontal",
+    activation,
   });
   return (
     <div
       role="radiogroup"
       aria-orientation="horizontal"
       {...aria}
-      className={cn("ui-segmented", size === "sm" && "ui-segmented--sm", className)}
+      className={cn(
+        "ui-segmented",
+        size === "sm" && "ui-segmented--sm",
+        isFullWidth && "ui-segmented--full",
+        className
+      )}
     >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           {...getItemProps(option)}
-          title={option.title}
+          aria-label={option["aria-label"]}
+          title={option.title ?? (option.label === undefined ? option["aria-label"] : undefined)}
           className="ui-segmented__item"
         >
           {option.icon}

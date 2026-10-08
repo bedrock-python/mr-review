@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { Checkbox, Radio, RadioGroup, Switch } from "../choice";
+import { Checkbox, CheckboxGroup, Radio, RadioGroup, Switch } from "../choice";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
+import { Slider } from "./Slider";
 import { Textarea } from "./Textarea";
 import type { Meta, StoryObj } from "@storybook/react";
 
@@ -88,6 +89,38 @@ const ChoicesDemo = (): React.ReactElement => {
       </RadioGroup>
     </div>
   );
+};
+
+/** Field as a group (swatches, a checkbox under a label) and a CheckboxGroup. */
+export const Groups: StoryObj = {
+  render: () => (
+    <div style={{ display: "grid", gap: 20, maxWidth: 420 }}>
+      <Field label="SSL verify" isGroup hint="Turn off only for a self-signed endpoint.">
+        <Checkbox label="Verify TLS certificate" defaultChecked />
+      </Field>
+      <CheckboxGroup legend="Include" orientation="horizontal">
+        <Checkbox label="Hosts" defaultChecked />
+        <Checkbox label="AI providers" defaultChecked />
+        <Checkbox label="Reviews" />
+      </CheckboxGroup>
+    </div>
+  ),
+};
+
+export const Sliders: StoryObj = {
+  render: () => (
+    <div style={{ display: "grid", gap: 20, maxWidth: 360 }}>
+      <Field label="Temperature" labelAside={<span>0.7</span>}>
+        <Slider min={0} max={2} step={0.05} defaultValue={0.7} />
+      </Field>
+      <Field label="Temperature (unset)" hint="Unset — the model's default">
+        <Slider min={0} max={2} step={0.05} defaultValue={1} isUnset />
+      </Field>
+      <Field label="Disabled">
+        <Slider min={0} max={2} defaultValue={1} disabled />
+      </Field>
+    </div>
+  ),
 };
 
 export const Choices: StoryObj = {

@@ -2,22 +2,8 @@ import { useId } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button, ICON_SIZE, Markdown, SectionHeader, StatusBadge } from "@shared/ui";
 import { PICK_LAYOUT } from "./PICK_LAYOUT";
-import type { MR, MRDiffStats, MRStatus, PipelineStatus } from "@entities/mr";
-import type { Status } from "@shared/ui";
-
-type BadgeSpec = { status: Status; label: string; isLive?: boolean };
-
-const MR_STATE: Record<MRStatus, BadgeSpec> = {
-  opened: { status: "neutral", label: "Opened" },
-  merged: { status: "success", label: "Merged" },
-  closed: { status: "danger", label: "Closed" },
-};
-
-const PIPELINE: Record<Exclude<PipelineStatus, "none">, BadgeSpec> = {
-  passed: { status: "success", label: "Passed" },
-  failed: { status: "danger", label: "Failed" },
-  running: { status: "active", label: "Running", isLive: true },
-};
+import { mrStateStatus, pipelineStatus } from "@entities/mr";
+import type { MR, MRDiffStats } from "@entities/mr";
 
 const DT_CLASS = "text-fg-2";
 
@@ -39,8 +25,8 @@ export const MRSidebar = ({
   isComposing,
 }: MRSidebarProps): React.ReactElement => {
   const id = useId();
-  const state = MR_STATE[mr.status];
-  const pipeline = mr.pipeline && mr.pipeline !== "none" ? PIPELINE[mr.pipeline] : null;
+  const state = mrStateStatus(mr.status);
+  const pipeline = pipelineStatus(mr.pipeline);
   const hasDescription = mr.description.trim().length > 0;
 
   return (
@@ -88,7 +74,7 @@ export const MRSidebar = ({
                   <StatusBadge
                     status={pipeline.status}
                     label={pipeline.label}
-                    isLive={pipeline.isLive ?? false}
+                    isLive={pipeline.isLive}
                   />
                 </dd>
               </>

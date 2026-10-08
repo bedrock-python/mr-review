@@ -55,6 +55,43 @@ describe("IconButton", () => {
     expect(screen.getByRole("button")).not.toHaveAttribute("aria-pressed");
   });
 
+  it("with a disabled reason: aria-disabled, no clicks, the reason as its tooltip", async () => {
+    const user = userEvent.setup();
+    const handleClick = vi.fn();
+    render(
+      <IconButton
+        label="Delete comment"
+        icon={icon}
+        shortcut="d"
+        disabledReason="This iteration was posted"
+        onClick={handleClick}
+      />
+    );
+    const button = screen.getByRole("button", { name: "Delete comment" });
+
+    await user.tab();
+    expect(button).toHaveFocus();
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("This iteration was posted");
+    // The key would do nothing either, so the tooltip does not offer it.
+    expect(tooltip.querySelector(".ui-kbd")).toBeNull();
+    await user.keyboard("{Enter}");
+    await user.click(button);
+
+    expect(handleClick).not.toHaveBeenCalled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("draws an indicator dot that is not announced", () => {
+    const { container } = render(<IconButton label="Filter" icon={icon} hasIndicator />);
+
+    expect(container.querySelector(".ui-icon-btn__indicator")).toHaveAttribute(
+      "aria-hidden",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Filter" })).toBeInTheDocument();
+  });
+
   it("sizes and variants by class", () => {
     render(<IconButton label="Delete" icon={icon} size="sm" variant="danger" />);
 

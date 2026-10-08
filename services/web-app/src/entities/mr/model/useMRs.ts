@@ -11,6 +11,12 @@ import type { InboxMRPage, InboxScope, MRPage, MRStateFilter, Repo, RepoPage } f
 
 const LIST_STALE_TIME_MS = 2 * 60 * 1000;
 
+/**
+ * No global error toast: the lists show their own error (an error state with Retry, the host
+ * status, a "could not refresh" note), and the merge request's header shows its own.
+ */
+const SHOWN_IN_PLACE = { silent: true } as const;
+
 /** Shorter repo searches are not sent to the server. */
 export const MIN_REPO_QUERY_LENGTH = 2;
 
@@ -78,6 +84,7 @@ export const useInfiniteRepos = (
     enabled: hostId !== null && isQueryAllowed,
     placeholderData: keepPreviousWithin<InfiniteData<RepoPage, number>>(mrKeys.repos(hostId ?? "")),
     staleTime: LIST_STALE_TIME_MS,
+    meta: SHOWN_IN_PLACE,
   });
 };
 
@@ -112,6 +119,7 @@ export const useInfiniteMRs = (
       mrKeys.lists(hostId ?? "", repoPath ?? "")
     ),
     staleTime: LIST_STALE_TIME_MS,
+    meta: SHOWN_IN_PLACE,
   });
 };
 
@@ -139,6 +147,7 @@ export const useInfiniteInboxMRs = (
       mrKeys.inbox(hostId ?? "")
     ),
     staleTime: LIST_STALE_TIME_MS,
+    meta: SHOWN_IN_PLACE,
   });
 };
 
@@ -177,6 +186,7 @@ export const useMR = (
     },
     enabled: hostId !== null && repoPath !== null && mrIid !== null,
     staleTime: 10 * 60 * 1000,
+    meta: SHOWN_IN_PLACE,
   });
 };
 

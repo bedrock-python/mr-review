@@ -1,0 +1,118 @@
+/* Markdown (comment bodies, MR descriptions, release notes). Conventions: see ../primitives.css. */
+
+@layer components {
+  .ui-markdown {
+    min-width: 0;
+    color: var(--fg-1);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+  }
+  /* The plain text shown until the renderer has loaded */
+  .ui-markdown--plain {
+    white-space: pre-wrap;
+  }
+  .ui-markdown :is(p, ul, ol, pre, blockquote, .ui-markdown__table) {
+    margin: 0 0 var(--space-2);
+  }
+  /* The block's container spaces it; a trailing margin would double that */
+  .ui-markdown > :last-child,
+  .ui-markdown li > :last-child {
+    margin-bottom: 0;
+  }
+  .ui-markdown :is(h1, h2, h3, h4, h5, h6) {
+    margin: var(--space-3) 0 var(--space-2);
+    color: var(--fg-0);
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    line-height: var(--lh-tight);
+  }
+  .ui-markdown :is(h1, h2) {
+    font-size: var(--fs-title);
+  }
+  .ui-markdown > :first-child {
+    margin-top: 0;
+  }
+  .ui-markdown strong {
+    color: var(--fg-0);
+    font-weight: var(--fw-semibold);
+  }
+  .ui-markdown :is(ul, ol) {
+    padding-left: var(--space-5);
+  }
+  .ui-markdown ul {
+    list-style-type: disc;
+  }
+  .ui-markdown ol {
+    list-style-type: decimal;
+  }
+  .ui-markdown li + li {
+    margin-top: 2px;
+  }
+  .ui-markdown a {
+    color: var(--accent-fg);
+    text-decoration: underline;
+  }
+  .ui-markdown code {
+    padding: 1px var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-badge);
+    background: var(--bg-3);
+    color: var(--fg-0);
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+  }
+  .ui-markdown pre {
+    padding: var(--space-2) var(--space-3);
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+    line-height: var(--lh-body);
+  }
+  .ui-markdown pre code {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .ui-markdown blockquote {
+    padding-left: var(--space-3);
+    border-left: 3px solid var(--border-strong);
+    color: var(--fg-2);
+  }
+  .ui-markdown hr {
+    margin: var(--space-3) 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .ui-markdown__table {
+    overflow-x: auto;
+  }
+  .ui-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: var(--fs-meta);
+  }
+  .ui-markdown :is(th, td) {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .ui-markdown th {
+    border-bottom-color: var(--border-strong);
+    background: var(--bg-2);
+    color: var(--fg-0);
+    font-weight: var(--fw-semibold);
+  }
+  .ui-markdown input[type="checkbox"] {
+    margin-right: var(--space-1);
+    cursor: default;
+  }
+  .ui-markdown__muted {
+    color: var(--fg-2);
+  }
+}

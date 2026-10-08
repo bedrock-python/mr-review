@@ -1,6 +1,77 @@
-/* Dialog, Drawer. Conventions: see ../primitives.css. */
+/* Dialog, Drawer, Menu, Popover. Conventions: see ../primitives.css. */
 
 @layer components {
+  /* ── Menu / Popover ────────────────────────────────────────── */
+  .ui-menu,
+  .ui-popover {
+    z-index: var(--z-popover);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-pop);
+  }
+  .ui-menu[data-state="open"],
+  .ui-popover[data-state="open"] {
+    animation: ui-fade-in var(--dur-base) var(--ease-out);
+  }
+  .ui-menu {
+    min-width: 220px;
+    padding: var(--space-1);
+    background: var(--bg-2);
+  }
+  .ui-menu__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--control-md);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    color: var(--fg-1);
+    font-size: var(--fs-control);
+    cursor: pointer;
+    user-select: none;
+  }
+  .ui-menu__item[data-highlighted] {
+    background: var(--bg-3);
+    color: var(--fg-0);
+  }
+  .ui-menu__item[data-disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  /* Items take the focus ring inside: the menu clips anything outside them */
+  .ui-menu__item:focus-visible {
+    outline-offset: -2px;
+  }
+  .ui-menu__icon {
+    display: inline-flex;
+    justify-content: center;
+    width: var(--icon-inline);
+    flex-shrink: 0;
+    color: var(--fg-2);
+  }
+  .ui-menu__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-menu__group-label {
+    padding: var(--space-2) var(--space-2) var(--space-1);
+  }
+  .ui-menu__separator {
+    height: 1px;
+    margin: var(--space-1) calc(-1 * var(--space-1));
+    background: var(--border);
+  }
+  .ui-popover {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-1);
+  }
+
   /* ── Dialog / Drawer ───────────────────────────────────────── */
   .ui-overlay {
     position: fixed;
@@ -80,6 +151,11 @@
     flex-shrink: 0;
     padding: 12px 20px;
     border-top: 1px solid var(--border);
+  }
+
+  /* No body between them: one rule, not the header's and the footer's stacked */
+  .ui-dialog__header + .ui-dialog__footer {
+    border-top: 0;
   }
 
   .ui-drawer {

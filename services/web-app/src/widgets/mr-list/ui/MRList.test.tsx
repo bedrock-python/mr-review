@@ -201,6 +201,26 @@ describe("MRList in a repository", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () 
     expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
   });
 
+  it("leaves the filter menu with Tab to the next control, with Shift+Tab to its button", async () => {
+    renderWithQueryClient(<MRList />);
+    await waitForStatus("Showing 30 · more below");
+    const button = screen.getByRole("button", { name: "Filter merge requests" });
+
+    await userEvent.click(button);
+    await userEvent.tab({ shift: true });
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+
+    await userEvent.click(button);
+    expect(screen.getByRole("radio", { name: "All merge requests" })).toHaveFocus();
+    await userEvent.tab();
+    expect(screen.queryByRole("dialog", { name: "Filter merge requests" })).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(button.compareDocumentPosition(document.activeElement as Node)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   it("closes the filter menu on Escape and goes back to its button", async () => {
     renderWithQueryClient(<MRList />);
     await waitForStatus("Showing 30 · more below");
@@ -325,6 +345,8 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     expect(
       screen.getByText("No open merge requests in the last repositories checked")
     ).toBeInTheDocument();
+    // The status line points at that row exactly while auto-loading is paused.
+    await waitForStatus("Showing 0 · Load more below");
     expect(inboxPages()).toEqual(
       Array.from({ length: MAX_BARREN_AUTO_PAGES }, (_, index) => String(index + 1))
     );
@@ -333,6 +355,31 @@ describe("MRList in the inbox", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => 
     await waitFor(() => {
       expect(inboxPages()).toHaveLength(MAX_BARREN_AUTO_PAGES + 1);
     });
+  });
+
+  it("stops pointing at Load more once the next page has failed", async () => {
+    server.use(
+      http.get("*/api/v1/hosts/:hostId/inbox", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page"));
+        if (page > MAX_BARREN_AUTO_PAGES) {
+          return HttpResponse.json({ detail: "GitLab answered 502" }, { status: 502 });
+        }
+        return HttpResponse.json({
+          items: [],
+          page,
+          per_page: 30,
+          has_more: true,
+          truncated_repos: [],
+        });
+      })
+    );
+    renderWithQueryClient(<MRList />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    await screen.findByRole("button", { name: "Retry" });
+
+    // The tail row now offers Retry, not Load more: the status line follows it.
+    await waitForStatus("Showing 0 · more below");
   });
 
   it("shows MRs newest first across pages and names the repositories cut short", async () => {

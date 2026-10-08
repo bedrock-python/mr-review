@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, configure, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, useLocation } from "react-router-dom";
@@ -7,11 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNav } from "@app/navigation";
 import { DEFAULT_BRIEF_CONFIG, reviewApi, reviewKeys } from "@entities/review";
 import { ApiError } from "@shared/api";
-import { INTEGRATION_TEST_TIMEOUT_MS, createTestQueryClient } from "@shared/lib/test-utils";
+import {
+  ASYNC_UTIL_TIMEOUT_MS,
+  INTEGRATION_TEST_TIMEOUT_MS,
+  createTestQueryClient,
+} from "@shared/lib/test-utils";
 import { useStageBarStore } from "../model/useStageBarStore";
 import { StageBar } from "./StageBar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Iteration, Review } from "@entities/review";
+
+// Lazy chunks and MSW round trips: see ASYNC_UTIL_TIMEOUT_MS.
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
 
 const toastError = vi.hoisted(() => vi.fn());
 

@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 import { Check, X } from "lucide-react";
-import { SeverityBadge } from "@entities/review";
+import { SeverityBadge, SeverityDot } from "@entities/review";
 import { cn } from "@shared/lib";
 import { Card, EmptyState, ICON_SIZE, IconButton, Markdown, SectionHeader } from "@shared/ui";
-import { SEV_COLOR } from "../../lib";
 import { PinnedCommentEditor } from "./PinnedCommentEditor";
 import { ReviewDiffViewer } from "./ReviewDiffViewer";
 import type { CommentFieldPatch } from "../../model";
@@ -51,11 +50,7 @@ const InlineCommentList = ({ comments, onOpen }: InlineCommentListProps): React.
                 "hover:border-border-strong hover:bg-bg-hover transition-colors"
               )}
             >
-              <span
-                className="ui-severity-counts__dot mt-(--space-1)"
-                style={{ background: SEV_COLOR[c.severity] }}
-                aria-hidden="true"
-              />
+              <SeverityDot severity={c.severity} className="mt-(--space-1)" />
               <span className="flex min-w-0 flex-1 flex-col gap-(--space-1)">
                 <span className="text-fg-2 font-mono text-(length:--fs-meta)">{lineLabel(c)}</span>
                 <span className="text-fg-1 truncate text-(length:--fs-control)">{c.body}</span>
@@ -102,7 +97,7 @@ const GeneralNotes = ({ comments, onToggleStatus }: GeneralNotesProps): React.Re
               }}
             />
           </div>
-          <Markdown className="[&>:last-child]:mb-0!">{c.body}</Markdown>
+          <Markdown>{c.body}</Markdown>
         </Card>
       );
     })}

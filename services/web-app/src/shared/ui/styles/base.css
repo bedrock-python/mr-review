@@ -2,8 +2,7 @@
 
 @layer components {
   /* ── Eyebrow: the one small-caps label style ───────────────── */
-  .ui-eyebrow,
-  .field-label {
+  .ui-eyebrow {
     display: block;
     margin: 0;
     font-family: var(--font-mono);
@@ -13,9 +12,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--fg-2);
-  }
-  .field-label {
-    margin-bottom: 6px;
   }
 
   /* ── Tones: [data-tone] sets --tone, --tone-fg, --tone-tint, --tone-line ── */
@@ -83,6 +79,27 @@
   .ui-focus-within :is(input, textarea):focus-visible {
     outline: none;
     box-shadow: none;
+  }
+
+  /* ── Marks ──────────────────────────────────────────────────
+     A dot: status, severity, "a filter is on". Its colour is the tone's, or an inline
+     background (severity hues). */
+  .ui-dot {
+    display: inline-block;
+    flex-shrink: 0;
+    width: var(--dot-size);
+    height: var(--dot-size);
+    border-radius: 50%;
+    background: var(--tone, var(--fg-3));
+  }
+  .ui-dot--pulse {
+    animation: ui-pulse 1.4s ease-in-out infinite;
+  }
+  /* An icon inside a sentence: Tailwind's preflight makes svg a block, which breaks the line */
+  .ui-inline-icon {
+    display: inline-block;
+    vertical-align: -2px;
+    flex-shrink: 0;
   }
 
   /* ── Visually hidden, still announced ──────────────────────── */

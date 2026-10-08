@@ -87,16 +87,6 @@
     transform: rotate(360deg);
   }
 }
-/* A text cursor: on, then off. Not `pulse`, which Tailwind's animate-pulse uses. */
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
@@ -107,35 +97,6 @@
     transform: translateY(0);
   }
 }
-@keyframes pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-}
-@keyframes pulse-ring-centered {
-  0% {
-    transform: translateY(-50%) scale(1);
-    opacity: 0.8;
-  }
-  70% {
-    transform: translateY(-50%) scale(1.5);
-    opacity: 0;
-  }
-  100% {
-    transform: translateY(-50%) scale(1.5);
-    opacity: 0;
-  }
-}
-
 /* ── INK (dark) — default ──────────────────────────────────── */
 /* Also on [data-theme="ink"], so a subtree can be ink inside another theme (theme previews) */
 :root,
@@ -215,6 +176,17 @@
   --icon-inline: 14px;
   --icon-button: 16px;
 
+  /* Marks: a status / severity / "something is on" dot, and the bar that marks the selected
+     row or the focused card */
+  --dot-size: 6px;
+  --indicator-width: 2px;
+
+  /* Provider identity: an icon tint only, never a fill, a CTA or a selection ring.
+     ≥ 3:1 on bg-0…bg-3 in every theme (ink's values hold on phosphor too). */
+  --provider-anthropic: oklch(72% 0.12 45);
+  --provider-openai: oklch(74% 0.11 170);
+  --provider-compat: oklch(72% 0.11 285);
+
   /* Motion */
   --dur-fast: 0.08s;
   --dur-base: 0.15s;
@@ -267,6 +239,10 @@
   --diff-del-fg: #8b2a2a;
   --diff-hunk: #f0efe9;
   --diff-gutter: #f4f3ed;
+
+  --provider-anthropic: oklch(56% 0.14 42);
+  --provider-openai: oklch(54% 0.1 172);
+  --provider-compat: oklch(54% 0.14 285);
 
   --shadow-pop: 0 6px 20px rgb(20 23 26 / 0.12);
   --shadow-dialog: 0 16px 48px rgb(20 23 26 / 0.2);
@@ -499,254 +475,9 @@
   }
 }
 
-/* ── reusable design system utilities ───────────────────────── */
+/* ── app-wide hooks the primitives do not cover ─────────────── */
 @layer utilities {
-  .mono {
-    font-family: var(--font-mono);
-  }
-  .dim {
-    color: var(--fg-2);
-  }
-
-  /* chips */
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border-radius: var(--radius-pill);
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    color: var(--fg-1);
-    font-size: 11px;
-    font-family: var(--font-mono);
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-  }
-  .chip.accent {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-color: transparent;
-  }
-
-  /* keyboard shortcut */
-  .kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-bottom-width: 2px;
-    border-radius: var(--radius-1);
-    color: var(--fg-2);
-  }
-
-  .divider {
-    height: 1px;
-    background: var(--border);
-  }
-
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  /* severity tags */
-  .sev {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px 2px 6px;
-    border-radius: var(--radius-1);
-    font-size: 10px;
-    font-family: var(--font-mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    border: 1px solid;
-    white-space: nowrap;
-  }
-  .sev .dot {
-    width: 6px;
-    height: 6px;
-  }
-  .sev.critical {
-    color: var(--c-critical-fg);
-    background: var(--c-critical-tint);
-    border-color: var(--c-critical-line);
-  }
-  .sev.critical .dot {
-    background: var(--c-critical);
-  }
-  .sev.major {
-    color: var(--c-major-fg);
-    background: var(--c-major-tint);
-    border-color: var(--c-major-line);
-  }
-  .sev.major .dot {
-    background: var(--c-major);
-  }
-  .sev.minor {
-    color: var(--c-minor-fg);
-    background: var(--c-minor-tint);
-    border-color: var(--c-minor-line);
-  }
-  .sev.minor .dot {
-    background: var(--c-minor);
-  }
-  .sev.suggestion {
-    color: var(--c-suggest-fg);
-    background: var(--c-suggest-tint);
-    border-color: var(--c-suggest-line);
-  }
-  .sev.suggestion .dot {
-    background: var(--c-suggest);
-  }
-
-  /* selectable rows */
-  .row-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 6px 10px;
-    border-radius: var(--radius-2);
-    text-align: left;
-    color: var(--fg-1);
-    transition:
-      background 0.08s,
-      color 0.08s;
-  }
-  .row-btn:hover {
-    background: var(--bg-hover);
-    color: var(--fg-0);
-  }
-  .row-btn.active {
-    background: var(--bg-2);
-    color: var(--fg-0);
-  }
-  .row-btn.active::before {
-    content: "";
-    width: 3px;
-    height: 16px;
-    background: var(--accent);
-    border-radius: 999px;
-    margin-left: -10px;
-    margin-right: 4px;
-    flex-shrink: 0;
-  }
-
-  /* favourite star — show on row hover */
-  .row-btn .fav-star {
-    opacity: 0;
-  }
-  .row-btn:hover .fav-star,
-  .row-btn .fav-star[data-active="true"] {
-    opacity: 1;
-  }
-
-  /* buttons */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-radius: var(--radius-2);
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    color: var(--fg-0);
-    font-size: 12px;
-    font-weight: 500;
-    transition:
-      background 0.08s,
-      border 0.08s;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .btn:hover {
-    background: var(--bg-3);
-    border-color: var(--border-strong);
-  }
-  .btn.primary {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-color: transparent;
-    font-weight: 600;
-  }
-  .btn.primary:hover {
-    filter: brightness(1.05);
-  }
-  .btn.ghost {
-    background: transparent;
-    border-color: transparent;
-    color: var(--fg-1);
-  }
-  .btn.ghost:hover {
-    background: var(--bg-hover);
-    color: var(--fg-0);
-  }
-  /* a disabled button must look it, and not react to hover */
-  .btn:disabled,
-  .btn:disabled:hover {
-    opacity: 0.5;
-    cursor: not-allowed;
-    filter: none;
-    background: var(--bg-2);
-    border-color: var(--border);
-  }
-  .btn.primary:disabled,
-  .btn.primary:disabled:hover {
-    background: var(--accent);
-    border-color: transparent;
-  }
-  .btn.ghost:disabled,
-  .btn.ghost:disabled:hover {
-    background: transparent;
-    border-color: transparent;
-  }
-
-  .icon-btn {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-2);
-    color: var(--fg-2);
-    transition:
-      background 0.08s,
-      color 0.08s;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .icon-btn:hover {
-    background: var(--bg-hover);
-    color: var(--fg-0);
-  }
-  .icon-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-  .icon-btn:disabled:hover {
-    background: transparent;
-    color: var(--fg-2);
-  }
-  /* press feedback: without it a click on the nav arrows looks like nothing happened */
-  .icon-btn:not(:disabled):active {
-    background: var(--bg-3);
-    color: var(--fg-0);
-    transform: scale(0.88);
-    transition: transform 0.04s;
-  }
-  /* Rows and icon buttons sit in clipped, tight containers: their ring goes inside */
-  .icon-btn:focus-visible,
-  .row-btn:focus-visible,
+  /* Rows of a virtual list take their focus ring inside: the list clips anything outside */
   [data-row-focus]:focus-visible {
     outline-offset: -2px;
   }
@@ -767,26 +498,6 @@
   .comment-editor {
     animation: fadeSlideIn 0.13s ease-out;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .icon-btn:not(:disabled):active {
-      transform: none;
-    }
-  }
-
-  /* card */
-  .card {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-3);
-  }
-
-  /* animations */
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-  .animate-pulse-ring {
-    animation: pulse-ring 1.5s ease-out infinite;
-  }
 
   /* phosphor scanline */
   [data-theme="phosphor"] body::after {
@@ -805,9 +516,6 @@
     mix-blend-mode: screen;
   }
 
-  [data-theme="phosphor"] .chip,
-  [data-theme="phosphor"] .btn,
-  [data-theme="phosphor"] .sev,
   [data-theme="phosphor"] .ui-btn,
   [data-theme="phosphor"] .ui-chip {
     text-transform: uppercase;

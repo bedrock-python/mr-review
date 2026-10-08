@@ -27,22 +27,22 @@ html [data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-descript
 /* The severity bar: a 3px edge in the toast's tone */
 html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="error"] {
   box-shadow:
-    inset 3px 0 0 var(--c-critical),
+    inset var(--indicator-width) 0 0 var(--c-critical),
     var(--shadow-pop);
 }
 html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="warning"] {
   box-shadow:
-    inset 3px 0 0 var(--c-major),
+    inset var(--indicator-width) 0 0 var(--c-major),
     var(--shadow-pop);
 }
 html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="success"] {
   box-shadow:
-    inset 3px 0 0 var(--c-add),
+    inset var(--indicator-width) 0 0 var(--c-add),
     var(--shadow-pop);
 }
 html [data-sonner-toaster] [data-sonner-toast][data-styled="true"][data-type="info"] {
   box-shadow:
-    inset 3px 0 0 var(--c-suggest),
+    inset var(--indicator-width) 0 0 var(--c-suggest),
     var(--shadow-pop);
 }
 html [data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-icon] {
@@ -66,7 +66,10 @@ html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]
   font-weight: var(--fw-semibold);
 }
 html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:focus-visible,
-html [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button]:focus-visible {
+html
+  [data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-close-button]:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   box-shadow: none;

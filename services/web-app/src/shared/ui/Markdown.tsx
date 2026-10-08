@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense } from "react";
-import { reloadOnStaleChunk } from "@shared/lib";
+import { cn, reloadOnStaleChunk } from "@shared/lib";
 import { ErrorBoundary } from "./error-boundary";
 import type { MarkdownProps } from "./MarkdownContent";
 
@@ -12,12 +12,7 @@ const MarkdownContent = lazy(
 );
 
 const PlainText = ({ children, className }: MarkdownProps): React.ReactElement => (
-  <div
-    className={`markdown-body${className ? ` ${className}` : ""}`}
-    style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}
-  >
-    {children}
-  </div>
+  <div className={cn("ui-markdown ui-markdown--plain", className)}>{children}</div>
 );
 
 const MarkdownBase = ({ children, className }: MarkdownProps): React.ReactElement => {

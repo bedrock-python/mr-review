@@ -103,6 +103,70 @@ describe("SegmentedControl", () => {
   });
 });
 
+describe("SegmentedControl, options and layout", () => {
+  it("names icon-only options, takes a description, and can span its row", () => {
+    render(
+      <>
+        <p id="view-hint">Tree groups the files by folder.</p>
+        <SegmentedControl
+          aria-label="File view"
+          aria-describedby="view-hint"
+          isFullWidth
+          value="tree"
+          onValueChange={vi.fn()}
+          options={[
+            { value: "tree", "aria-label": "Tree", icon: <svg aria-hidden="true" /> },
+            { value: "list", "aria-label": "List", icon: <svg aria-hidden="true" /> },
+          ]}
+        />
+      </>
+    );
+
+    const group = screen.getByRole("radiogroup", { name: "File view" });
+    expect(group).toHaveAccessibleDescription("Tree groups the files by folder.");
+    expect(group).toHaveClass("ui-segmented--full");
+    expect(screen.getByRole("radio", { name: "Tree" })).toHaveAttribute("title", "Tree");
+    expect(screen.getByRole("radio", { name: "List" })).toHaveAttribute("aria-checked", "false");
+  });
+});
+
+describe("SegmentedControl, manual activation", () => {
+  it("moves focus with the arrows and chooses only on Space or Enter", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(
+      <>
+        <SegmentedControl<View>
+          aria-label="Apply"
+          activation="manual"
+          value="list"
+          onValueChange={handleChange}
+          options={[
+            { value: "list", label: "List" },
+            { value: "pinned", label: "Pinned" },
+            { value: "thread", label: "Thread" },
+          ]}
+        />
+        <button type="button">After</button>
+      </>
+    );
+
+    await user.tab();
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "Thread" })).toHaveFocus();
+    expect(handleChange).not.toHaveBeenCalled();
+
+    await user.keyboard("{Enter}");
+    await user.keyboard("{ArrowLeft} ");
+    expect(handleChange.mock.calls).toEqual([["thread"], ["pinned"]]);
+
+    // Away and back: the tab stop is the chosen option again, not the last one focused.
+    await user.tab();
+    await user.tab({ shift: true });
+    expect(screen.getByRole("radio", { name: "List" })).toHaveFocus();
+  });
+});
+
 describe("SegmentedControl, a disabled option", () => {
   it("is not chosen by Space even when it has focus", async () => {
     const user = userEvent.setup();
@@ -138,6 +202,25 @@ describe("Toolbar", () => {
     expect(screen.getByRole("group", { name: "Comment filters" })).toBe(
       container.firstElementChild
     );
+  });
+});
+
+describe("StageFooter, message and column", () => {
+  it("shows a message in place of the summary and lines up with a column", () => {
+    render(
+      <StageFooter
+        summary="Thorough"
+        message={<p>Everything is excluded by the path filters.</p>}
+        contentMaxWidth="660px"
+        primaryAction={<button type="button">Continue</button>}
+      />
+    );
+
+    const footer = screen.getByRole("region", { name: "Stage actions" });
+    expect(footer).toHaveTextContent("Everything is excluded by the path filters.");
+    expect(footer).not.toHaveTextContent("Thorough");
+    expect(footer).toHaveClass("ui-stage-footer--column");
+    expect(footer.style.getPropertyValue("--stage-footer-content")).toBe("660px");
   });
 });
 

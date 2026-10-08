@@ -26,7 +26,7 @@ export const VersionBadge = (): React.ReactElement => {
           onClick={() => {
             setIsOpen(true);
           }}
-          className="text-fg-2 hover:bg-bg-hover hover:text-fg-1 flex h-(--control-sm) shrink-0 items-center gap-(--space-1) rounded-(--radius-1) px-(--space-1) font-mono text-(length:--fs-meta) transition-colors duration-(--dur-fast)"
+          className="text-fg-2 hover:bg-bg-hover hover:text-fg-1 ml-auto flex h-(--control-sm) shrink-0 items-center gap-(--space-1) rounded-(--radius-1) px-(--space-1) font-mono text-(length:--fs-meta) transition-colors duration-(--dur-fast)"
         >
           <span>web {web}</span>
           {api !== null && (
@@ -36,7 +36,10 @@ export const VersionBadge = (): React.ReactElement => {
             </>
           )}
           {versions.isAnyUpdateAvailable && (
-            <span aria-hidden="true" className="bg-accent size-[6px] shrink-0 rounded-full" />
+            <span
+              aria-hidden="true"
+              className="bg-accent size-(--dot-size) shrink-0 rounded-full"
+            />
           )}
         </button>
       </Tooltip>

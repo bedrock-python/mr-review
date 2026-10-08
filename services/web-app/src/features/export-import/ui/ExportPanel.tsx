@@ -7,6 +7,7 @@ import {
   Callout,
   Card,
   Checkbox,
+  CheckboxGroup,
   Field,
   ICON_SIZE,
   Input,
@@ -15,14 +16,7 @@ import {
 } from "@shared/ui";
 
 import { useExportData } from "../model/useExportData";
-import {
-  buttonRowStyle,
-  fieldsetStyle,
-  inlineRowStyle,
-  legendStyle,
-  panelStyle,
-  twoColumnsStyle,
-} from "./styles";
+import { buttonRowStyle, panelStyle, twoColumnsStyle } from "./styles";
 import type { ExportRequest } from "@shared/api/export-import.api";
 
 type SecretsChoice = "encrypted" | "omitted" | "plain";
@@ -100,23 +94,18 @@ export const ExportPanel = (): React.ReactElement => {
 
   return (
     <Card style={panelStyle}>
-      <fieldset style={fieldsetStyle}>
-        <legend className="ui-eyebrow" style={legendStyle}>
-          Include
-        </legend>
-        <div style={inlineRowStyle}>
-          {DATA_CHOICES.map(([key, label]) => (
-            <Checkbox
-              key={key}
-              label={label}
-              checked={included[key]}
-              onCheckedChange={(checked) => {
-                setIncluded((prev) => ({ ...prev, [key]: checked }));
-              }}
-            />
-          ))}
-        </div>
-      </fieldset>
+      <CheckboxGroup legend="Include" orientation="horizontal">
+        {DATA_CHOICES.map(([key, label]) => (
+          <Checkbox
+            key={key}
+            label={label}
+            checked={included[key]}
+            onCheckedChange={(checked) => {
+              setIncluded((prev) => ({ ...prev, [key]: checked }));
+            }}
+          />
+        ))}
+      </CheckboxGroup>
 
       {carriesSecrets && (
         <RadioGroup

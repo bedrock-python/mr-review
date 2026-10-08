@@ -104,10 +104,11 @@ const fill = async (user: User, field: HTMLElement, text: string): Promise<void>
   await user.paste(text);
 };
 
+// Each configured model has a "Remove <model>" button: read the names from those.
 const configuredModels = (): string[] =>
   within(screen.getByRole("list", { name: "Configured models" }))
-    .getAllByRole("listitem")
-    .map((item) => item.querySelector(".mono")?.textContent ?? "");
+    .getAllByRole("button", { name: /^Remove / })
+    .map((button) => (button.getAttribute("aria-label") ?? "").replace(/^Remove /, ""));
 
 const resetMocks = (): void => {
   vi.clearAllMocks();

@@ -27,6 +27,12 @@
   .ui-btn svg {
     flex-shrink: 0;
   }
+  .ui-btn--xs {
+    height: 20px;
+    padding: 0 6px;
+    gap: 4px;
+    font-size: var(--fs-meta);
+  }
   .ui-btn--sm {
     height: var(--control-sm);
     padding: 0 8px;
@@ -74,6 +80,20 @@
   .ui-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
     background: color-mix(in oklch, var(--c-critical) 20%, transparent);
   }
+  /* A quiet Remove / Delete in a row: the danger colour on the label, no fill until hover */
+  .ui-btn--tone-danger {
+    color: var(--c-danger-fg);
+  }
+  .ui-btn--tone-danger:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--c-critical-tint);
+    color: var(--c-danger-fg);
+  }
+  /* A toggle button that is on: the accent tint, like a pressed IconButton */
+  .ui-btn[aria-pressed="true"]:not(.ui-btn--primary, .ui-btn--danger) {
+    border-color: var(--accent-line);
+    background: var(--accent-tint);
+    color: var(--accent-fg);
+  }
   .ui-btn:active:not(:disabled, [aria-disabled="true"]) {
     transform: translateY(0.5px);
   }
@@ -113,7 +133,7 @@
     background: var(--bg-2);
     border-color: var(--border);
   }
-  .ui-icon-btn:hover:not(:disabled) {
+  .ui-icon-btn:hover:not(:disabled, [aria-disabled="true"]) {
     background: var(--bg-hover);
     color: var(--fg-0);
   }
@@ -121,13 +141,29 @@
     background: var(--accent-tint);
     color: var(--accent-fg);
   }
-  .ui-icon-btn--danger:hover:not(:disabled) {
+  .ui-icon-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
     background: var(--c-critical-tint);
     color: var(--c-critical-fg);
   }
-  .ui-icon-btn:disabled {
+  .ui-icon-btn:disabled,
+  .ui-icon-btn[aria-disabled="true"] {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  /* "Something behind this button is on": a dot in the top-right corner */
+  .ui-icon-btn {
+    position: relative;
+  }
+  .ui-icon-btn__indicator {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    width: var(--dot-size);
+    height: var(--dot-size);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg-1);
+    pointer-events: none;
   }
   .ui-icon-btn:focus-visible {
     outline-offset: -2px;

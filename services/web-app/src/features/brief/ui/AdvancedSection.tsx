@@ -4,10 +4,9 @@ import {
   MAX_PROMPT_BUDGET_CHARS,
   MIN_PROMPT_BUDGET_CHARS,
 } from "@entities/review";
-import { Checkbox, Field, Input } from "@shared/ui";
+import { Checkbox, Disclosure, Field, Input } from "@shared/ui";
 import { excludedSummary } from "../lib";
 import { BriefSection } from "./BriefSection";
-import { Disclosure } from "./Disclosure";
 import { PathFilters } from "./PathFilters";
 import type { BriefConfig, ExcludedFiles } from "@entities/review";
 
@@ -53,6 +52,7 @@ export const AdvancedSection = ({
       summary={excludedSummary(excluded)}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
+      headingLevel="h2"
     >
       <div className="flex flex-col" style={{ gap: "var(--space-6)" }}>
         <PathFilters

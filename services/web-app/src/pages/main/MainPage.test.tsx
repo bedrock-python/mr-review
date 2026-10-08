@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { configure, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import MockAdapter from "axios-mock-adapter";
@@ -8,13 +8,20 @@ import { useAppStore } from "@app/store";
 import { checkUpdateApi } from "@features/check-update/api";
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
 import { httpClient } from "@shared/api";
-import { INTEGRATION_TEST_TIMEOUT_MS, createTestQueryClient } from "@shared/lib/test-utils";
+import {
+  ASYNC_UTIL_TIMEOUT_MS,
+  INTEGRATION_TEST_TIMEOUT_MS,
+  createTestQueryClient,
+} from "@shared/lib/test-utils";
 import { MainPage } from "./MainPage";
 import type { Comment, Review } from "@entities/review";
 
+// Lazy chunks and MSW round trips: see ASYNC_UTIL_TIMEOUT_MS.
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+
 // The Polish stage is its own lazily loaded chunk: under a busy machine (parallel test
 // files) it takes longer than Testing Library's 1 s default to arrive.
-const LAZY_STAGE_WAIT = { timeout: 5000 };
+const LAZY_STAGE_WAIT = { timeout: ASYNC_UTIL_TIMEOUT_MS };
 
 const HOST_ID = "33333333-3333-4333-8333-333333333333";
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";

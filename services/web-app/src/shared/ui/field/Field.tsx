@@ -18,9 +18,18 @@ export type FieldProps = {
   labelAside?: React.ReactNode;
   /** The label stays for assistive tech but is not drawn (a search box with an icon). */
   isLabelHidden?: boolean;
+  /**
+   * For what one `<label htmlFor>` cannot name — several controls, or one that is not a native
+   * input (colour swatches, a checkbox under its own label, a list editor): the Field becomes
+   * `role="group"` named by its label (`aria-labelledby`) and described by its hint and error.
+   */
+  isGroup?: boolean;
   className?: string;
   style?: React.CSSProperties;
-  /** One control: Input, Textarea or Select. It picks up id, aria-describedby, aria-invalid. */
+  /**
+   * One control: Input, Textarea, Select or Slider. It picks up id, aria-describedby,
+   * aria-invalid. With `isGroup`, any controls; each names itself.
+   */
   children: React.ReactNode;
 };
 
@@ -33,6 +42,7 @@ export const Field = ({
   id,
   labelAside,
   isLabelHidden = false,
+  isGroup = false,
   className,
   style,
   children,
@@ -41,6 +51,7 @@ export const Field = ({
   const controlId = id ?? `${generatedId}-control`;
   const hintId = `${controlId}-hint`;
   const errorId = `${controlId}-error`;
+  const labelId = `${controlId}-label`;
   const hasHint = hint !== undefined && hint !== null && hint !== false;
   const hasError = error !== undefined && error !== null && error !== false && error !== "";
 
@@ -54,20 +65,39 @@ export const Field = ({
     [controlId, hintId, errorId, hasHint, hasError, isRequired]
   );
 
+  const required = isRequired && (
+    <span className="ui-field__required" aria-hidden="true">
+      *
+    </span>
+  );
+
   return (
-    <div className={cn("ui-field", className)} style={style}>
+    <div
+      className={cn("ui-field", className)}
+      style={style}
+      {...(isGroup
+        ? { role: "group", "aria-labelledby": labelId, "aria-describedby": context.describedBy }
+        : {})}
+    >
       <div className={cn("ui-field__label-row", isLabelHidden && "ui-visually-hidden")}>
-        <label className="ui-eyebrow" htmlFor={controlId}>
-          {label}
-          {isRequired && (
-            <span className="ui-field__required" aria-hidden="true">
-              *
-            </span>
-          )}
-        </label>
+        {isGroup ? (
+          <span id={labelId} className="ui-eyebrow">
+            {label}
+            {required}
+          </span>
+        ) : (
+          <label className="ui-eyebrow" htmlFor={controlId}>
+            {label}
+            {required}
+          </label>
+        )}
         {labelAside}
       </div>
-      <FieldContext.Provider value={context}>{children}</FieldContext.Provider>
+      {isGroup ? (
+        children
+      ) : (
+        <FieldContext.Provider value={context}>{children}</FieldContext.Provider>
+      )}
       {hasHint && (
         <p id={hintId} className="ui-field__hint">
           {hint}

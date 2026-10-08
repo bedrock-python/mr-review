@@ -1,4 +1,5 @@
-import { SEVERITY_LABEL, SEVERITY_ORDER, SEV_COLOR } from "../lib";
+import { SeverityDot } from "@entities/review";
+import { SEVERITY_LABEL, SEVERITY_ORDER } from "../lib";
 import type { CommentSeverity } from "@entities/review";
 import type { SegmentedOption } from "@shared/ui";
 
@@ -7,12 +8,6 @@ export const SEVERITY_OPTIONS: readonly SegmentedOption<CommentSeverity>[] = SEV
   (severity) => ({
     value: severity,
     label: SEVERITY_LABEL[severity],
-    icon: (
-      <span
-        className="ui-severity-counts__dot"
-        style={{ background: SEV_COLOR[severity] }}
-        aria-hidden="true"
-      />
-    ),
+    icon: <SeverityDot severity={severity} />,
   })
 );

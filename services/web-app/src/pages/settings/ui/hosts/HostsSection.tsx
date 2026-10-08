@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { Server } from "lucide-react";
 
-import { HOST_COLORS, getHostColor, useDeleteHost, useHosts } from "@entities/host";
+import {
+  HOST_COLORS,
+  HOST_TYPE_LABELS,
+  getHostColor,
+  useDeleteHost,
+  useHosts,
+} from "@entities/host";
 import type { Host, HostColorId } from "@entities/host";
 import { Badge, ICON_SIZE } from "@shared/ui";
 
-import { HOST_TYPE_LABELS } from "../../lib/hostForm";
 import { SettingsList } from "../SettingsList";
 import { useFocusWhenClosed } from "../../lib/useFocusWhenClosed";
 import { RowActions } from "../RowActions";

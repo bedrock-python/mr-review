@@ -127,6 +127,49 @@ describe("SelectCardGroup", () => {
     expect(security).toHaveAttribute("aria-checked", "false");
   });
 
+  it("lays the cards out in a fixed number of columns when asked", () => {
+    render(
+      <SelectCardGroup
+        aria-label="Two up"
+        columns={2}
+        value="a"
+        onValueChange={vi.fn()}
+        options={[
+          { value: "a", title: "A" },
+          { value: "b", title: "B" },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("radiogroup", { name: "Two up" }).style.gridTemplateColumns).toBe(
+      "repeat(2, minmax(0, 1fr))"
+    );
+  });
+
+  it("with manual activation, the arrows only move", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(
+      <SelectCardGroup
+        aria-label="Saved"
+        activation="manual"
+        value="a"
+        onValueChange={handleChange}
+        options={[
+          { value: "a", title: "A" },
+          { value: "b", title: "B" },
+        ]}
+      />
+    );
+
+    await user.tab();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("radio", { name: "B" })).toHaveFocus();
+    expect(handleChange).not.toHaveBeenCalled();
+    await user.keyboard(" ");
+    expect(handleChange.mock.calls).toEqual([["b"]]);
+  });
+
   it("jumps to the ends with Home and End", async () => {
     const user = userEvent.setup();
     render(<Presets />);

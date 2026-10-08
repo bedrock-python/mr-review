@@ -34,6 +34,21 @@ describe("MarkdownContent", () => {
     expect(container).toHaveTextContent("[payload]");
   });
 
+  it("opens links in a new tab without the opener", () => {
+    render(<MarkdownContent>{"See [the docs](https://example.com/docs)."}</MarkdownContent>);
+
+    const link = screen.getByRole("link", { name: "the docs" });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("is styled by its class, not by inline sizes", () => {
+    const { container } = render(<MarkdownContent>{"One.\n\nTwo."}</MarkdownContent>);
+
+    expect(container.firstElementChild).toHaveClass("ui-markdown");
+    expect(container.querySelector("[style]")).toBeNull();
+  });
+
   it("keeps raw HTML as text", () => {
     const { container } = render(
       <MarkdownContent>{'<img src="https://evil.example/x.png"> <b>bold</b>'}</MarkdownContent>

@@ -82,7 +82,7 @@ export const WithComments: Story = {
         <span
           key={c.id}
           aria-label={`${c.severity} comment`}
-          className="inline-block h-2 w-2 rounded-full"
+          className="inline-block size-(--dot-size) rounded-full"
           style={{ background: SEVERITY_COLOR[c.severity] }}
         />
       ));

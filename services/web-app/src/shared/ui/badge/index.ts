@@ -1,10 +1,12 @@
 export { Badge } from "./Badge";
 export type { BadgeProps } from "./Badge";
-export { StatusBadge } from "./StatusBadge";
-export type { Status, StatusBadgeProps } from "./StatusBadge";
+export { StatusBadge, StatusDot } from "./StatusBadge";
+export type { Status, StatusBadgeProps, StatusDotProps } from "./StatusBadge";
 export { CountBadge } from "./CountBadge";
 export type { CountBadgeProps } from "./CountBadge";
 export { Chip } from "./Chip";
+export { Tag } from "./Tag";
+export type { TagProps } from "./Tag";
 export type { ChipProps } from "./Chip";
 export { toneAttribute } from "./tone";
 export type { Tone } from "./tone";

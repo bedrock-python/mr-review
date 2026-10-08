@@ -1,5 +1,5 @@
 import { QueryCache, QueryClient } from "@tanstack/react-query";
-import type { Query, QueryKey, QueryMeta } from "@tanstack/react-query";
+import type { Query, QueryMeta } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/query-persist-client-core";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { toast } from "sonner";
@@ -32,37 +32,22 @@ export const shouldPersistQuery = (query: Pick<Query, "queryKey" | "state">): bo
 };
 
 /**
- * Queries whose failure the screen already shows where their data would be: the repository
- * and merge request lists (an error state with Retry, the host status, a "could not
- * refresh" note) and the merge request itself (the header's error row, which every stage
- * sits under). A toast on top would say the same thing twice.
- */
-// The `mrKeys` prefixes of @entities/mr, spelled out so the entry chunk does not pull the
-// entity in; the tests build the keys with `mrKeys` to keep the two in step.
-const IN_PLACE_ERROR_QUERY_PREFIXES: readonly QueryKey[] = [
-  ["mrs", "repos"],
-  ["mrs", "list"],
-  ["mrs", "inbox"],
-  ["mrs", "detail"],
-];
-
-const isShownInPlace = (queryKey: QueryKey): boolean =>
-  IN_PLACE_ERROR_QUERY_PREFIXES.some((prefix) =>
-    prefix.every((part, index) => queryKey[index] === part)
-  );
-
-/**
- * Whether a failed query gets the global error toast. A query that shows its own error
- * state opts out with `meta: { silent: true }`, or with `silentStatuses` for the statuses
- * it handles itself (a 404 the page turns into a redirect); the lists and the merge request
- * header are known here to show theirs.
+ * Whether a failed query gets the global error toast. A query whose screen shows the failure
+ * in place opts out, so the two do not say the same thing twice:
+ * - `meta: { silent: true }`: every failure is shown in place, a failed refresh over loaded
+ *   data included (the repository and merge request lists, the merge request header);
+ * - `meta: { silent: "when-empty" }`: only a failure with nothing loaded is (the hosts and AI
+ *   providers: an empty list says so; with data cached — a refetch after an edit, a page
+ *   opened from the persisted cache — the screens just show the old list, so it still toasts);
+ * - `silentStatuses`: the statuses it handles itself (a 404 the page turns into a redirect).
  */
 export const shouldToastQueryError = (
   error: unknown,
   meta: QueryMeta | undefined,
-  queryKey: QueryKey = []
+  hasData = false
 ): boolean => {
-  if (meta?.silent === true || isShownInPlace(queryKey)) return false;
+  if (meta?.silent === true) return false;
+  if (meta?.silent === "when-empty" && !hasData) return false;
   const silentStatuses = meta?.silentStatuses;
   if (error instanceof ApiError && Array.isArray(silentStatuses)) {
     return !silentStatuses.includes(error.status);
@@ -74,7 +59,7 @@ export const createAppQueryClient = (): QueryClient =>
   new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
-        if (!shouldToastQueryError(error, query.meta, query.queryKey)) return;
+        if (!shouldToastQueryError(error, query.meta, query.state.data !== undefined)) return;
         toast.error(error instanceof Error ? error.message : "Unknown error");
       },
     }),

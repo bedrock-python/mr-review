@@ -24,9 +24,6 @@ export const StageBody = ({ children }: { children: React.ReactNode }): React.Re
 );
 
 /** The stage footer, its summary and actions lined up with the column above. */
-export const ColumnFooter = (props: Omit<StageFooterProps, "className">): React.ReactElement => (
-  <StageFooter
-    {...props}
-    className="px-[max(var(--space-5),calc((100%_-_var(--dispatch-column))_/_2))]"
-  />
-);
+export const ColumnFooter = (
+  props: Omit<StageFooterProps, "className" | "contentMaxWidth">
+): React.ReactElement => <StageFooter {...props} contentMaxWidth="var(--dispatch-column)" />;

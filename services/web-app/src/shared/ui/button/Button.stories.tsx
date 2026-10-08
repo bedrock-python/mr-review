@@ -17,7 +17,7 @@ type Story = StoryObj<typeof Button>;
 export const Playground: Story = {};
 
 const VARIANTS: ButtonVariant[] = ["primary", "secondary", "ghost", "danger"];
-const SIZES: ButtonSize[] = ["sm", "md", "lg"];
+const SIZES: ButtonSize[] = ["xs", "sm", "md", "lg"];
 
 export const Matrix: Story = {
   render: () => (
@@ -47,6 +47,37 @@ export const Matrix: Story = {
           </Button>
         </div>
       ))}
+    </div>
+  ),
+};
+
+/** Toggle (aria-pressed), the danger tone on a ghost row action, and aria-disabled with why. */
+export const States: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <Button aria-pressed>View JSON</Button>
+      <Button aria-pressed={false}>View JSON</Button>
+      <Button
+        variant="ghost"
+        tone="danger"
+        size="sm"
+        icon={<Trash2 size={14} aria-hidden="true" />}
+      >
+        Remove
+      </Button>
+      <Button disabledReason="This iteration was posted">New comment</Button>
+      <IconButton
+        label="Filter"
+        variant="secondary"
+        hasIndicator
+        icon={<History size={16} aria-hidden="true" />}
+      />
+      <IconButton
+        label="Delete"
+        variant="danger"
+        disabledReason="This iteration was posted"
+        icon={<Trash2 size={16} aria-hidden="true" />}
+      />
     </div>
   ),
 };

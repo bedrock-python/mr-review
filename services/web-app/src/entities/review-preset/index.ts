@@ -20,5 +20,5 @@ export type {
   CreateReviewPresetInput,
   UpdateReviewPresetInput,
 } from "./model";
-export { PresetEditor } from "./ui";
-export type { PresetEditorProps } from "./ui";
+export { DeletePresetConfirm, PresetEditor } from "./ui";
+export type { DeletePresetConfirmProps, PresetEditorProps } from "./ui";

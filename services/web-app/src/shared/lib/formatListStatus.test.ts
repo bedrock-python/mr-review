@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatListStatus } from "./listStatus";
+import { formatListStatus } from "./formatListStatus";
 
 describe("formatListStatus", () => {
   it("says nothing once everything is loaded and shown", () => {
@@ -23,6 +23,26 @@ describe("formatListStatus", () => {
     expect(formatListStatus({ loadedCount: 37, hasNextPage: true, isFetchingNextPage: true })).toBe(
       "Showing 37 · loading more…"
     );
+  });
+
+  it("points at the Load more row while auto-loading is paused", () => {
+    expect(
+      formatListStatus({
+        loadedCount: 90,
+        hasNextPage: true,
+        isFetchingNextPage: false,
+        isAutoLoadPaused: true,
+      })
+    ).toBe("Showing 90 · Load more below");
+    expect(
+      formatListStatus({
+        loadedCount: 90,
+        shownCount: 0,
+        hasNextPage: true,
+        isFetchingNextPage: false,
+        isAutoLoadPaused: true,
+      })
+    ).toBe("0 of 90 shown · Load more below");
   });
 
   it("counts what a filter hides", () => {

@@ -10,6 +10,7 @@ import {
   useInfiniteInboxMRs,
   useInfiniteMRs,
   useInfiniteRepos,
+  useMR,
 } from "./useMRs";
 import type { MRStateFilter, Repo, RepoPage } from "./mr.schema";
 
@@ -31,6 +32,29 @@ afterAll(() => {
 });
 
 const repoPage = (items: Repo[]): RepoPage => ({ items, page: 1, per_page: 50, has_more: false });
+
+describe("errors", () => {
+  it("are shown in place by the lists and the MR header, so their queries skip the toast", async () => {
+    const queryClient = createTestQueryClient();
+    const wrapper = createQueryClientWrapper(queryClient);
+    renderHook(
+      () => {
+        useInfiniteRepos(MOCK_HOST_ID);
+        useInfiniteMRs(MOCK_HOST_ID, MOCK_BUSY_REPO, { state: "opened" });
+        useInfiniteInboxMRs(MOCK_HOST_ID, "all");
+        useMR(MOCK_HOST_ID, MOCK_BUSY_REPO, 1);
+      },
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(queryClient.getQueryCache().getAll()).toHaveLength(4);
+    });
+    for (const query of queryClient.getQueryCache().getAll()) {
+      expect(query.meta).toEqual({ silent: true });
+    }
+  });
+});
 
 describe("stale infinite lists", () => {
   it("restart from their first page instead of refetching every page loaded before", async () => {

@@ -1,14 +1,18 @@
-import { useState } from "react";
-import { Bookmark, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Bookmark, Pencil, Trash2 } from "lucide-react";
 import {
+  DeletePresetConfirm,
   PresetEditor,
   useBuiltinPresets,
   useDeleteReviewPreset,
   useReviewPresets,
   useUpdateReviewPreset,
 } from "@entities/review-preset";
-import { Button, Card, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
+import { Button, Card, Disclosure, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
+import { focusAfterDialog, neighbourRowControl } from "@shared/lib";
 import type { ReviewPreset } from "@entities/review-preset";
+
+const EDIT_SELECTOR = "[data-preset-edit]";
 
 const ROW_STYLE: React.CSSProperties = { padding: "var(--space-3) var(--space-4)" };
 
@@ -45,6 +49,25 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
   const deletePreset = useDeleteReviewPreset();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  const handleConfirmDelete = (): void => {
+    // Picked while the row is still here: the next preset's Edit, else the previous one's,
+    // else the built-in presets toggle under the list.
+    const row = rowRef.current;
+    const target =
+      neighbourRowControl(row, EDIT_SELECTOR) ??
+      row?.closest("[data-presets-manager]")?.querySelector<HTMLElement>("[aria-expanded]") ??
+      null;
+    deletePreset.mutate(preset.id, {
+      onSuccess: () => {
+        setIsDeleted(true);
+        setIsConfirming(false);
+        focusAfterDialog(target);
+      },
+    });
+  };
 
   if (isEditing) {
     return (
@@ -80,6 +103,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
 
   return (
     <li
+      ref={rowRef}
       className="border-border flex items-start border-b last:border-b-0"
       style={{ ...ROW_STYLE, gap: "var(--space-3)" }}
     >
@@ -97,6 +121,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
           variant="ghost"
           size="sm"
           icon={icon(Pencil)}
+          data-preset-edit=""
           aria-label={`Edit preset ${preset.name}`}
           onClick={() => {
             setIsEditing(true);
@@ -105,24 +130,27 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
           Edit
         </Button>
         <Button
-          variant={isConfirming ? "danger" : "ghost"}
+          variant="ghost"
+          tone="danger"
           size="sm"
           icon={icon(Trash2)}
-          isLoading={deletePreset.isPending}
-          aria-label={
-            isConfirming ? `Confirm deleting preset ${preset.name}` : `Delete preset ${preset.name}`
-          }
+          aria-label={`Delete preset ${preset.name}`}
           onClick={() => {
-            if (!isConfirming) {
-              setIsConfirming(true);
-              return;
-            }
-            deletePreset.mutate(preset.id);
+            setIsConfirming(true);
           }}
         >
-          {isConfirming ? "Confirm" : "Delete"}
+          Delete
         </Button>
       </div>
+      <DeletePresetConfirm
+        preset={isConfirming ? preset : null}
+        isPending={deletePreset.isPending}
+        onCancel={() => {
+          setIsConfirming(false);
+        }}
+        onConfirm={handleConfirmDelete}
+        shouldRestoreFocus={!isDeleted}
+      />
     </li>
   );
 };
@@ -133,7 +161,7 @@ export const ReviewPresetsManager = (): React.ReactElement => {
   const { data: builtins } = useBuiltinPresets();
 
   return (
-    <div className="flex flex-col" style={{ gap: "var(--space-4)" }}>
+    <div data-presets-manager="" className="flex flex-col" style={{ gap: "var(--space-4)" }}>
       <Card padding="none" className="overflow-hidden">
         {isLoading && (
           <div className="flex justify-center" style={ROW_STYLE}>
@@ -157,19 +185,8 @@ export const ReviewPresetsManager = (): React.ReactElement => {
         )}
       </Card>
       {builtins && (
-        <details className="group">
-          <summary
-            className="text-fg-1 hover:text-fg-0 flex w-fit cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden"
-            style={{ gap: "var(--space-1)", fontSize: "var(--fs-control)" }}
-          >
-            <ChevronRight
-              size={ICON_SIZE.inline}
-              aria-hidden="true"
-              className="text-fg-2 transition-transform group-open:rotate-90"
-            />
-            Built-in presets
-          </summary>
-          <Card as="div" padding="none" style={{ marginTop: "var(--space-2)" }}>
+        <Disclosure variant="inline" headingLevel="none" title="Built-in presets" shouldKeepMounted>
+          <Card as="div" padding="none">
             <ul className="m-0 list-none p-0">
               {builtins.map((preset) => (
                 <li
@@ -188,7 +205,7 @@ export const ReviewPresetsManager = (): React.ReactElement => {
               ))}
             </ul>
           </Card>
-        </details>
+        </Disclosure>
       )}
     </div>
   );

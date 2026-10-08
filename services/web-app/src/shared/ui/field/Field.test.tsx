@@ -2,11 +2,100 @@ import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Search } from "lucide-react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { SearchField } from "../SearchField";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
+import { Slider } from "./Slider";
+import { Checkbox, CheckboxGroup } from "../choice";
 import { Textarea } from "./Textarea";
+
+describe("Field as a group", () => {
+  it("names several controls as a group, described by its hint", () => {
+    render(
+      <Field label="Colour" hint="Used for the host's icon." isGroup>
+        <button type="button" aria-label="Red" />
+        <button type="button" aria-label="Blue" />
+      </Field>
+    );
+
+    const group = screen.getByRole("group", { name: "Colour" });
+    expect(group).toHaveAccessibleDescription("Used for the host's icon.");
+    expect(group.querySelector("label")).toBeNull();
+    expect(screen.getByRole("button", { name: "Red" })).not.toHaveAttribute("id");
+  });
+});
+
+describe("CheckboxGroup", () => {
+  it("is a fieldset named by its legend", () => {
+    render(
+      <CheckboxGroup legend="Include" orientation="horizontal">
+        <Checkbox label="Hosts" defaultChecked />
+        <Checkbox label="Reviews" />
+      </CheckboxGroup>
+    );
+
+    const group = screen.getByRole("group", { name: "Include" });
+    expect(group.tagName).toBe("FIELDSET");
+    expect(group).toHaveClass("ui-radio-group--row");
+    expect(screen.getByRole("checkbox", { name: "Hosts" })).toBeChecked();
+  });
+});
+
+describe("Slider", () => {
+  it("is a range named by its Field, drawn neutral while unset", () => {
+    render(
+      <Field label="Temperature" hint="0 — Deterministic">
+        <Slider min={0} max={2} step={0.05} defaultValue={1} isUnset />
+      </Field>
+    );
+
+    const slider = screen.getByRole("slider", { name: "Temperature" });
+    expect(slider).toHaveAccessibleDescription("0 — Deterministic");
+    expect(slider).toHaveAttribute("data-unset", "true");
+    expect(slider).toHaveClass("ui-slider");
+  });
+});
+
+describe("Select width", () => {
+  it("fills its container by default and takes its own width in a row when asked", () => {
+    render(
+      <>
+        <Select aria-label="Type">
+          <option>GitLab</option>
+        </Select>
+        <Select aria-label="Sort by" isFullWidth={false}>
+          <option>Updated</option>
+        </Select>
+      </>
+    );
+
+    expect(screen.getByRole("combobox", { name: "Type" }).parentElement).not.toHaveClass(
+      "ui-select-shell--auto"
+    );
+    expect(screen.getByRole("combobox", { name: "Sort by" }).parentElement).toHaveClass(
+      "ui-select-shell--auto"
+    );
+  });
+});
+
+describe("SearchField", () => {
+  it("forwards its ref to the input", () => {
+    const ref = { current: null as HTMLInputElement | null };
+    render(
+      <SearchField
+        ref={ref}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Search"
+        ariaLabel="Search"
+      />
+    );
+
+    expect(ref.current).toBe(screen.getByRole("searchbox", { name: "Search" }));
+  });
+});
 
 describe("Field", () => {
   it("labels its control", () => {
