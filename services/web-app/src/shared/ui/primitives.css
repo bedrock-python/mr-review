@@ -1,0 +1,20 @@
+/* ─────────────────────────────────────────────────────────────
+   shared/ui primitives — styled only with the tokens in app/styles/index.css,
+   which imports this file once.
+
+   Conventions
+   - Classes are `ui-<block>`, modifiers `ui-<block>--<modifier>`, parts
+     `ui-<block>__<part>`; state comes from ARIA/data attributes
+     (aria-pressed, aria-checked, aria-invalid, data-state, data-tone).
+   - Everything sits in the `components` layer, so a Tailwind utility or an
+     inline style on the element still wins: a caller can nudge spacing
+     without adding a variant.
+   - Colour comes from a tone: `data-tone="accent|critical|major|minor|
+     suggestion|danger|warn|info|success"` sets --tone (dots, fills),
+     --tone-fg (text), --tone-tint (12% fill) and --tone-line (40% border).
+   - The legacy `.field` / `.field-label` share the Input / eyebrow rules, so
+     the Brief forms already look like the primitives.
+   ───────────────────────────────────────────────────────────── */
+
+@import "./styles/base.css";
+@import "./styles/forms.css";

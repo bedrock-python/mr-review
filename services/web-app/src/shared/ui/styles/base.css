@@ -1,0 +1,113 @@
+/* Eyebrow, tones, visually hidden, shared keyframes. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Eyebrow: the one small-caps label style ───────────────── */
+  .ui-eyebrow,
+  .field-label {
+    display: block;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-eyebrow);
+    font-weight: var(--fw-medium);
+    line-height: var(--lh-tight);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-2);
+  }
+  .field-label {
+    margin-bottom: 6px;
+  }
+
+  /* ── Tones: [data-tone] sets --tone, --tone-fg, --tone-tint, --tone-line ── */
+  /* Tone defaults at zero specificity, so a [data-tone] below always wins */
+  :where(.ui-badge, .ui-count, .ui-chip) {
+    --tone: var(--fg-3);
+    --tone-fg: var(--fg-1);
+    --tone-tint: color-mix(in oklch, var(--fg-3) 14%, transparent);
+    --tone-line: var(--border-strong);
+  }
+  :where(.ui-callout) {
+    --tone: var(--fg-3);
+    --tone-fg: var(--fg-1);
+    --tone-tint: var(--bg-2);
+    --tone-line: var(--border);
+  }
+  [data-tone="accent"] {
+    --tone: var(--accent);
+    --tone-fg: var(--accent-fg);
+    --tone-tint: var(--accent-tint);
+    --tone-line: var(--accent-line);
+  }
+  [data-tone="critical"],
+  [data-tone="danger"] {
+    --tone: var(--c-critical);
+    --tone-fg: var(--c-critical-fg);
+    --tone-tint: var(--c-critical-tint);
+    --tone-line: var(--c-critical-line);
+  }
+  [data-tone="major"],
+  [data-tone="warn"] {
+    --tone: var(--c-major);
+    --tone-fg: var(--c-major-fg);
+    --tone-tint: var(--c-major-tint);
+    --tone-line: var(--c-major-line);
+  }
+  [data-tone="minor"] {
+    --tone: var(--c-minor);
+    --tone-fg: var(--c-minor-fg);
+    --tone-tint: var(--c-minor-tint);
+    --tone-line: var(--c-minor-line);
+  }
+  [data-tone="suggestion"],
+  [data-tone="info"] {
+    --tone: var(--c-suggest);
+    --tone-fg: var(--c-suggest-fg);
+    --tone-tint: var(--c-suggest-tint);
+    --tone-line: var(--c-suggest-line);
+  }
+  [data-tone="success"] {
+    --tone: var(--c-add);
+    --tone-fg: var(--c-add-fg);
+    --tone-tint: var(--c-add-tint);
+    --tone-line: var(--c-add-line);
+  }
+
+  /* ── Visually hidden, still announced ──────────────────────── */
+  .ui-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@keyframes ui-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ui-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
