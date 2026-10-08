@@ -27,7 +27,10 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
 
   if (snippet === null) {
     return (
-      <div className="text-fg-2 px-2.5 py-2 font-mono text-(length:--fs-meta)" role="status">
+      <div
+        className="text-fg-2 px-(--space-3) py-(--space-2) font-mono text-(length:--fs-meta)"
+        role="status"
+      >
         {isDiffLoading
           ? "Loading code…"
           : `Line ${String(line)} of ${file} is not shown in the diff.`}
@@ -55,12 +58,16 @@ export const CodeContext = ({ file, line }: CodeContextProps): React.ReactElemen
               aria-current={isTarget ? "true" : undefined}
               className={cn(ROW_CLASS[row.kind], isTarget && "diff-row-highlight")}
             >
-              <td className="text-fg-2 px-1.5 text-right select-none">{row.oldLine ?? ""}</td>
-              <td className="text-fg-2 px-1.5 text-right select-none">{row.newLine ?? ""}</td>
+              <td className="text-fg-2 px-(--space-1) text-right select-none">
+                {row.oldLine ?? ""}
+              </td>
+              <td className="text-fg-2 px-(--space-1) text-right select-none">
+                {row.newLine ?? ""}
+              </td>
               <td className="text-center select-none" aria-hidden="true">
                 {SIGN[row.kind]}
               </td>
-              <td className="pr-2 break-all whitespace-pre-wrap">{row.content}</td>
+              <td className="pr-(--space-2) break-all whitespace-pre-wrap">{row.content}</td>
             </tr>
           );
         })}

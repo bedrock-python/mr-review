@@ -20,6 +20,11 @@ type CommentCardProps = {
 /** The icon size Badge is laid out for. */
 const BADGE_ICON_PX = 12;
 
+const LOCKED_DELETE_REASON = "This iteration was posted; comments can't be deleted";
+/** The look IconButton gives `disabled`, for one that is only aria-disabled. */
+const LOCKED_ICON_BUTTON_CLASS =
+  "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-fg-2";
+
 const locationOf = (comment: Comment): string => {
   if (comment.file === null) return "general";
   return comment.line === null ? comment.file : `${comment.file}:${String(comment.line)}`;
@@ -127,14 +132,17 @@ const CommentCardBase = ({
               handlers.onEdit(id);
             }}
           />
+          {/* Locked: still focusable and hoverable, so its tooltip can say why it does nothing. */}
           <IconButton
             size="sm"
             variant="danger"
             label="Delete comment"
-            disabled={isLocked}
+            tooltip={isLocked ? LOCKED_DELETE_REASON : undefined}
+            aria-disabled={isLocked ? true : undefined}
+            className={cn(isLocked && LOCKED_ICON_BUTTON_CLASS)}
             icon={<Trash2 size={ICON_SIZE.inline} aria-hidden="true" />}
             onClick={() => {
-              handlers.onDelete(id);
+              if (!isLocked) handlers.onDelete(id);
             }}
           />
         </div>
@@ -179,7 +187,8 @@ const CommentCardBase = ({
               handlers.onToggleContext(id);
             }}
           >
-            {isContextOpen ? "Hide code" : "Show code"}
+            {/* One name either way; aria-expanded and the chevron tell open from closed. */}
+            Show code
           </Button>
           {isContextOpen && (
             <div className="border-border bg-bg-0 w-full overflow-hidden rounded-(--radius-control) border">

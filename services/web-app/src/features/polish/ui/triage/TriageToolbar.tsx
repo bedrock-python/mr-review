@@ -1,19 +1,11 @@
 import { useRef } from "react";
-import { Keyboard, Plus, Search, X } from "lucide-react";
-import {
-  Button,
-  ICON_SIZE,
-  IconButton,
-  Input,
-  Kbd,
-  Toolbar,
-  ToolbarSpacer,
-  Tooltip,
-} from "@shared/ui";
+import { Keyboard, Search, X } from "lucide-react";
 import { cn } from "@shared/lib";
+import { ICON_SIZE, IconButton, Input, Kbd, Toolbar, ToolbarSpacer } from "@shared/ui";
 import { EMPTY_FILTERS, SEVERITY_ORDER, isFiltering, useFittingLayout } from "../../lib";
 import { BulkMenu } from "./BulkMenu";
 import { FileFilter, FiltersPopover, GroupToggle, StatusFilter } from "./ListFilters";
+import { NewCommentButton } from "./NewCommentButton";
 import { SeverityChips } from "./SeverityChips";
 import type { FileFilterOption } from "./ListFilters";
 import type { CommentFilters, SeverityCounts } from "../../lib";
@@ -179,28 +171,7 @@ export const TriageToolbar = ({
         onDismissAll={onDismissAll}
         onSetSeverity={onSetSeverity}
       />
-      {layout === "narrow" ? (
-        <IconButton
-          size="sm"
-          variant="secondary"
-          label="New comment"
-          shortcut="n"
-          disabled={isLocked}
-          icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
-          onClick={onAdd}
-        />
-      ) : (
-        <Tooltip content="New comment" shortcut="n" isDisabled={isLocked}>
-          <Button
-            size="sm"
-            icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
-            disabled={isLocked}
-            onClick={onAdd}
-          >
-            New comment
-          </Button>
-        </Tooltip>
-      )}
+      <NewCommentButton isCompact={layout === "narrow"} isLocked={isLocked} onAdd={onAdd} />
       <IconButton
         size="sm"
         label="Keyboard shortcuts"

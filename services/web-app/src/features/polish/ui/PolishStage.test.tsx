@@ -15,6 +15,8 @@ const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 // The Markdown renderer is a lazy chunk: its first import takes seconds when suites run in
 // parallel, well past findBy's 1 s default.
 const MARKDOWN_LOAD_TIMEOUT_MS = 10_000;
+// A tooltip opens 400 ms into a hover; more under a parallel run.
+const TOOLTIP_OPEN_TIMEOUT_MS = 5_000;
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
 
 const DIFF = [
@@ -499,7 +501,11 @@ describe("PolishStage list — code context", { timeout: INTEGRATION_TEST_TIMEOU
     const user = userEvent.setup();
     renderStage(makeReview([makeComment("c1", { line: 10 })]));
 
-    await user.click(within(card("c1")).getByRole("button", { name: "Show code" }));
+    const toggle = within(card("c1")).getByRole("button", { name: "Show code" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(toggle).toHaveAccessibleName("Show code");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
 
     const snippet = screen.getByRole("table", { name: "Code around src/app.ts:10" });
     const rows = within(snippet).getAllByRole("row");
@@ -794,12 +800,27 @@ describe("PolishStage list — adding and deleting", { timeout: INTEGRATION_TEST
     });
   });
 
-  it("disables adding and deleting on a posted iteration", () => {
+  it("disables adding and deleting on a posted iteration, and says why", async () => {
+    const user = userEvent.setup();
     renderStage(makeReview([makeComment("c1")], "2026-05-17T10:00:00+00:00"));
+    const add = screen.getByRole("button", { name: "New comment" });
+    const remove = within(card("c1")).getByRole("button", { name: "Delete comment" });
 
-    expect(screen.getByRole("button", { name: "New comment" })).toBeDisabled();
-    expect(within(card("c1")).getByRole("button", { name: "Delete comment" })).toBeDisabled();
+    expect(add).toHaveAttribute("aria-disabled", "true");
+    expect(remove).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText(/This iteration was already posted/)).toBeInTheDocument();
+    await user.hover(remove);
+    expect(
+      await screen.findByRole("tooltip", {}, { timeout: TOOLTIP_OPEN_TIMEOUT_MS })
+    ).toHaveTextContent("This iteration was posted; comments can't be deleted");
+
+    await user.click(remove);
+    await user.click(add);
+    await user.keyboard("n");
+    await waitPastCoalescing();
+    expect(cards()).toHaveLength(1);
+    expect(fake.deleteComment).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "New comment" })).not.toBeInTheDocument();
   });
 
   it("offers to write the first comment when the model produced none", async () => {
