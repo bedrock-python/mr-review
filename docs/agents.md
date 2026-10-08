@@ -355,9 +355,16 @@ The inbox (all scopes list open MRs only, newest update first within a page):
 `authored`, `assigned` and `review_requested` are each one host request per page. GitHub and Gitea
 answer them from issue search, so those items have no branch names either. `all` walks the
 repositories the token sees, most recently active first: page N takes the N-th batch of 10
-repositories and the first `per_page` open MRs of each (five repositories at a time), merged
+repositories and the newest `min(per_page, 10)` open MRs of each (five repositories at a time), merged
 newest-first; `has_more` means more repositories remain. Pinned favourites join page 1. A
 repository whose MRs cannot be fetched is skipped with a warning rather than failing the page.
+The inbox envelope has one more key, `truncated_repos`: the repositories on that page that had more
+open MRs than it took — their own MR list has the rest. It is always `[]` for the personal scopes.
+Order is newest-first within a page only; a later page can hold a more recently updated MR.
+
+```json
+{"items": [...], "page": 1, "per_page": 30, "has_more": true, "truncated_repos": ["group/busy-repo"]}
+```
 
 ### VCS connections and caching
 

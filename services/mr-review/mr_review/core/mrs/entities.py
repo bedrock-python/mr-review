@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from mr_review.core.pagination import Page
 
 # State filter accepted by MR listings. "all" means every state.
 MRStateFilter = Literal["opened", "merged", "closed", "all"]
@@ -52,6 +54,13 @@ class InboxMR(BaseModel):
 
     mr: MR
     repo_path: str
+
+
+class InboxMRPage(Page[InboxMR]):
+    """A page of the inbox. ``truncated_repos``: repositories (scope ``all``) that had more open MRs
+    than the page took from each; their MR list has the rest."""
+
+    truncated_repos: list[str] = Field(default_factory=list)
 
 
 class DiffLine(BaseModel):

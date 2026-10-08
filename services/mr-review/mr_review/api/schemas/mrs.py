@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PageResponse[T](BaseModel):
@@ -97,4 +97,5 @@ class MRPageResponse(PageResponse[MRResponse]):
 
 
 class InboxMRPageResponse(PageResponse[InboxMRResponse]):
-    pass
+    # scope=all takes only the newest few open MRs of each repository; these had more.
+    truncated_repos: list[str] = Field(default_factory=list)

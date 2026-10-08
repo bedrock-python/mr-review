@@ -85,7 +85,7 @@ The **inbox** has four views of open merge requests:
 
 | View | What it shows |
 |------|---------------|
-| **All** | Open merge requests across your repositories, ten repositories per page, most recently active repositories first; pinned favourites are included on the first page |
+| **All** | Open merge requests across your repositories, newest first, ten repositories at a time, most recently active repositories first; pinned favourites are included on the first page. Each repository shows its ten newest; a note names the ones that have more |
 | **Authored** | Ones you opened |
 | **Assigned** | Ones assigned to you |
 | **Review requested** | Ones waiting for your review |

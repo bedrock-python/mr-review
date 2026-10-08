@@ -9,7 +9,12 @@ from uuid import uuid4
 import pytest
 from mr_review.core.mrs.entities import MR, InboxMR, InboxScope, MRStateFilter, Repo
 from mr_review.core.pagination import Page
-from mr_review.use_cases.mrs.list_inbox_mrs import INBOX_FETCH_CONCURRENCY, INBOX_REPO_BATCH, ListInboxMRsUseCase
+from mr_review.use_cases.mrs.list_inbox_mrs import (
+    INBOX_FETCH_CONCURRENCY,
+    INBOX_MRS_PER_REPO,
+    INBOX_REPO_BATCH,
+    ListInboxMRsUseCase,
+)
 
 from tests.factories.entities import make_host
 
@@ -161,3 +166,30 @@ async def test__list_inbox_mrs__personal_scope__delegates_to_host_listing(scope:
     provider.list_repos.assert_not_called()
     assert [item.mr.iid for item in result.items] == [2, 1]
     assert (result.page, result.per_page, result.has_more) == (3, 5, True)
+
+
+async def test__list_inbox_mrs__all__caps_mrs_per_repo_and_reports_truncated_repos() -> None:
+    """Each repository contributes its newest few open MRs; the page says which ones had more."""
+    provider = AsyncMock()
+    provider.list_repos.return_value = _repos(["g/busy", "g/quiet"])
+
+    def list_mrs(repo_path: str, state: MRStateFilter, page: int, per_page: int) -> Page[MR]:
+        mrs = [_make_mr(iid=i) for i in range(per_page)]
+        return Page(items=mrs, page=1, per_page=per_page, has_more=repo_path == "g/busy")
+
+    provider.list_mrs.side_effect = list_mrs
+
+    result = await _make_use_case(provider).execute(host_id=uuid4(), per_page=30)
+
+    assert {call.kwargs["per_page"] for call in provider.list_mrs.await_args_list} == {INBOX_MRS_PER_REPO}
+    assert result.truncated_repos == ["g/busy"]
+    assert len(result.items) == 2 * INBOX_MRS_PER_REPO
+
+
+async def test__list_inbox_mrs__personal_scope__reports_no_truncated_repos() -> None:
+    provider = AsyncMock()
+    provider.list_my_mrs.return_value = Page(items=[], page=1, per_page=30, has_more=True)
+
+    result = await _make_use_case(provider).execute(host_id=uuid4(), scope="authored")
+
+    assert result.truncated_repos == []

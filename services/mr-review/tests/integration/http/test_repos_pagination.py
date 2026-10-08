@@ -140,6 +140,7 @@ async def test__inbox__personal_scope__returns_page_envelope(
     assert response.status_code == 200
     assert [(i["repo_path"], i["iid"]) for i in body["items"]] == [("team/svc", 7)]
     assert (body["page"], body["per_page"], body["has_more"]) == (1, 30, True)
+    assert body["truncated_repos"] == []
     assert gitlab.last_params()["scope"] == "created_by_me"
 
 
@@ -152,6 +153,8 @@ async def test__inbox__default_scope_all__merges_repo_batch_newest_first(
     assert [(i["repo_path"], i["iid"]) for i in body["items"]] == [("group/p2", 2), ("group/p1", 1)]
     # More repositories remain (X-Next-Page on the project listing).
     assert body["has_more"] is True
+    assert body["truncated_repos"] == []
+    assert {r.url.params["per_page"] for r in gitlab.requests if r.url.path.endswith("/merge_requests")} == {"10"}
     assert f"{_API}/merge_requests" not in gitlab.paths()
 
 

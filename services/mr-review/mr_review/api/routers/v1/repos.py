@@ -197,4 +197,5 @@ async def list_inbox_mrs(
         page=result.page,
         per_page=result.per_page,
         has_more=result.has_more,
+        truncated_repos=result.truncated_repos,
     )
