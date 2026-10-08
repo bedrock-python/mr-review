@@ -27,7 +27,7 @@ models (which take temperature, which reasoning levels) and turns structured out
 | `name` | — | Display label |
 | `type` | — | One of the three above |
 | `api_key` | — | Sent to the endpoint. Stored in plain text in the data directory |
-| `base_url` | `""` | Empty means the backend's own default. For `claude` a set URL reaches Claude through a gateway — LiteLLM, a corporate proxy |
+| `base_url` | `""` | Empty means the backend's own default. For `claude` a set URL reaches Claude through a gateway — LiteLLM, a corporate proxy; a trailing `/v1` is dropped, since the client adds `/v1/messages` itself |
 | `models` | `[]` | The models offered in the dispatch form. The first is the default for a dispatch that names none |
 | `ssl_verify` | `true` | `false` disables certificate verification entirely |
 | `timeout` | `60` | Seconds the client waits on the endpoint — to connect, and between pieces of the streamed answer |
@@ -50,6 +50,10 @@ off — the HTTP client reads the system store, not a bundled one.
 | Ollama, with mr-review in Docker | `openai_compat` | `http://host.docker.internal:11434/v1` |
 | Groq, Together, LM Studio, a gateway | `openai_compat` | the endpoint's own `/v1` URL |
 
+Before this version `base_url` was ignored for `claude`, and the add form could keep the URL
+of a type it was switched away from. Settings now marks a Claude provider whose base URL is not
+Anthropic's with a warning — clear the field unless it is a gateway you meant to use.
+
 `localhost` inside the container is the container, not your machine — a local model reached
 from a container needs `host.docker.internal` (Docker Desktop) or the host's LAN address.
 
@@ -57,7 +61,9 @@ from a container needs `host.docker.internal` (Docker Desktop) or the host's LAN
 
 **Fetch models from API** in the provider form asks the endpoint which models it has, using
 the values in the form as they are — a key or base URL you have typed but not saved yet
-included (`POST /api/v1/ai-providers/preview/models`; a blank key keeps the saved one). The
+included (`POST /api/v1/ai-providers/preview/models`; a blank key keeps the saved one, but only
+for the saved base URL and type — a changed endpoint needs the key typed in again, so the saved
+key is never sent anywhere else). The
 answer is offered next to the list, to add one model at a time or all at once; it never
 replaces the list, so a hand-picked list survives an endpoint with hundreds of models.
 `GET /api/v1/ai-providers/{id}/models` does the same with the saved settings.
@@ -85,7 +91,7 @@ Each dispatch can tune the model call; every setting left empty means "the defau
 | Thinking budget | `reasoning_budget` — tokens | off |
 | Temperature | `temperature` — 0 to 2 | the model's own |
 | Max output tokens | `max_output_tokens` — 256 to 128,000 | 32,000 on Claude (64,000 at `xhigh`/`max` effort, budget + 16,000 with a thinking budget); the endpoint's own otherwise |
-| Structured output | `structured_output` | on for `claude` and `openai` models that support it, off for `openai_compat` |
+| Structured output | `structured_output` | on for `claude` and `openai` models that support it when the provider talks to the vendor's own endpoint; off for `openai_compat`, for unknown OpenAI ids and for any `base_url` pointing elsewhere |
 | System prompt | `system_prompt` | the built-in reviewer prompt |
 
 Models differ in what they accept, and a setting a model rejects would fail the whole request
@@ -100,15 +106,19 @@ returns what that is, decided from the model id alone — no call to the provide
 | Claude Opus 4.7 | as Opus 4.8 | no | 128K | offered, off by default |
 | Claude Opus 4.6, Sonnet 4.6 | adaptive thinking, off unless asked for; effort `low`, `medium`, `high`, `max` | yes, up to 1 | 128K | offered, off by default |
 | Claude Opus 4.5, Haiku 4.5 | thinking budget, off unless asked for | yes, up to 1 | 64K | on |
-| Claude Sonnet 4.5, Sonnet 4 | thinking budget | yes, up to 1 | 64K | offered, off by default |
-| Claude Opus 4.1 / Opus 4 | thinking budget | yes, up to 1 | 32K | on (4.1) / offered (4) |
+| Claude Sonnet 4.5 | thinking budget | yes, up to 1 | 64K | offered, off by default |
+| Claude Sonnet 4 | thinking budget | yes, up to 1 | 64K | no |
+| Claude Opus 4.1 / Opus 4 | thinking budget | yes, up to 1 | 32K | on (4.1) / no (4) |
 | Claude Sonnet 3.7 | thinking budget | yes, up to 1 | 64K | no |
 | Claude 3.5 and 3 | none | yes, up to 1 | 8K / 4K | no |
 | OpenAI o-series (`o1`, `o3`, `o4-mini`…) | always on, effort `low`…`high` | no | 100K | on |
-| OpenAI `gpt-5`, `gpt-5.1`, `gpt-5.2`… | always on; `minimal`…`high`, `none`…`high`, `none`…`xhigh` | no | 128K | on |
+| OpenAI `gpt-5`, `gpt-5.1`, `gpt-5.2`…, `gpt-5.5` | always on; `minimal`…`high`, `none`…`high`, `none`…`xhigh` (5.5 defaults to `medium`) | no | 128K | on |
+| OpenAI `gpt-5.x-chat-latest` | always on; `medium` only | no | 16K | on |
+| OpenAI `gpt-5-pro` / `gpt-5.x-pro` | always on; `high` / `medium`…`xhigh` | no | 128K | on / offered, off |
 | OpenAI `gpt-4.1`, `gpt-4o` | none | yes, up to 2 | 32K / 16K | on |
+| OpenAI `chatgpt-4o-latest`, `gpt-4o-2024-05-13` | none | yes, up to 2 | 16K / 4K | no |
 | OpenAI `gpt-4`, `gpt-4-turbo`, `gpt-3.5` | none | yes | 4K | no |
-| Any other OpenAI id | always on, effort `low`…`high` | no | unknown | on |
+| Any other OpenAI id | always on, effort `low`…`high` | no | unknown | offered, off by default |
 | `openai_compat` — any model | effort or budget, off unless asked for | yes, up to 2 | unknown | offered, off by default |
 
 Claude ids are recognised in any spelling — first-party, Bedrock
@@ -141,7 +151,11 @@ and `response_format: json_schema` (strict) on OpenAI. The model can then only a
 parseable comments, and they still stream in as they are written. The built-in system prompt
 describes the object instead of a bare array while it is on.
 
-Servers differ, so it is off by default for `openai_compat`. When an endpoint rejects it, the
+Servers differ, so it is off by default for `openai_compat`, for OpenAI ids the table does not
+know, and for a `claude` or `openai` provider whose `base_url` is not the vendor's own API (a
+gateway, or another vendor such as DeepSeek or Groq behind the `openai` type). A refusal — Claude's
+`stop_reason: refusal`, or OpenAI's `refusal` field under strict structured output — ends the
+dispatch with an error carrying the model's message. When an endpoint rejects it, the
 dispatch fails with the endpoint's message and a hint to turn **Structured output** off — it
 is not silently retried without.
 

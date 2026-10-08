@@ -298,13 +298,15 @@ than two path segments.
 
 `GET /api/v1/ai-providers/{id}/models` asks the endpoint itself for its model list with the
 saved settings; `POST /api/v1/ai-providers/preview/models` does the same with settings that are
-not saved yet (`provider_id` fills in what is left out, a blank `api_key` keeps the saved key) —
+not saved yet (`provider_id` fills in what is left out, a blank `api_key` keeps the saved key —
+for the saved base URL and type only; a changed endpoint without a key answers 422) —
 it is what the settings form's "Fetch models" calls. An endpoint that rejects the key answers
 401, one that times out 504, anything else upstream 502, each with the endpoint's message.
 
 A dispatch may also carry, all optional: `model`, `temperature` (0–2), `reasoning_effort`
 (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`), `reasoning_budget` (thinking
 tokens), `max_output_tokens` (256–128 000, thinking included), `structured_output` (`null`:
+off for unknown OpenAI ids and whenever `base_url` is not the vendor's own API, otherwise
 on for `claude` and `openai` models that support it, off for `openai_compat`) and
 `system_prompt` (replaces the built-in one). Before the call each setting is fitted to the
 model, because a rejected parameter fails the whole request with a 400:
