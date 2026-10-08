@@ -23,7 +23,8 @@ Before dispatching to the AI, tune the review brief. Everything is saved as you 
   the top of the prompt. **Save as preset…** stores the current intent under a name — with
   its instructions, which you can rewrite, and optionally this brief's settings (focus areas,
   output, context toggles, exclude patterns, the advanced options), applied whenever the
-  preset is picked. The saved preset in use can be edited or deleted here, any of them under
+  preset is picked; the toast that follows offers **Undo**, which puts back the settings it
+  replaced. Saved presets can be edited or deleted here — without applying them — and under
   **Settings → Review presets**; a brief whose preset was deleted falls back to its built-in
   one and says so.
 - **Focus areas** — a checklist the model must go through explicitly: pick common ones
