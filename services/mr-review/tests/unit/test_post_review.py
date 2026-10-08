@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -19,6 +19,7 @@ from mr_review.use_cases.reviews.post_review import (
 )
 
 from tests.factories.entities import make_comment, make_host, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
@@ -129,18 +130,20 @@ class FakeProvider:
         return [comment.body for call in self.inline_calls for comment in call]
 
 
-class InMemoryReviews:
-    def __init__(self, review: Review) -> None:
-        self.review = review
-        self.updates = 0
+class InMemoryReviews(SingleReviewRepository):
+    """Holds one review and, unlike its base, answers only that review's id."""
+
+    review: Review
+
+    @property
+    def updates(self) -> int:
+        return len(self.writes)
 
     async def get_by_id(self, review_id: UUID) -> Review | None:
         return self.review if review_id == self.review.id else None
 
-    async def update(self, review: Review) -> Review:
-        self.updates += 1
-        self.review = review
-        return review
+    async def update_with(self, review_id: UUID, change: Callable[[Review], Review]) -> Review | None:
+        return await super().update_with(review_id, change) if review_id == self.review.id else None
 
 
 class Hosts:

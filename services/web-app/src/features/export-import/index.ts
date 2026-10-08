@@ -4,4 +4,4 @@
 
 export { ExportImportSection } from "./ui/ExportImportSection";
 export { useExportData } from "./model/useExportData";
-export { useImportData } from "./model/useImportData";
+export { useImportData, useImportPreview } from "./model/useImportData";

@@ -43,6 +43,7 @@ from mr_review.use_cases.mrs.get_mr_diff import GetMRDiffUseCase
 from mr_review.use_cases.mrs.list_inbox_mrs import ListInboxMRsUseCase
 from mr_review.use_cases.mrs.list_mrs import ListMRsUseCase
 from mr_review.use_cases.mrs.list_repos import ListReposUseCase
+from mr_review.use_cases.preview_import import PreviewImportUseCase
 from mr_review.use_cases.review_presets.create_review_preset import CreateReviewPresetUseCase
 from mr_review.use_cases.review_presets.delete_review_preset import DeleteReviewPresetUseCase
 from mr_review.use_cases.review_presets.get_review_preset import GetReviewPresetUseCase
@@ -395,11 +396,13 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
     ) -> ExportDataUseCase:
         return ExportDataUseCase(
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             review_repo=review_repo,
+            preset_repo=preset_repo,
         )
 
     @provide
@@ -408,9 +411,26 @@ class UseCaseProvider(Provider):
         host_repo: FileHostRepository,
         ai_provider_repo: FileAIProviderRepository,
         review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
     ) -> ImportDataUseCase:
         return ImportDataUseCase(
             host_repo=host_repo,
             ai_provider_repo=ai_provider_repo,
             review_repo=review_repo,
+            preset_repo=preset_repo,
+        )
+
+    @provide
+    def get_preview_import_use_case(
+        self,
+        host_repo: FileHostRepository,
+        ai_provider_repo: FileAIProviderRepository,
+        review_repo: FileReviewRepository,
+        preset_repo: FileReviewPresetRepository,
+    ) -> PreviewImportUseCase:
+        return PreviewImportUseCase(
+            host_repo=host_repo,
+            ai_provider_repo=ai_provider_repo,
+            review_repo=review_repo,
+            preset_repo=preset_repo,
         )

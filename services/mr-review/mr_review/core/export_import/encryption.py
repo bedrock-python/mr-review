@@ -1,96 +1,108 @@
-"""Token encryption/decryption utilities for export/import."""
+"""Secret encryption for export packages.
+
+Current format: one key per package, derived once with PBKDF2-SHA256 from the passphrase
+and a random salt; every secret is a Fernet token under that key. The salt, the iteration
+count and an encrypted check marker go into the package's ``encryption`` block.
+
+Legacy format (version 1 files): every secret carries its own salt as
+``"<urlsafe-b64 salt>:<fernet token>"`` and needs its own key derivation. Only decryption
+is kept for it, so old files can still be imported.
+
+Key derivation costs tens of milliseconds by design; callers on an event loop run these
+functions in a worker thread.
+"""
 
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from mr_review.core.export_import.entities import EncryptionParams
+from mr_review.core.export_import.errors import DamagedPackageError, WrongPassphraseError
 
-def _derive_key(password: str, salt: bytes) -> bytes:
-    """Derive encryption key from password using PBKDF2.
+KDF_ITERATIONS = 600_000
+_SALT_BYTES = 16
+_CHECK_MARKER = b"mr-review export"
 
-    Args:
-        password: User-provided password
-        salt: Random salt bytes
 
-    Returns:
-        Base64-encoded 32-byte key suitable for Fernet
-    """
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=600_000,
-        backend=default_backend(),
-    )
-    key = kdf.derive(password.encode())
-    return base64.urlsafe_b64encode(key)
+def _derive_key(password: str, salt: bytes, iterations: int = KDF_ITERATIONS) -> bytes:
+    """Derive a Fernet key (URL-safe base64 of 32 bytes) from a password with PBKDF2-SHA256."""
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=iterations)
+    return base64.urlsafe_b64encode(kdf.derive(password.encode()))
+
+
+class PackageCipher:
+    """Encrypts and decrypts the secrets of one package with a single derived key."""
+
+    def __init__(self, fernet: Fernet) -> None:
+        self._fernet = fernet
+
+    @classmethod
+    def create(cls, password: str, iterations: int = KDF_ITERATIONS) -> tuple[PackageCipher, EncryptionParams]:
+        """Derive a fresh key for a new package; return it with the parameters to store."""
+        salt = os.urandom(_SALT_BYTES)
+        cipher = cls(Fernet(_derive_key(password, salt, iterations)))
+        params = EncryptionParams(
+            iterations=iterations,
+            salt=base64.urlsafe_b64encode(salt).decode(),
+            check=cipher._fernet.encrypt(_CHECK_MARKER).decode(),
+        )
+        return cipher, params
+
+    @classmethod
+    def open(cls, password: str, params: EncryptionParams) -> PackageCipher:
+        """Re-derive a package's key, raising :class:`WrongPassphraseError` if it does not fit."""
+        try:
+            salt = base64.urlsafe_b64decode(params.salt)
+        except (binascii.Error, ValueError) as exc:
+            raise DamagedPackageError("The file's encryption block is damaged.") from exc
+        cipher = cls(Fernet(_derive_key(password, salt, params.iterations)))
+        try:
+            marker = cipher._fernet.decrypt(params.check.encode())
+        except InvalidToken as exc:
+            raise WrongPassphraseError from exc
+        if marker != _CHECK_MARKER:
+            raise WrongPassphraseError
+        return cipher
+
+    def encrypt(self, secret: str) -> str:
+        return self._fernet.encrypt(secret.encode()).decode()
+
+    def decrypt(self, token: str) -> str:
+        """Decrypt one secret; ``ValueError`` if it was not encrypted with this key."""
+        try:
+            return self._fernet.decrypt(token.encode()).decode()
+        except InvalidToken as exc:
+            raise ValueError("Secret cannot be decrypted with this file's key") from exc
 
 
 def encrypt_token(token: str, password: str) -> str:
-    """Encrypt a token with a password.
+    """Encrypt one secret in the legacy per-secret format ``"<salt>:<fernet token>"``.
 
-    Args:
-        token: Plain text token to encrypt
-        password: Password for encryption
-
-    Returns:
-        Encrypted token in format "base64_salt:encrypted_data"
+    Kept for tests and tooling that need version 1 files; new exports use :class:`PackageCipher`.
     """
-    # Generate random salt
-    salt = os.urandom(16)
-
-    # Derive key from password and salt
-    key = _derive_key(password, salt)
-
-    # Encrypt token
-    fernet = Fernet(key)
-    encrypted = fernet.encrypt(token.encode())
-
-    # Combine salt and encrypted data
-    salt_b64 = base64.urlsafe_b64encode(salt).decode()
-    combined = f"{salt_b64}:{encrypted.decode()}"
-
-    return combined
+    salt = os.urandom(_SALT_BYTES)
+    encrypted = Fernet(_derive_key(password, salt)).encrypt(token.encode())
+    return f"{base64.urlsafe_b64encode(salt).decode()}:{encrypted.decode()}"
 
 
 def decrypt_token(encrypted_token: str, password: str) -> str:
-    """Decrypt an encrypted token with a password.
-
-    Args:
-        encrypted_token: Encrypted token in format "base64_salt:encrypted_data"
-        password: Password for decryption
-
-    Returns:
-        Decrypted plain text token
+    """Decrypt one secret in the legacy per-secret format ``"<salt>:<fernet token>"``.
 
     Raises:
-        ValueError: If password is incorrect or token format is invalid
+        ValueError: If the password is wrong or the value is not in that format.
     """
-    # Split salt and encrypted data
     try:
         salt_b64, encrypted_data = encrypted_token.split(":", 1)
-    except ValueError as e:
-        msg = "Invalid encrypted token format"
-        raise ValueError(msg) from e
-
-    # Decode salt
-    salt = base64.urlsafe_b64decode(salt_b64)
-
-    # Derive key from password and salt
-    key = _derive_key(password, salt)
-
-    # Decrypt token
-    fernet = Fernet(key)
+        salt = base64.urlsafe_b64decode(salt_b64)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("Invalid encrypted token format") from exc
     try:
-        decrypted = fernet.decrypt(encrypted_data.encode())
-    except Exception as e:
-        msg = "Failed to decrypt token - incorrect password or corrupted data"
-        raise ValueError(msg) from e
-
-    return decrypted.decode()
+        return Fernet(_derive_key(password, salt)).decrypt(encrypted_data.encode()).decode()
+    except InvalidToken as exc:
+        raise ValueError("Failed to decrypt token - incorrect password or corrupted data") from exc

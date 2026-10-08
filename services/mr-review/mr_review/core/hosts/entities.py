@@ -4,13 +4,18 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+
+HostType = Literal["gitlab", "github", "gitea", "forgejo", "bitbucket"]
 
 
 class Host(BaseModel):
+    # The token must never reach a log through a validation error message.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     id: UUID
     name: str
-    type: Literal["gitlab", "github", "gitea", "forgejo", "bitbucket"]
+    type: HostType
     base_url: str
     token: SecretStr
     color: str | None = None

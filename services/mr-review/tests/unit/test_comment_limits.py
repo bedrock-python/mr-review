@@ -23,6 +23,7 @@ from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 
 from tests.factories.entities import make_ai_provider, make_comment, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
@@ -124,24 +125,12 @@ def test__settle_reparse__limited_and_reported() -> None:
     assert settled.filtered == 3
 
 
-def _repo(review: Review) -> AsyncMock:
-    repo = AsyncMock()
-    state = {"review": review}
-
-    async def get_by_id(_review_id: object) -> Review:
-        return state["review"]
-
-    async def update(updated: Review) -> Review:
-        state["review"] = updated
-        return updated
-
-    repo.get_by_id.side_effect = get_by_id
-    repo.update.side_effect = update
-    return repo
+def _repo(review: Review) -> SingleReviewRepository:
+    return SingleReviewRepository(review)
 
 
-def _stored(repo: AsyncMock) -> list[Comment]:
-    saved: Review = repo.update.call_args[0][0]
+def _stored(repo: SingleReviewRepository) -> list[Comment]:
+    saved = repo.last_write
     return saved.iterations[-1].comments
 
 

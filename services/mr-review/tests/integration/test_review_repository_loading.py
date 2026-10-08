@@ -13,6 +13,7 @@ from mr_review.core.reviews.entities import DEFAULT_PROMPT_BUDGET_CHARS, Comment
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration
+from tests.fakes import save_review
 
 pytestmark = pytest.mark.integration
 
@@ -20,7 +21,7 @@ pytestmark = pytest.mark.integration
 async def _stored_review_id(review_repo: FileReviewRepository) -> UUID:
     review = await review_repo.create(host_id=uuid4(), repo_path="ns/repo", mr_iid=1)
     iteration = make_iteration(comments=[make_comment(body="One"), make_comment(body="Two")])
-    await review_repo.update(review.model_copy(update={"iterations": [iteration]}))
+    await save_review(review_repo, review.model_copy(update={"iterations": [iteration]}))
     return review.id
 
 
@@ -140,7 +141,7 @@ async def test__review_repo__post_record__round_trips(review_repo: FileReviewRep
     posted_at = datetime(2026, 3, 4, 5, 6, tzinfo=timezone.utc)
     record = CommentPost(outcome="general_note", at=posted_at, note_id="17", url="https://h/n17", reason="why")
     comment = make_comment(body="One").model_copy(update={"post": record})
-    await review_repo.update(review.model_copy(update={"iterations": [make_iteration(comments=[comment])]}))
+    await save_review(review_repo, review.model_copy(update={"iterations": [make_iteration(comments=[comment])]}))
 
     loaded = await review_repo.get_by_id(review.id)
 

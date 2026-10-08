@@ -34,6 +34,7 @@ from mr_review.infra.repositories.review import FileReviewRepository
 from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
 
 from tests.factories.entities import make_ai_provider, make_comment, make_host, make_iteration
+from tests.fakes import save_review
 
 pytestmark = [pytest.mark.integration, pytest.mark.http]
 
@@ -148,7 +149,7 @@ async def _seed(
     iteration = make_iteration(
         stage=stage, comments=comments or [], brief_config=BriefConfig(include_context=False)
     ).model_copy(update={"raw_response": raw_response})
-    review = await reviews.update(review.model_copy(update={"iterations": [iteration]}))
+    review = await save_review(reviews, review.model_copy(update={"iterations": [iteration]}))
     return review, iteration
 
 
@@ -535,7 +536,7 @@ async def test__dispatch__provider_cannot_be_started__iteration_left_as_it_was(h
     seeded = await harness.reviews.get_by_id(review.id)
     assert seeded is not None
     iteration = seeded.iterations[0].model_copy(update={"ai_provider_id": previous_provider, "model": "old-model"})
-    await harness.reviews.update(seeded.model_copy(update={"iterations": [iteration]}))
+    await save_review(harness.reviews, seeded.model_copy(update={"iterations": [iteration]}))
 
     async def failing_factory(*_args: object) -> AsyncIterator[str]:
         raise RuntimeError("bad provider config")
@@ -560,7 +561,7 @@ async def test__dispatch__review_edited_while_context_is_collected__edit_survive
         assert current is not None
         edited = current.iterations[0].comments[0].model_copy(update={"body": "Edited while dispatching"})
         iteration = current.iterations[0].model_copy(update={"comments": [edited]})
-        await harness.reviews.update(current.model_copy(update={"iterations": [iteration]}))
+        await save_review(harness.reviews, current.model_copy(update={"iterations": [iteration]}))
 
     harness.dispatch.on_fetch_diff = edit_meanwhile
     harness.dispatch.model = _Model([], error=RuntimeError("provider down"))

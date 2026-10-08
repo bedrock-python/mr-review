@@ -30,12 +30,14 @@ class AddRepoByUrlUseCase:
         provider = self._vcs_factory(host)
         repo = await provider.get_repo(repo_path)
 
-        favourites = list(host.favourite_repos)
-        if repo.path not in favourites:
-            favourites.append(repo.path)
-            updated = await self._host_repo.set_favourite_repos(host_id, favourites)
-            if updated is None:
-                raise ValueError(f"Host {host_id} not found")
-            host = updated
+        def _pin(current: Host) -> Host:
+            if repo.path in current.favourite_repos:
+                return current
+            return current.model_copy(update={"favourite_repos": [*current.favourite_repos, repo.path]})
 
-        return host, repo
+        # Pin against the stored list, not the one read before the VCS round trip, so a
+        # favourite toggled meanwhile is not overwritten.
+        updated = await self._host_repo.update_with(host_id, _pin)
+        if updated is None:
+            raise ValueError(f"Host {host_id} not found")
+        return updated, repo

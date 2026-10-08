@@ -12,7 +12,7 @@ import pytest
 from mr_review.core.ai.entities import AIStreamItem, DispatchOptions
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.mrs.entities import MR
-from mr_review.core.reviews.entities import IterationStage, Review
+from mr_review.core.reviews.entities import IterationStage
 from mr_review.use_cases.reviews.dispatch_review import (
     DispatchChunk,
     DispatchCompleted,
@@ -21,6 +21,7 @@ from mr_review.use_cases.reviews.dispatch_review import (
 )
 
 from tests.factories.entities import make_ai_provider, make_host, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
@@ -136,14 +137,12 @@ async def test__execute__provider_not_found__raises_value_error() -> None:
 
 async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> None:
     """Creates a new iteration in dispatch stage and returns an async iterator."""
-    review_repo = AsyncMock()
     host_repo = AsyncMock()
     ai_provider_repo = AsyncMock()
     review = make_review()
+    review_repo = SingleReviewRepository(review)
     host = make_host(type="gitlab")
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=["claude-haiku-4-5"])
-    review_repo.get_by_id.return_value = review
-    review_repo.update.return_value = review
     host_repo.get_by_id.return_value = host
     ai_provider_repo.get_by_id.return_value = ai_provider
 
@@ -167,8 +166,7 @@ async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> 
 
     assert [e.text for e in events if isinstance(e, DispatchChunk)] == dispatched_chunks
     assert isinstance(events[-1], DispatchCompleted)
-    review_repo.update.assert_awaited()
-    first_call: Review = review_repo.update.call_args_list[0][0][0]
+    first_call = review_repo.writes[0]
     assert any(it.stage == IterationStage.dispatch for it in first_call.iterations)
 
 
@@ -177,10 +175,9 @@ async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> 
 
 async def test__stream_and_save__streams_chunks_and_persists() -> None:
     """Streams chunks from ai_dispatcher_factory and persists the accumulated response."""
-    review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
     review = make_review(iterations=[iteration])
-    review_repo.get_by_id.return_value = review
+    review_repo = SingleReviewRepository(review)
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=["claude-haiku-4-5"])
     ai_response = json.dumps([{"file": None, "line": None, "severity": "minor", "body": "Looks good"}])
@@ -211,10 +208,9 @@ async def test__stream_and_save__streams_chunks_and_persists() -> None:
 
 async def test__stream_and_save__model_override__passes_to_factory() -> None:
     """Passes the explicit model override through to the dispatcher factory."""
-    review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
     review = make_review(iterations=[iteration])
-    review_repo.get_by_id.return_value = review
+    review_repo = SingleReviewRepository(review)
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=["claude-haiku-4-5"])
 
@@ -242,11 +238,10 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
 
 async def test__stream_and_save__review_gone_after_stream__raises_instead_of_done() -> None:
     """When the review is gone after streaming nothing is written and the stream ends in an error, not done."""
-    review_repo = AsyncMock()
     iteration = make_iteration(stage=IterationStage.brief, comments=[])
     review = make_review(iterations=[iteration])
-    # The first read marks the iteration as dispatching; by the time the answer is stored it is gone.
-    review_repo.get_by_id.side_effect = [review, None]
+    # The iteration is marked as dispatching; by the time the answer is stored the review is gone.
+    review_repo = SingleReviewRepository(review)
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=[])
 
@@ -255,6 +250,7 @@ async def test__stream_and_save__review_gone_after_stream__raises_instead_of_don
         prompt: str,
         options: DispatchOptions,
     ) -> AsyncIterator[str]:
+        review_repo.review = None
         return _async_iter([json.dumps([])])
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
@@ -266,4 +262,4 @@ async def test__stream_and_save__review_gone_after_stream__raises_instead_of_don
         await _drain(stream, events)
 
     assert [type(e) for e in events] == [DispatchChunk]
-    review_repo.update.assert_awaited_once()
+    assert len(review_repo.writes) == 1

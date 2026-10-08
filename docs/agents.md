@@ -42,8 +42,9 @@ hosts with a personal access token each, list repositories and open merge reques
 a diff (or an arbitrary two-ref diff), build a prompt out of the diff plus whatever
 context you enable, stream a review back from a model, let you edit and dismiss individual
 comments, and post the survivors to the merge request as inline notes. It keeps hosts,
-providers and review history in YAML files under one directory, and can export and import
-that state as a single JSON file with the tokens optionally encrypted under a password.
+providers, review presets and review history in YAML files under one directory, and can export and import
+that state as a single JSON file with the tokens encrypted under a passphrase, left out, or —
+only when asked for explicitly — in plain text.
 
 **It does not** authenticate anyone — there is no login, no user model and no token on any
 route. It has no scheduler, no webhook receiver and no CI mode: a review starts because a
@@ -429,7 +430,8 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/review-presets` | GET, POST | Saved review presets, oldest first; create one (`name`, `description`, `instructions`, `brief_config`). A name taken by another preset, ignoring case, is a 409; an unknown or invalid `brief_config` field is a 422 |
 | `/api/v1/review-presets/builtin` | GET | The four built-in presets with the instructions each puts in the prompt (read-only) |
 | `/api/v1/review-presets/{id}` | GET, PATCH, DELETE | Read, change (omitted fields stay; `brief_config` is replaced whole), delete |
-| `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file — review presets are not part of it yet |
+| `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store — hosts, AI providers, review presets, reviews — as one JSON file; secrets encrypted, left out, or plain on explicit opt-in |
+| `/api/v1/data/import/preview` | POST | What an export file holds and how much of it already exists here; writes nothing |
 
 ### Pagination
 
@@ -593,19 +595,22 @@ when the host does not report the commit.
 
 1. **There is no authentication.** Not one route requires a credential. Anyone who can
    reach the port can read every host token and every API key through
-   `POST /api/v1/data/export`, and can post comments to your repositories under your token.
-   Bind the published port to `127.0.0.1` — the shipped compose files do, unless
-   `MR_REVIEW_BIND` says otherwise — or put an authenticating proxy in front. Never
-   expose it to a network you do not control.
+   `POST /api/v1/data/export` with `include_plain_secrets`, and can post comments to your
+   repositories under your token. Bind the published port to `127.0.0.1` — the shipped
+   compose files do, unless `MR_REVIEW_BIND` says otherwise — or put an authenticating
+   proxy in front. Never expose it to a network you do not control.
 2. **Mount `/data`.** The images keep all state there (`MR_REVIEW__DATA_DIR=/data`);
    without a volume it goes when the container is recreated. Older tags default to
    `~/.mr-review` instead — set `MR_REVIEW__DATA_DIR` explicitly when pinning one.
 3. **The data directory is a secret.** Host tokens and provider API keys are stored in
-   plain text in `hosts.yaml` and `ai_providers.yaml`. The password on export/import
-   encrypts the export file, not the store.
+   plain text in `hosts.yaml` and `ai_providers.yaml`. The passphrase on export encrypts
+   the export file, not the store. The application creates the directory `0700` and its
+   files `0600`; a bind-mounted directory that already exists keeps the permissions you
+   gave it.
 4. **Run one worker.** `MR_REVIEW__SERVER__WORKERS` above 1 gives each process its own VCS
    cache and its own AI concurrency fence, so the cap becomes workers × cap, and the YAML
-   store gets concurrent writers with no lock between them.
+   store's write locks are per process: writes stay atomic, but two workers changing the
+   same record can overwrite each other.
 5. **A provider's concurrency cap is fixed at first use.** The semaphore is created on the
    first dispatch to that provider and kept for the life of the process; changing
    `max_concurrent` afterwards takes effect on restart.
@@ -790,12 +795,13 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 |---|---|
 | 400 | `Repo path must include at least 'owner/repo'`, or a host type given a nested path |
 | 400, 422 | `VCS rejected the request (<status>): <host's message>` — the host refused what was asked (a bad ref, an unsupported search); retrying will not help |
+| 400 | An import of an encrypted file without its passphrase, with a wrong one, or with a damaged secret — nothing is written |
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
 | 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
 | 401 | `Claude rejected the API key (401): …` — listing or previewing an AI provider's models with a key the endpoint refuses |
 | 409 | Posting a review whose source is a branch diff, posting an iteration that was already posted (without `force`), posting or changing the comments of a review (`PATCH`, add, delete) while a post of it runs, dispatching, re-parsing, adding or deleting comments on an iteration that was posted, or a review preset name that is already taken |
-| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config`; a prompt or dispatch whose path filters exclude every changed file |
+| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key; a brief field out of range, or an unknown field in a preset's `brief_config`; a prompt or dispatch whose path filters exclude every changed file; an export file that does not validate — for export and import the details name the field but never echo the value |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
 | 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly. For a post this means it could not start (the MR or its diff could not be read); a comment the host refuses is reported in the answer's `results`, not as an error |
 | 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |
@@ -831,6 +837,7 @@ Fetch a page when the task is the one named beside it.
 | [Review pipeline](features/pipeline.md) | what each stage does from the UI's side |
 | [VCS hosts](features/hosts.md) | creating a token with the right scope, verifying a connection |
 | [AI providers](features/ai-providers.md) | choosing a model, pointing at Ollama or another compatible endpoint |
+| [Export and import](features/export-import.md) | moving data between instances, backups, what each merge strategy does to existing records |
 | [vitest and expect-type](troubleshooting/vitest-expect-type.md) | the frontend test suite refuses to start |
 | [Changelog](changelog.md) | what changed between versions |
 

@@ -35,6 +35,7 @@ from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 
 from tests.factories.entities import make_ai_provider, make_host, make_iteration
+from tests.fakes import save_review
 
 pytestmark = [pytest.mark.integration, pytest.mark.http]
 
@@ -131,7 +132,7 @@ async def _seed(reviews: FileReviewRepository, config: BriefConfig | None = None
         host_id=uuid4(), repo_path="ns/repo", source=BranchDiffSource(base_ref="main", head_ref="feature")
     )
     iteration = make_iteration(brief_config=config or BriefConfig(include_context=False))
-    await reviews.update(review.model_copy(update={"iterations": [iteration]}))
+    await save_review(reviews, review.model_copy(update={"iterations": [iteration]}))
     return review.id
 
 

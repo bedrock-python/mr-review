@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -17,16 +16,14 @@ from mr_review.use_cases.reviews.iteration_comments import (
 )
 
 from tests.factories.entities import make_comment, make_iteration, make_review
+from tests.fakes import SingleReviewRepository
 
 pytestmark = pytest.mark.unit
 
 
-def _echo_repo(review: Review) -> AsyncMock:
-    """Repository double that returns ``review`` and persists whatever it is given."""
-    repo = AsyncMock()
-    repo.get_by_id.return_value = review
-    repo.update.side_effect = lambda updated: updated
-    return repo
+def _echo_repo(review: Review) -> SingleReviewRepository:
+    """Repository double holding ``review`` and keeping whatever it is given."""
+    return SingleReviewRepository(review)
 
 
 async def test__create_comment__anchored__appends_comment_with_server_id() -> None:
@@ -50,7 +47,7 @@ async def test__create_comment__anchored__appends_comment_with_server_id() -> No
     added = comments[1]
     assert added.id != existing.id
     assert (added.file, added.line, added.severity, added.status) == ("src/app.py", 12, "major", "kept")
-    repo.update.assert_awaited_once()
+    assert len(repo.writes) == 1
 
 
 async def test__create_comment__line_without_file__stores_general_comment() -> None:
@@ -82,8 +79,7 @@ async def test__create_comment__only_target_iteration_changes() -> None:
 
 async def test__create_comment__review_missing__raises_value_error() -> None:
     """An unknown review id raises ValueError (mapped to 404)."""
-    repo = AsyncMock()
-    repo.get_by_id.return_value = None
+    repo = SingleReviewRepository(None)
     missing = uuid4()
 
     with pytest.raises(ValueError, match=str(missing)):
@@ -120,7 +116,7 @@ async def test__create_comment__posted_iteration__raises_locked(
         await CreateCommentUseCase(repo).execute(
             review_id=review.id, iteration_id=iteration.id, severity="minor", body="x"
         )
-    repo.update.assert_not_awaited()
+    assert repo.writes == []
 
 
 async def test__delete_comment__existing__removes_only_that_comment() -> None:
@@ -135,7 +131,7 @@ async def test__delete_comment__existing__removes_only_that_comment() -> None:
     )
 
     assert [c.body for c in result.iterations[0].comments] == ["a", "b"]
-    repo.update.assert_awaited_once()
+    assert len(repo.writes) == 1
 
 
 async def test__delete_comment__comment_missing__raises_value_error() -> None:
@@ -147,13 +143,12 @@ async def test__delete_comment__comment_missing__raises_value_error() -> None:
 
     with pytest.raises(ValueError, match=str(missing)):
         await DeleteCommentUseCase(repo).execute(review_id=review.id, iteration_id=iteration.id, comment_id=missing)
-    repo.update.assert_not_awaited()
+    assert repo.writes == []
 
 
 async def test__delete_comment__review_missing__raises_value_error() -> None:
     """An unknown review id raises ValueError (mapped to 404)."""
-    repo = AsyncMock()
-    repo.get_by_id.return_value = None
+    repo = SingleReviewRepository(None)
 
     with pytest.raises(ValueError, match="not found"):
         await DeleteCommentUseCase(repo).execute(review_id=uuid4(), iteration_id=uuid4(), comment_id=uuid4())
@@ -170,7 +165,7 @@ async def test__delete_comment__posted_iteration__raises_locked() -> None:
 
     with pytest.raises(IterationLockedError):
         await DeleteCommentUseCase(repo).execute(review_id=review.id, iteration_id=iteration.id, comment_id=comment.id)
-    repo.update.assert_not_awaited()
+    assert repo.writes == []
 
 
 def test__pure_changes__leave_the_input_review_untouched() -> None:

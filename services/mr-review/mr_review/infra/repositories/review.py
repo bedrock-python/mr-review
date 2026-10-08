@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
 
-import yaml
 from pydantic import ValidationError
 
 from mr_review.core.reviews.entities import (
@@ -21,6 +20,8 @@ from mr_review.core.reviews.entities import (
 )
 from mr_review.core.reviews.severity import DEFAULT_SEVERITY, normalize_severity
 from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
+from mr_review.infra.repositories.file_store import KeyedLock, dump_yaml, write_file_atomically
+from mr_review.infra.repositories.review_cache import MRKey, ReviewFileCache
 from mr_review.infra.utils import now_utc as _now_utc
 
 _log = logging.getLogger(__name__)
@@ -198,43 +199,82 @@ def _review_to_dict(review: Review) -> dict[str, object]:
 
 
 class FileReviewRepository:
+    """One YAML file per review under ``reviews/``.
+
+    Reads go through :class:`ReviewFileCache`: unchanged files are not parsed again, the
+    history list is sorted from cached metadata, and ``get_by_mr`` uses an index over
+    (host, repository, MR). Every read builds a fresh entity, so no caller can change what
+    is cached.
+
+    Writes to one review are serialised per review id, and finding-or-creating the review
+    of an MR is serialised per MR.
+    """
+
     def __init__(self, data_dir: Path) -> None:
         self._reviews_dir = data_dir / "reviews"
+        self._review_locks: KeyedLock[UUID] = KeyedLock()
+        self._mr_locks: KeyedLock[MRKey] = KeyedLock()
+        self._files = ReviewFileCache(self._reviews_dir, _review_from_dict)
 
     def _review_path(self, review_id: UUID) -> Path:
         return self._reviews_dir / f"{review_id}.yaml"
 
-    def _read_one(self, review_id: UUID) -> Review | None:
-        path = self._review_path(review_id)
-        if not path.exists():
-            return None
-        with path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if data is None:
-            return None
-        return _review_from_dict(data)
+    # -- synchronous file access; run in worker threads -----------------------------------
 
-    def _write_one(self, review: Review) -> None:
-        self._reviews_dir.mkdir(parents=True, exist_ok=True)
+    def _read_review(self, review_id: UUID) -> Review | None:
+        loaded = self._files.load(self._review_path(review_id), with_data=True)
+        if loaded is None or loaded[1] is None:
+            return None
+        return _review_from_dict(loaded[1])
+
+    def _write_review(self, review: Review) -> None:
         path = self._review_path(review.id)
-        tmp = path.with_suffix(".yaml.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(_review_to_dict(review), f, allow_unicode=True, sort_keys=False)
-        os.replace(tmp, path)
+        data = _review_to_dict(review)
+        dir_before = self._files.directory_mtime()
+        written = write_file_atomically(path, dump_yaml(data))
+        self._files.record_write(path, data, review, written, dir_before)
 
-    def _scan_all(self) -> list[Review]:
-        if not self._reviews_dir.exists():
-            return []
-        reviews: list[Review] = []
-        for path in self._reviews_dir.glob("*.yaml"):
-            try:
-                with path.open("r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                if data is not None:
-                    reviews.append(_review_from_dict(data))
-            except Exception:
-                _log.warning("Corrupt or unreadable review file %s, skipping", path)
+    def _delete_file(self, review_id: UUID) -> bool:
+        path = self._review_path(review_id)
+        dir_before = self._files.directory_mtime()
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return False
+        self._files.record_delete(path, dir_before)
+        return True
+
+    def _load_reviews(self, names: list[str]) -> list[Review]:
+        """Parse the named files, skipping any deleted or damaged since they were listed."""
+        reviews = []
+        for name in names:
+            loaded = self._files.load_or_skip(self._reviews_dir / name, with_data=True)
+            if loaded is not None and loaded[1] is not None:
+                reviews.append(_review_from_dict(loaded[1]))
         return reviews
+
+    def _find_by_mr(self, key: MRKey) -> Review | None:
+        # Re-check each hit against its file: it may have been deleted or rewritten since.
+        candidates: list[tuple[datetime, str]] = []
+        for name in self._files.names_for(key):
+            loaded = self._files.load_or_skip(self._reviews_dir / name, with_data=False)
+            if loaded is not None and loaded[0].mr_key == key:
+                candidates.append((loaded[0].updated_at, name))
+        # Duplicates can exist from older versions or imports; the latest one is the live one.
+        candidates.sort(reverse=True)
+        found = self._load_reviews([name for _, name in candidates[:1]])
+        return found[0] if found else None
+
+    def _list_sorted(self, limit: int | None) -> list[Review]:
+        metas = self._files.scan()
+        names = sorted(metas, key=lambda name: metas[name].updated_at, reverse=True)
+        return self._load_reviews(names if limit is None else names[:limit])
+
+    # -- public API -----------------------------------------------------------------------
+
+    async def _save(self, review: Review) -> Review:
+        await self._review_locks.run(review.id, lambda: asyncio.to_thread(self._write_review, review))
+        return review
 
     async def create(
         self,
@@ -254,8 +294,7 @@ class FileReviewRepository:
             created_at=now,
             updated_at=now,
         )
-        await asyncio.to_thread(self._write_one, review)
-        return review
+        return await self._save(review)
 
     async def create_from_source(
         self,
@@ -276,51 +315,66 @@ class FileReviewRepository:
             created_at=now,
             updated_at=now,
         )
-        await asyncio.to_thread(self._write_one, review)
-        return review
+        return await self._save(review)
+
+    async def get_or_create_by_mr(
+        self,
+        host_id: UUID,
+        repo_path: str,
+        mr_iid: int,
+        brief_config: BriefConfig | None = None,
+    ) -> Review:
+        key: MRKey = (host_id, repo_path, mr_iid)
+
+        async def _operation() -> Review:
+            existing = await asyncio.to_thread(self._find_by_mr, key)
+            if existing is not None:
+                return existing
+            return await self.create(host_id, repo_path, mr_iid, brief_config)
+
+        return await self._mr_locks.run(key, _operation)
 
     async def get_by_id(self, review_id: UUID) -> Review | None:
-        return await asyncio.to_thread(self._read_one, review_id)
+        return await asyncio.to_thread(self._read_review, review_id)
 
     async def get_by_mr(self, host_id: UUID, repo_path: str, mr_iid: int) -> Review | None:
-        def _sync() -> Review | None:
-            for review in self._scan_all():
-                if (
-                    review.host_id == host_id
-                    and review.repo_path == repo_path
-                    and isinstance(review.source, MRSource)
-                    and review.source.mr_iid == mr_iid
-                ):
-                    return review
-            return None
-
-        return await asyncio.to_thread(_sync)
+        return await asyncio.to_thread(self._find_by_mr, (host_id, repo_path, mr_iid))
 
     async def list_all(self) -> list[Review]:
-        def _sync() -> list[Review]:
-            reviews = self._scan_all()
-            reviews.sort(key=lambda r: r.updated_at, reverse=True)
-            return reviews[:_MAX_REVIEWS]
+        return await asyncio.to_thread(self._list_sorted, _MAX_REVIEWS)
 
-        return await asyncio.to_thread(_sync)
+    async def list_all_uncapped(self) -> list[Review]:
+        return await asyncio.to_thread(self._list_sorted, None)
 
-    async def update(self, review: Review) -> Review:
-        def _sync() -> Review:
-            existing = self._read_one(review.id)
-            if existing is None:
-                raise ValueError(f"Review {review.id} not found")
-            updated = review.model_copy(update={"updated_at": _now_utc()})
-            self._write_one(updated)
+    async def update_with(self, review_id: UUID, change: Callable[[Review], Review]) -> Review | None:
+        def _existing_only(current: Review | None) -> Review | None:
+            return change(current) if current is not None else None
+
+        return await self._apply_change(review_id, _existing_only, touch=True)
+
+    async def upsert_with(self, review_id: UUID, change: Callable[[Review | None], Review | None]) -> Review | None:
+        return await self._apply_change(review_id, change, touch=False)
+
+    async def _apply_change(
+        self,
+        review_id: UUID,
+        change: Callable[[Review | None], Review | None],
+        *,
+        touch: bool,
+    ) -> Review | None:
+        async def _operation() -> Review | None:
+            current = await asyncio.to_thread(self._read_review, review_id)
+            updated = change(current)
+            if updated is None or updated is current:
+                return current
+            if updated.id != review_id:
+                raise ValueError(f"A change to review {review_id} must not alter its id")
+            if touch:
+                updated = updated.model_copy(update={"updated_at": _now_utc()})
+            await asyncio.to_thread(self._write_review, updated)
             return updated
 
-        return await asyncio.to_thread(_sync)
+        return await self._review_locks.run(review_id, _operation)
 
     async def delete(self, review_id: UUID) -> bool:
-        def _sync() -> bool:
-            path = self._review_path(review_id)
-            if not path.exists():
-                return False
-            path.unlink()
-            return True
-
-        return await asyncio.to_thread(_sync)
+        return await self._review_locks.run(review_id, lambda: asyncio.to_thread(self._delete_file, review_id))

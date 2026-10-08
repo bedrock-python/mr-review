@@ -10,6 +10,7 @@ import yaml
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration
+from tests.fakes import save_review
 
 pytestmark = pytest.mark.integration
 
@@ -24,7 +25,7 @@ async def test__review_repo__raw_response__round_trips_exactly(review_repo: File
     review = await review_repo.create(host_id=uuid4(), repo_path="ns/repo", mr_iid=1)
     iteration = make_iteration(comments=[make_comment()]).model_copy(update={"raw_response": _TRICKY})
 
-    await review_repo.update(review.model_copy(update={"iterations": [iteration]}))
+    await save_review(review_repo, review.model_copy(update={"iterations": [iteration]}))
     loaded = await review_repo.get_by_id(review.id)
 
     assert loaded is not None
@@ -34,7 +35,7 @@ async def test__review_repo__raw_response__round_trips_exactly(review_repo: File
 async def test__review_repo__no_raw_response__loads_as_none(review_repo: FileReviewRepository) -> None:
     review = await review_repo.create(host_id=uuid4(), repo_path="ns/repo", mr_iid=1)
 
-    await review_repo.update(review.model_copy(update={"iterations": [make_iteration()]}))
+    await save_review(review_repo, review.model_copy(update={"iterations": [make_iteration()]}))
     loaded = await review_repo.get_by_id(review.id)
 
     assert loaded is not None
@@ -46,7 +47,7 @@ async def test__review_repo__file_from_before_raw_response__still_loads(
 ) -> None:
     review = await review_repo.create(host_id=uuid4(), repo_path="ns/repo", mr_iid=1)
     iteration = make_iteration(comments=[make_comment(body="One")])
-    await review_repo.update(review.model_copy(update={"iterations": [iteration]}))
+    await save_review(review_repo, review.model_copy(update={"iterations": [iteration]}))
     path = data_dir / "reviews" / f"{review.id}.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     del data["iterations"][0]["raw_response"]

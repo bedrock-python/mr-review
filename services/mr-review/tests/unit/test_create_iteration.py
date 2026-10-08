@@ -9,6 +9,7 @@ from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationS
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 
 from tests.factories.entities import make_iteration, make_review
+from tests.fakes import stub_update_with
 
 pytestmark = pytest.mark.unit
 
@@ -19,24 +20,17 @@ async def test__create_iteration__no_config__inherits_last_iteration_brief_confi
     security_config = BriefConfig(preset=BriefPreset.security)
     completed_iter = make_iteration(number=1, brief_config=security_config, completed_at=datetime.now(timezone.utc))
     review = make_review(iterations=[completed_iter])
-    updated_review = make_review(
-        id=review.id,
-        iterations=[completed_iter, make_iteration(number=2, brief_config=security_config, stage=IterationStage.brief)],
-    )
-    repo.get_by_id.return_value = review
-    repo.update.return_value = updated_review
+    writes = stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id)
 
-    repo.get_by_id.assert_awaited_once_with(review.id)
-    repo.update.assert_awaited_once()
-    persisted_review = repo.update.call_args[0][0]
-    assert len(persisted_review.iterations) == 2
-    new_iter = persisted_review.iterations[1]
+    assert len(writes) == 1
+    assert len(result.iterations) == 2
+    new_iter = result.iterations[1]
     assert new_iter.brief_config == security_config
     assert new_iter.stage == IterationStage.brief
-    assert result == updated_review
+    repo.update.assert_not_called()
 
 
 async def test__create_iteration__custom_config__uses_provided_config() -> None:
@@ -45,35 +39,12 @@ async def test__create_iteration__custom_config__uses_provided_config() -> None:
     completed_iter = make_iteration(number=1, completed_at=datetime.now(timezone.utc))
     review = make_review(iterations=[completed_iter])
     custom_config = BriefConfig(preset=BriefPreset.performance)
-    updated_review = make_review(
-        id=review.id,
-        iterations=[completed_iter, make_iteration(number=2, brief_config=custom_config, stage=IterationStage.brief)],
-    )
-    repo.get_by_id.return_value = review
-    repo.update.return_value = updated_review
+    stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id, brief_config=custom_config)
 
-    persisted_review = repo.update.call_args[0][0]
-    assert persisted_review.iterations[1].brief_config == custom_config
-    assert result == updated_review
-
-
-async def test__create_iteration__number_increments_from_completed_iterations() -> None:
-    """The new iteration's number is len(existing_iterations) + 1 when all previous are completed."""
-    repo = AsyncMock()
-    existing_iter = make_iteration(number=1, completed_at=datetime.now(timezone.utc))
-    review = make_review(iterations=[existing_iter])
-    repo.get_by_id.return_value = review
-    repo.update.return_value = review
-    use_case = CreateIterationUseCase(repo)
-
-    await use_case.execute(review_id=review.id)
-
-    persisted_review = repo.update.call_args[0][0]
-    assert len(persisted_review.iterations) == 2
-    assert persisted_review.iterations[1].number == 2
+    assert result.iterations[1].brief_config == custom_config
 
 
 async def test__create_iteration__one_completed_iteration__new_number_is_two() -> None:
@@ -81,14 +52,13 @@ async def test__create_iteration__one_completed_iteration__new_number_is_two() -
     repo = AsyncMock()
     existing_iter = make_iteration(number=1, completed_at=datetime.now(timezone.utc))
     review = make_review(iterations=[existing_iter])
-    repo.get_by_id.return_value = review
-    repo.update.return_value = review
+    stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
-    await use_case.execute(review_id=review.id)
+    result = await use_case.execute(review_id=review.id)
 
-    persisted_review = repo.update.call_args[0][0]
-    assert persisted_review.iterations[1].number == 2
+    assert len(result.iterations) == 2
+    assert result.iterations[1].number == 2
 
 
 async def test__create_iteration__new_iteration_stage_is_brief() -> None:
@@ -96,27 +66,25 @@ async def test__create_iteration__new_iteration_stage_is_brief() -> None:
     repo = AsyncMock()
     existing_iter = make_iteration(number=1, completed_at=datetime.now(timezone.utc))
     review = make_review(iterations=[existing_iter])
-    repo.get_by_id.return_value = review
-    repo.update.return_value = review
+    stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
-    await use_case.execute(review_id=review.id)
+    result = await use_case.execute(review_id=review.id)
 
-    persisted_review = repo.update.call_args[0][0]
-    assert persisted_review.iterations[1].stage == IterationStage.brief
+    assert result.iterations[1].stage == IterationStage.brief
 
 
 async def test__create_iteration__review_not_found__raises_value_error() -> None:
     """ValueError is raised when the review does not exist."""
     repo = AsyncMock()
-    repo.get_by_id.return_value = None
+    writes = stub_update_with(repo, None)
     use_case = CreateIterationUseCase(repo)
     missing_id = uuid4()
 
     with pytest.raises(ValueError, match=str(missing_id)):
         await use_case.execute(review_id=missing_id)
 
-    repo.update.assert_not_awaited()
+    assert writes == []
 
 
 async def test__create_iteration__existing_completed_iterations_are_preserved() -> None:
@@ -126,16 +94,14 @@ async def test__create_iteration__existing_completed_iterations_are_preserved() 
     iter1 = make_iteration(number=1, completed_at=now)
     iter2 = make_iteration(number=2, completed_at=now)
     review = make_review(iterations=[iter1, iter2])
-    repo.get_by_id.return_value = review
-    repo.update.return_value = review
+    stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
-    await use_case.execute(review_id=review.id)
+    result = await use_case.execute(review_id=review.id)
 
-    persisted_review = repo.update.call_args[0][0]
-    assert persisted_review.iterations[0] is iter1
-    assert persisted_review.iterations[1] is iter2
-    assert persisted_review.iterations[2].number == 3
+    assert result.iterations[0] is iter1
+    assert result.iterations[1] is iter2
+    assert result.iterations[2].number == 3
 
 
 async def test__create_iteration__last_incomplete__returns_review_without_creating() -> None:
@@ -143,12 +109,12 @@ async def test__create_iteration__last_incomplete__returns_review_without_creati
     repo = AsyncMock()
     existing_iter = make_iteration(number=1, completed_at=None, stage=IterationStage.brief)
     review = make_review(iterations=[existing_iter])
-    repo.get_by_id.return_value = review
+    writes = stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id)
 
-    repo.update.assert_not_awaited()
+    assert writes == []
     assert result is review
 
 
@@ -157,8 +123,7 @@ async def test__create_iteration__last_partly_posted__starts_a_new_iteration() -
     repo = AsyncMock()
     partly_posted = make_iteration(number=1, completed_at=None, stage=IterationStage.post)
     review = make_review(iterations=[partly_posted])
-    repo.get_by_id.return_value = review
-    repo.update.side_effect = lambda updated: updated
+    stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id)
@@ -173,18 +138,14 @@ async def test__create_iteration__last_incomplete__new_config__updates_brief_con
     new_config = BriefConfig(preset=BriefPreset.security)
     existing_iter = make_iteration(number=1, completed_at=None, stage=IterationStage.brief, brief_config=old_config)
     review = make_review(iterations=[existing_iter])
-    updated_review = make_review(id=review.id, iterations=[make_iteration(number=1, brief_config=new_config)])
-    repo.get_by_id.return_value = review
-    repo.update.return_value = updated_review
+    writes = stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id, brief_config=new_config)
 
-    repo.update.assert_awaited_once()
-    persisted_review = repo.update.call_args[0][0]
-    assert persisted_review.iterations[0].brief_config == new_config
-    assert len(persisted_review.iterations) == 1
-    assert result == updated_review
+    assert len(writes) == 1
+    assert result.iterations[0].brief_config == new_config
+    assert len(result.iterations) == 1
 
 
 async def test__create_iteration__last_incomplete__same_config__no_update() -> None:
@@ -193,10 +154,10 @@ async def test__create_iteration__last_incomplete__same_config__no_update() -> N
     config = BriefConfig(preset=BriefPreset.security)
     existing_iter = make_iteration(number=1, completed_at=None, stage=IterationStage.brief, brief_config=config)
     review = make_review(iterations=[existing_iter])
-    repo.get_by_id.return_value = review
+    writes = stub_update_with(repo, review)
     use_case = CreateIterationUseCase(repo)
 
     result = await use_case.execute(review_id=review.id, brief_config=config)
 
-    repo.update.assert_not_awaited()
+    assert writes == []
     assert result is review

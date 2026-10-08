@@ -6,6 +6,9 @@ SENSITIVE_LOG_FIELDS: frozenset[str] = frozenset(
     {
         # Credentials and tokens
         "password",
+        "encryption_password",
+        "decryption_password",
+        "passphrase",
         "token",
         "secret",
         "authorization",

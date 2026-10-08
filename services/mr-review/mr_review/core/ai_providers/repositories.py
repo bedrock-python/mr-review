@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
@@ -35,5 +36,23 @@ class AIProviderRepository(Protocol):
         max_concurrent: int | None = None,
         clear_max_concurrent: bool = False,
     ) -> AIProvider | None: ...
+
+    async def update_with(self, provider_id: UUID, change: Callable[[AIProvider], AIProvider]) -> AIProvider | None:
+        """Atomically read the provider, apply ``change`` and store the result.
+
+        Concurrent changes are serialised, so none of them is lost. Returning the very
+        object ``change`` was given writes nothing. ``None`` when no provider has that id.
+        """
+        ...
+
+    async def upsert_with(
+        self, provider_id: UUID, change: Callable[[AIProvider | None], AIProvider | None]
+    ) -> AIProvider | None:
+        """Like :meth:`update_with`, but ``change`` gets ``None`` for a missing provider and may create it.
+
+        Returning ``None`` or the object it was given writes nothing. The stored provider is
+        returned as-is, ``id`` and ``created_at`` included.
+        """
+        ...
 
     async def delete(self, provider_id: UUID) -> bool: ...
