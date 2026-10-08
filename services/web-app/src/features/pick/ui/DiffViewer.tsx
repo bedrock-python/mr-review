@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { DiffTable } from "@shared/ui";
+import { FileX } from "lucide-react";
+import { DiffTable, EmptyState, ICON_SIZE, Toolbar, ToolbarSpacer } from "@shared/ui";
 import type { DiffFile } from "@entities/mr";
 import type { DiffLineWithFile } from "@shared/ui";
 
@@ -32,19 +33,30 @@ export const DiffViewer = ({ file }: DiffViewerProps): React.ReactElement => {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-1)] px-4 py-2.5">
-        <span className="truncate font-mono text-sm text-[var(--fg-0)]" title={displayPath}>
+      <Toolbar size="sm">
+        <h2
+          className="text-fg-0 m-0 min-w-0 truncate font-mono font-normal"
+          style={{ fontSize: "var(--fs-control)" }}
+          title={displayPath}
+        >
           {displayPath}
+        </h2>
+        <ToolbarSpacer />
+        <span
+          className="flex shrink-0 font-mono"
+          style={{ gap: "var(--space-2)", fontSize: "var(--fs-meta)" }}
+        >
+          <span className="text-c-add-fg">+{file.additions}</span>
+          <span className="text-c-del-fg">-{file.deletions}</span>
         </span>
-        <div className="ml-4 flex shrink-0 items-center gap-3 font-mono text-xs">
-          <span className="text-[var(--c-add-fg)]">+{file.additions}</span>
-          <span className="text-[var(--c-del-fg)]">-{file.deletions}</span>
-        </div>
-      </div>
+      </Toolbar>
       {file.hunks.length === 0 ? (
-        <div className="flex h-24 items-center justify-center text-sm text-[var(--fg-2)]">
-          Binary file or no diff available
-        </div>
+        <EmptyState
+          size="sm"
+          icon={<FileX size={ICON_SIZE.inline} />}
+          title="No diff to show"
+          description="A binary file, or a change the host did not send a diff for."
+        />
       ) : (
         <DiffTable lines={lines} className="min-h-0 flex-1" ariaLabel={`Diff of ${file.path}`} />
       )}
