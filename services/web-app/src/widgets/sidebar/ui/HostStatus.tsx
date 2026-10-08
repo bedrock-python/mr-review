@@ -20,7 +20,7 @@ export const HostStatus = ({ connection, errorMessage }: HostStatusProps): React
     <span
       title={connection === "unreachable" ? errorMessage : undefined}
       className={cn(
-        "flex min-w-0 items-center gap-(--space-2) text-(length:--fs-meta)",
+        "flex items-center gap-(--space-2) text-(length:--fs-meta) whitespace-nowrap",
         connection === "unreachable" ? "text-(--c-danger-fg)" : "text-fg-2"
       )}
     >
@@ -29,7 +29,7 @@ export const HostStatus = ({ connection, errorMessage }: HostStatusProps): React
         className="size-(--dot-size) shrink-0 rounded-full"
         style={{ background: look.dot }}
       />
-      <span className="truncate">{look.label}</span>
+      <span>{look.label}</span>
     </span>
   );
 };

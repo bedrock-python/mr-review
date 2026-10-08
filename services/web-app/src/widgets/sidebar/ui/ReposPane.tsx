@@ -169,7 +169,9 @@ export const ReposPane = (): React.ReactElement => {
         />
       )}
 
-      <div className="border-border mt-auto flex min-h-(--control-lg) shrink-0 items-center justify-between gap-(--space-2) border-t px-(--space-3)">
+      {/* Wraps rather than cuts: in a mono theme "can't reach host" and both versions do not
+          fit the pane's width on one line, and the host's state must be read whole. */}
+      <div className="border-border mt-auto flex min-h-(--control-lg) shrink-0 flex-wrap items-center justify-between gap-x-(--space-2) border-t px-(--space-3) py-(--space-1)">
         {selectedHostId === null ? (
           <span />
         ) : (
