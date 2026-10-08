@@ -87,7 +87,7 @@ The server answers only requests whose `Host` header names it the way it expects
 `localhost`, `127.0.0.1`, `::1` and `api` (the API's service name in the standard compose
 file), on any port. Anything else gets `400 Invalid host header`, naming the host it
 refused. This is what stops a web page from re-pointing its own domain at `127.0.0.1` (DNS
-rebinding) and reading the API — the data export with every stored token included — from
+rebinding) and reading the API — including a data export with every stored token — from
 your browser.
 
 Opening mr-review by any other name means adding that name, without a port, to

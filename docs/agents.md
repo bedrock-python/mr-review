@@ -42,7 +42,7 @@ hosts with a personal access token each, list repositories and open merge reques
 a diff (or an arbitrary two-ref diff), build a prompt out of the diff plus whatever
 context you enable, stream a review back from a model, let you edit and dismiss individual
 comments, and post the survivors to the merge request as inline notes. It keeps hosts,
-providers and review history in YAML files under one directory, and can export and import
+providers, review presets and review history in YAML files under one directory, and can export and import
 that state as a single JSON file with the tokens encrypted under a passphrase, left out, or —
 only when asked for explicitly — in plain text.
 
@@ -598,8 +598,7 @@ when the host does not report the commit.
    `POST /api/v1/data/export` with `include_plain_secrets`, and can post comments to your
    repositories under your token. Bind the published port to `127.0.0.1` — the shipped
    compose files do, unless `MR_REVIEW_BIND` says otherwise — or put an authenticating
-   proxy in front. Never
-   expose it to a network you do not control.
+   proxy in front. Never expose it to a network you do not control.
 2. **Mount `/data`.** The images keep all state there (`MR_REVIEW__DATA_DIR=/data`);
    without a volume it goes when the container is recreated. Older tags default to
    `~/.mr-review` instead — set `MR_REVIEW__DATA_DIR` explicitly when pinning one.

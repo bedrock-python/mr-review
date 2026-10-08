@@ -92,7 +92,7 @@ docker compose up -d
 
 Both compose files publish their ports on `127.0.0.1`. That is deliberate: **mr-review has
 no login.** Anyone who can open the port can read every stored VCS token and AI API key
-(`POST /api/v1/data/export`) and post comments under your tokens. Publish it beyond this
+(`POST /api/v1/data/export` with `include_plain_secrets`) and post comments under your tokens. Publish it beyond this
 machine only on a network where you trust everyone who can reach it, or put a reverse
 proxy that authenticates in front of it instead.
 
