@@ -187,8 +187,9 @@ class DispatchReviewUseCase:
         """Build the prompt and return the event stream; the review is first written when it starts.
 
         Raises ``ValueError`` for an unknown review, host, provider or iteration,
-        ``DispatchModelMissingError`` when no model is named and the provider has none, and
-        ``IterationLockedError`` for an iteration that was already posted.
+        ``DispatchModelMissingError`` when no model is named and the provider has none,
+        ``IterationLockedError`` for an iteration that was already posted, and
+        ``AllFilesExcludedError`` when the brief's path filters leave none of the changed files.
         """
         review = await self._review_repo.get_by_id(review_id)
         if review is None:

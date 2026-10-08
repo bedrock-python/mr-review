@@ -15,6 +15,17 @@ from mr_review.use_cases.reviews.prompt_builder import ComposedPrompt, PreviousC
 from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 
+class AllFilesExcludedError(Exception):
+    """The brief's path filters leave none of the change's files to review."""
+
+    def __init__(self, total: int) -> None:
+        super().__init__(
+            f"All {total} changed files are excluded by the path filters, so there is nothing to review. "
+            "Loosen the include or exclude patterns in the brief."
+        )
+        self.total = total
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedIntent:
     instructions: str
@@ -73,10 +84,15 @@ async def assemble_prompt(
     iteration_number: int,
     presets: ReviewPresetRepository | None = None,
 ) -> AssembledPrompt:
-    """Fetch what ``config`` asks for and compose the prompt the model gets for ``review``."""
+    """Fetch what ``config`` asks for and compose the prompt the model gets for ``review``.
+
+    Raises ``AllFilesExcludedError`` when the change has files but the path filters leave none.
+    """
     resolved = await resolve_source(review, provider)
     path_filter = PathFilter.from_brief(config)
     diff_files, excluded = path_filter.split(resolved.diff_files)
+    if resolved.diff_files and not diff_files:
+        raise AllFilesExcludedError(len(resolved.diff_files))
     intent = await resolve_intent(config, presets)
     context = await gather_context(provider, review.repo_path, diff_files, config, resolved.ref, path_filter.allows)
     previous = previous_comments(review, iteration_number) if config.include_previous_comments else None

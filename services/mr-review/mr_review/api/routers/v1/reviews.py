@@ -60,7 +60,7 @@ from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchEr
 from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
-from mr_review.use_cases.reviews.prompt_assembly import AssembledPrompt
+from mr_review.use_cases.reviews.prompt_assembly import AllFilesExcludedError, AssembledPrompt
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
@@ -247,6 +247,8 @@ async def get_review_prompt(
             brief_config=body.brief_config,
             iteration_id=body.iteration_id,
         )
+    except AllFilesExcludedError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(content=assembled.prompt.text, media_type="text/plain")
@@ -303,6 +305,8 @@ async def preview_review_prompt(
             brief_config=body.brief_config,
             iteration_id=body.iteration_id,
         )
+    except AllFilesExcludedError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _preview_to_response(assembled)
@@ -365,7 +369,7 @@ async def dispatch_review(
         )
     except IterationLockedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except DispatchModelMissingError as exc:
+    except (DispatchModelMissingError, AllFilesExcludedError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

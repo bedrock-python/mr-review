@@ -6,7 +6,7 @@ The VCS host is faked through DI; reviews and presets go through the real YAML r
 from __future__ import annotations
 
 import math
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,10 +30,11 @@ from mr_review.infra.di.providers.use_cases import UseCaseProvider
 from mr_review.infra.di.providers.vcs import VCSInfraProvider
 from mr_review.infra.repositories.review import FileReviewRepository
 from mr_review.infra.repositories.review_preset import FileReviewPresetRepository
+from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
 from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 
-from tests.factories.entities import make_host, make_iteration
+from tests.factories.entities import make_ai_provider, make_host, make_iteration
 
 pytestmark = [pytest.mark.integration, pytest.mark.http]
 
@@ -85,6 +86,20 @@ class _FakeVCSProvider(Provider):
             host_repo=_Found(make_host()),  # type: ignore[arg-type]
             vcs_factory=lambda _host: _VCS(),  # type: ignore[arg-type,return-value]
         )
+
+    @provide(override=True)
+    def get_dispatch_use_case(self, review_repo: FileReviewRepository) -> DispatchReviewUseCase:
+        return DispatchReviewUseCase(
+            review_repo=review_repo,
+            host_repo=_Found(make_host()),  # type: ignore[arg-type]
+            ai_provider_repo=_Found(make_ai_provider()),  # type: ignore[arg-type]
+            vcs_factory=lambda _host: _VCS(),  # type: ignore[arg-type,return-value]
+            ai_dispatcher_factory=_never_called,
+        )
+
+
+async def _never_called(*_args: object) -> AsyncIterator[str]:
+    raise AssertionError("The model must not be called")
 
 
 @dataclass
@@ -200,3 +215,27 @@ async def test__preview__unknown_review__404(harness: _Harness) -> None:
     response = await harness.client.post(f"/api/v1/reviews/{uuid4()}/prompt/preview", json={})
 
     assert response.status_code == 404
+
+
+_NOTHING_LEFT = {"include_context": False, "include_paths": ["docs/**"]}
+
+
+@pytest.mark.parametrize("route", ["prompt", "prompt/preview"])
+async def test__prompt__path_filters_leave_no_file__422_saying_so(harness: _Harness, route: str) -> None:
+    review_id = await _seed(harness.reviews)
+
+    response = await harness.client.post(f"/api/v1/reviews/{review_id}/{route}", json={"brief_config": _NOTHING_LEFT})
+
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("All 2 changed files are excluded by the path filters")
+
+
+async def test__dispatch__path_filters_leave_no_file__422_and_the_iteration_untouched(harness: _Harness) -> None:
+    review_id = await _seed(harness.reviews, BriefConfig.model_validate(_NOTHING_LEFT))
+    before = await harness.reviews.get_by_id(review_id)
+
+    response = await harness.client.post(f"/api/v1/reviews/{review_id}/dispatch", json={"ai_provider_id": str(uuid4())})
+
+    assert response.status_code == 422
+    assert "excluded by the path filters" in response.json()["detail"]
+    assert await harness.reviews.get_by_id(review_id) == before

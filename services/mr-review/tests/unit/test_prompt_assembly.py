@@ -11,6 +11,7 @@ from mr_review.core.mrs.entities import MR, DiffFile, DiffHunk, DiffLine
 from mr_review.core.review_presets.entities import ReviewPreset
 from mr_review.core.reviews.entities import BriefConfig, IterationStage
 from mr_review.use_cases.reviews.prompt_assembly import (
+    AllFilesExcludedError,
     assemble_prompt,
     dispatch_target_number,
     previous_comments,
@@ -76,6 +77,32 @@ async def test__assemble__excluded_files_left_out_of_the_diff_and_of_full_files(
     assert assembled.files_total == 3
     assert [(e.path, e.reason) for e in assembled.excluded] == [("uv.lock", "*.lock"), ("dist/app.js", "dist/")]
     assert [c.args[1] for c in provider.get_file.await_args_list] == ["src/billing.py"]
+
+
+async def test__assemble__include_directory_without_slash__its_files_reviewed() -> None:
+    provider = _vcs([_changed("services/api/main.py", "serve()"), _changed("web/app.ts", "web-marker")])
+    config = BriefConfig(include_context=False, include_paths=["services/api"])
+
+    assembled = await assemble_prompt(make_review(), provider, config, iteration_number=1)
+
+    assert "serve()" in assembled.prompt.text
+    assert "web-marker" not in assembled.prompt.text
+
+
+async def test__assemble__path_filters_leave_nothing__refused_before_any_context_is_fetched() -> None:
+    provider = _vcs([_changed("src/a.py"), _changed("src/b.py")], files={"README.md": "readme"})
+    config = BriefConfig(include_paths=["docs/**"])
+
+    with pytest.raises(AllFilesExcludedError, match="All 2 changed files are excluded by the path filters"):
+        await assemble_prompt(make_review(), provider, config, iteration_number=1)
+
+    provider.get_file.assert_not_awaited()
+
+
+async def test__assemble__change_without_files__not_refused() -> None:
+    assembled = await assemble_prompt(make_review(), _vcs([]), BriefConfig(include_context=False), iteration_number=1)
+
+    assert assembled.files_total == 0
 
 
 async def test__assemble__default_excludes_off__lockfile_reviewed() -> None:
