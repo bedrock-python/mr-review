@@ -1,6 +1,6 @@
-import { useId } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Button, Callout, Card, Field, Input, Textarea } from "@shared/ui";
 
 import {
   MAX_PRESET_DESCRIPTION_CHARS,
@@ -9,6 +9,8 @@ import {
   ReviewPresetFormSchema,
 } from "../model/reviewPreset.schema";
 import type { ReviewPresetForm } from "../model/reviewPreset.schema";
+
+const INSTRUCTIONS_ROWS = 5;
 
 export type PresetEditorProps = {
   initial: ReviewPresetForm;
@@ -23,12 +25,7 @@ export type PresetEditorProps = {
   children?: React.ReactNode;
 };
 
-const errorStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: "var(--c-critical-fg)",
-  marginTop: 4,
-};
-
+/** A preset's name, description and instructions, in a card with Save and Cancel. */
 export const PresetEditor = ({
   initial,
   title,
@@ -39,7 +36,6 @@ export const PresetEditor = ({
   onCancel,
   children,
 }: PresetEditorProps): React.ReactElement => {
-  const id = useId();
   const {
     register,
     handleSubmit,
@@ -50,76 +46,58 @@ export const PresetEditor = ({
   });
 
   return (
-    <form
-      aria-label={title}
-      onSubmit={(event) => {
-        void handleSubmit(onSubmit)(event);
-      }}
-      className="card"
-      style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}
-    >
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)" }}>{title}</div>
-      <div>
-        <label className="field-label" htmlFor={`${id}-name`}>
-          Name
-        </label>
-        <input
-          id={`${id}-name`}
-          className="field"
-          maxLength={MAX_PRESET_NAME_CHARS}
-          aria-invalid={errors.name ? true : undefined}
-          {...register("name")}
-        />
-        {errors.name && <div style={errorStyle}>{errors.name.message}</div>}
-      </div>
-      <div>
-        <label className="field-label" htmlFor={`${id}-description`}>
-          Description
-        </label>
-        <input
-          id={`${id}-description`}
-          className="field"
-          maxLength={MAX_PRESET_DESCRIPTION_CHARS}
-          placeholder="What this preset is for"
-          {...register("description")}
-        />
-      </div>
-      <div>
-        <label className="field-label" htmlFor={`${id}-instructions`}>
-          Instructions
-        </label>
-        <textarea
-          id={`${id}-instructions`}
-          className="field"
-          rows={5}
-          maxLength={MAX_PRESET_INSTRUCTIONS_CHARS}
-          aria-describedby={`${id}-instructions-hint`}
-          style={{ fontFamily: "var(--font-sans)" }}
-          {...register("instructions")}
-        />
-        <div
-          id={`${id}-instructions-hint`}
-          style={{ fontSize: 11, color: "var(--fg-2)", marginTop: 4 }}
+    <Card padding="md">
+      <form
+        aria-label={title}
+        noValidate
+        onSubmit={(event) => {
+          void handleSubmit(onSubmit)(event);
+        }}
+        className="flex flex-col"
+        style={{ gap: "var(--space-4)" }}
+      >
+        <p
+          className="text-fg-0 m-0"
+          style={{ fontSize: "var(--fs-body)", fontWeight: "var(--fw-semibold)" }}
         >
-          Opens the prompt in place of the built-in preset&apos;s instructions. Leave empty to keep
-          them.
+          {title}
+        </p>
+        <Field label="Name" error={errors.name?.message}>
+          <Input maxLength={MAX_PRESET_NAME_CHARS} {...register("name")} />
+        </Field>
+        <Field label="Description" error={errors.description?.message}>
+          <Input
+            maxLength={MAX_PRESET_DESCRIPTION_CHARS}
+            placeholder="e.g. Exported names and their docs only"
+            {...register("description")}
+          />
+        </Field>
+        <Field
+          label="Instructions"
+          hint="Opens the prompt in place of the built-in preset's instructions. Leave empty to keep them."
+          error={errors.instructions?.message}
+        >
+          <Textarea
+            rows={INSTRUCTIONS_ROWS}
+            maxLength={MAX_PRESET_INSTRUCTIONS_CHARS}
+            {...register("instructions")}
+          />
+        </Field>
+        {children}
+        {error && (
+          <Callout tone="danger" size="sm">
+            {error}
+          </Callout>
+        )}
+        <div className="flex justify-end" style={{ gap: "var(--space-2)" }}>
+          <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" isLoading={isSaving}>
+            {submitLabel}
+          </Button>
         </div>
-        {errors.instructions && <div style={errorStyle}>{errors.instructions.message}</div>}
-      </div>
-      {children}
-      {error && (
-        <div role="alert" style={{ ...errorStyle, marginTop: 0 }}>
-          {error}
-        </div>
-      )}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <button type="button" className="btn ghost" onClick={onCancel} disabled={isSaving}>
-          Cancel
-        </button>
-        <button type="submit" className="btn primary" disabled={isSaving}>
-          {isSaving ? "Saving…" : submitLabel}
-        </button>
-      </div>
-    </form>
+      </form>
+    </Card>
   );
 };

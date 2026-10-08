@@ -1,21 +1,26 @@
-import { memo, useState } from "react";
-import type { PromptPreviewState } from "../model";
+import { memo, useId, useState } from "react";
+import { Check, ChevronDown, ChevronUp, Copy, FileText, RefreshCw } from "lucide-react";
+import {
+  Badge,
+  Button,
+  Callout,
+  Card,
+  EmptyState,
+  Eyebrow,
+  ICON_SIZE,
+  SectionHeader,
+  Spinner,
+  Toolbar,
+  ToolbarSpacer,
+} from "@shared/ui";
 import { PromptBreakdown } from "./PromptBreakdown";
-import { noticeStyle } from "./styles";
+import type { PromptPreviewState } from "../model";
 
-const CopyIcon = (): React.ReactElement => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    aria-hidden="true"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
+// A preview that no longer matches the brief, or one being rebuilt, is shown dimmed.
+const DIMMED_OPACITY = 0.6;
+
+const icon = (Icon: typeof Copy): React.ReactNode => (
+  <Icon size={ICON_SIZE.inline} aria-hidden="true" />
 );
 
 /**
@@ -26,15 +31,8 @@ const PromptText = memo(function PromptText({ text }: { text: string }): React.R
   return (
     <pre
       aria-label="Prompt text"
-      style={{
-        margin: 0,
-        fontFamily: "var(--font-mono)",
-        fontSize: 11,
-        lineHeight: 1.55,
-        color: "var(--fg-1)",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-      }}
+      className="text-fg-1 m-0 font-mono break-words whitespace-pre-wrap"
+      style={{ fontSize: "var(--fs-meta)", lineHeight: "var(--lh-body)" }}
     >
       {text}
     </pre>
@@ -48,166 +46,138 @@ export type PromptPreviewPanelProps = {
   state: PromptPreviewState;
   copy: CopyState;
   onCopy: () => void;
-  footer: React.ReactNode;
 };
-
-const Spinner = (): React.ReactElement => (
-  <div
-    aria-hidden="true"
-    className="animate-spin"
-    style={{
-      width: 10,
-      height: 10,
-      border: "1.5px solid var(--border)",
-      borderTopColor: "var(--accent)",
-      borderRadius: "50%",
-    }}
-  />
-);
 
 export const PromptPreviewPanel = ({
   state,
   copy,
   onCopy,
-  footer,
 }: PromptPreviewPanelProps): React.ReactElement => {
+  const id = useId();
   const { preview, isRequested, isFetching, error, isStale, refresh } = state;
   const [showBreakdown, setShowBreakdown] = useState(true);
+  const isCopied = copy.status === "copied";
+
+  let body: React.ReactNode = null;
+  if (preview) {
+    body = (
+      <div
+        className="flex flex-col"
+        style={{ gap: "var(--space-4)", opacity: isStale || isFetching ? DIMMED_OPACITY : 1 }}
+      >
+        <Card padding="sm">
+          <SectionHeader
+            as="h3"
+            title="Breakdown"
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={icon(showBreakdown ? ChevronUp : ChevronDown)}
+                aria-expanded={showBreakdown}
+                aria-controls={`${id}-breakdown`}
+                onClick={() => {
+                  setShowBreakdown((shown) => !shown);
+                }}
+              >
+                {showBreakdown ? "Hide breakdown" : "Show breakdown"}
+              </Button>
+            }
+          />
+          {showBreakdown && (
+            <div id={`${id}-breakdown`} style={{ marginTop: "var(--space-3)" }}>
+              <PromptBreakdown preview={preview} />
+            </div>
+          )}
+        </Card>
+        <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
+          <SectionHeader as="h3" title="Prompt" />
+          <PromptText text={preview.prompt} />
+        </div>
+      </div>
+    );
+  } else if (isFetching) {
+    body = (
+      <EmptyState
+        className="flex-1"
+        icon={<Spinner size="sm" isDecorative />}
+        title="Building the prompt…"
+      />
+    );
+  } else if (!error) {
+    body = (
+      <EmptyState
+        className="flex-1"
+        role="none"
+        icon={<FileText size={ICON_SIZE.button} />}
+        title="See the prompt before you send it"
+        description="Build the exact prompt the model will get: what each part takes, and what the budget cuts."
+        actions={
+          <Button icon={icon(FileText)} onClick={refresh}>
+            Preview prompt
+          </Button>
+        }
+      />
+    );
+  }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--bg-0)",
-      }}
+    <section
+      aria-labelledby={`${id}-title`}
+      className="bg-bg-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          padding: "10px 16px",
-          borderBottom: "1px solid var(--border)",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 12, color: "var(--fg-2)", fontWeight: 500 }}>
-            Prompt Preview
-          </h2>
-          {isFetching && <Spinner />}
-          {isStale && !isFetching && (
-            <span
-              role="status"
-              className="chip mono"
-              style={{ fontSize: 10, color: "var(--c-major-fg)" }}
-            >
-              Out of date
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {preview && (
-            <span
-              className="chip mono"
-              style={{ fontSize: 10 }}
-              title="Estimated at 4 characters per token"
-            >
-              ≈ {preview.estimated_tokens.toLocaleString()} tokens (est.)
-            </span>
-          )}
-          <button
-            type="button"
-            className={isStale ? "btn primary" : "btn ghost"}
-            style={{ padding: "4px 8px", gap: 5 }}
+      <Toolbar size="sm">
+        <Eyebrow as="h2" id={`${id}-title`}>
+          Prompt preview
+        </Eyebrow>
+        {isFetching && <Spinner size="sm" label="Building the prompt" />}
+        {isStale && !isFetching && (
+          <span role="status">
+            <Badge tone="warn">Out of date</Badge>
+          </span>
+        )}
+        <ToolbarSpacer />
+        {preview && (
+          <span
+            className="text-fg-2 font-mono"
+            style={{ fontSize: "var(--fs-meta)" }}
+            title="Estimated at 4 characters per token"
+          >
+            ≈ {preview.estimated_tokens.toLocaleString()} tokens (est.)
+          </span>
+        )}
+        {isRequested && (
+          <Button
+            variant={isStale ? "secondary" : "ghost"}
+            size="sm"
+            icon={icon(RefreshCw)}
             onClick={refresh}
             disabled={isFetching}
           >
-            {isRequested ? "Refresh" : "Preview"}
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
-            style={{ padding: "4px 8px", gap: 5 }}
-            onClick={onCopy}
-            disabled={!preview}
-          >
-            <CopyIcon />
-            {copy.status === "copied" ? "Copied!" : "Copy"}
-          </button>
+            Refresh
+          </Button>
+        )}
+        {preview && (
+          <Button variant="ghost" size="sm" icon={icon(isCopied ? Check : Copy)} onClick={onCopy}>
+            {isCopied ? "Copied!" : "Copy"}
+          </Button>
+        )}
+      </Toolbar>
+      <div className="flex-1 overflow-y-auto" style={{ padding: "var(--space-4)" }}>
+        <div className="flex min-h-full flex-col" style={{ gap: "var(--space-3)" }}>
+          {copy.status === "failed" && (
+            <Callout tone="danger" size="sm">
+              {copy.message}
+            </Callout>
+          )}
+          {error && (
+            <Callout tone="danger" size="sm">
+              {`Could not build the prompt: ${error.message}`}
+            </Callout>
+          )}
+          {body}
         </div>
       </div>
-      {copy.status === "failed" && (
-        <div role="alert" style={{ ...noticeStyle("var(--c-critical)"), margin: "8px 16px 0" }}>
-          {copy.message}
-        </div>
-      )}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: 16,
-          opacity: isFetching ? 0.5 : 1,
-          transition: "opacity 0.15s",
-        }}
-      >
-        {error && (
-          <div role="alert" style={{ ...noticeStyle("var(--c-critical)"), marginBottom: 12 }}>
-            {`Could not build the prompt: ${error.message}`}
-          </div>
-        )}
-        {preview ? (
-          <>
-            <button
-              type="button"
-              className="btn ghost"
-              aria-expanded={showBreakdown}
-              style={{ padding: "2px 6px", fontSize: 11, marginBottom: 6 }}
-              onClick={() => {
-                setShowBreakdown((shown) => !shown);
-              }}
-            >
-              {showBreakdown ? "Hide breakdown" : "Show breakdown"}
-            </button>
-            {showBreakdown && (
-              <div style={{ marginBottom: 12 }}>
-                <PromptBreakdown preview={preview} />
-              </div>
-            )}
-            <div style={{ opacity: isStale ? 0.6 : 1 }}>
-              <PromptText text={preview.prompt} />
-            </div>
-          </>
-        ) : (
-          !isFetching &&
-          !error && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                gap: 16,
-                color: "var(--fg-2)",
-                fontSize: 12,
-                textAlign: "center",
-              }}
-            >
-              <span style={{ lineHeight: 1.5, maxWidth: 240 }}>
-                Configure the brief on the left, then preview the prompt and what fits in it
-              </span>
-              <button type="button" className="btn primary" style={{ gap: 6 }} onClick={refresh}>
-                Preview prompt
-              </button>
-            </div>
-          )
-        )}
-      </div>
-      {footer}
-    </div>
+    </section>
   );
 };

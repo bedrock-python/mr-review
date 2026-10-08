@@ -174,11 +174,11 @@ afterEach(() => {
 
 describe("BriefStage — editing", () => {
   it(
-    "keeps a newline typed into Context Files and saves one path per line",
+    "keeps a newline typed into the context file paths and saves one path per line",
     async () => {
       const user = userEvent.setup();
       renderStage();
-      const field = await screen.findByLabelText("Context Files");
+      const field = await screen.findByLabelText("Context file paths");
 
       await user.type(field, "docs/{Enter}README.md");
 
@@ -190,10 +190,10 @@ describe("BriefStage — editing", () => {
     INTEGRATION_TEST_TIMEOUT_MS
   );
 
-  it("tidies blank lines and spaces in Context Files when the field loses focus", async () => {
+  it("tidies blank lines and spaces in the context file paths on blur", async () => {
     const user = userEvent.setup();
     renderStage();
-    const field = await screen.findByLabelText("Context Files");
+    const field = await screen.findByLabelText("Context file paths");
 
     await user.type(field, "  docs/  {Enter}{Enter}README.md");
     expect(field).toHaveValue("  docs/  \n\nREADME.md");
@@ -206,18 +206,18 @@ describe("BriefStage — editing", () => {
     const user = userEvent.setup();
     renderStage();
 
-    expect(await screen.findByLabelText("Custom Instructions")).toBeInstanceOf(HTMLTextAreaElement);
-    expect(screen.getByRole("button", { name: /THOROUGH/, pressed: true })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: false })).toBeInTheDocument();
-    const pill = screen.getByRole("button", { name: "Include project context files" });
-    expect(pill).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByLabelText("Custom instructions")).toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByRole("radio", { name: /Thorough/, checked: true })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Security/, checked: false })).toBeInTheDocument();
+    const projectContext = screen.getByRole("checkbox", { name: "Project context files" });
+    expect(projectContext).toBeChecked();
 
-    await user.click(screen.getByRole("button", { name: /SECURITY/ }));
-    await user.click(pill);
+    await user.click(screen.getByRole("radio", { name: /Security/ }));
+    await user.click(projectContext);
 
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: true })).toBeInTheDocument();
-    expect(pill).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByLabelText("Context Files")).not.toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByRole("radio", { name: /Security/, checked: true })).toBeInTheDocument();
+    expect(projectContext).not.toBeChecked();
+    expect(screen.queryByLabelText("Context file paths")).not.toBeInTheDocument();
   });
 
   it(
@@ -227,7 +227,7 @@ describe("BriefStage — editing", () => {
       renderStage();
 
       await user.type(await screen.findByLabelText("Comment language"), "Russian");
-      await user.click(screen.getByRole("button", { name: "Major and up" }));
+      await user.click(screen.getByRole("radio", { name: "Major and up" }));
       await user.type(screen.getByLabelText("Maximum comments"), "12");
       await user.click(screen.getByRole("button", { name: "Error handling" }));
 
@@ -260,7 +260,7 @@ describe("BriefStage — prompt preview", () => {
     renderStage();
     const pre = await openPreview(user);
 
-    await user.type(screen.getByLabelText("Custom Instructions"), "Check the cache");
+    await user.type(screen.getByLabelText("Custom instructions"), "Check the cache");
 
     expect(screen.getByText("Out of date")).toBeInTheDocument();
     expect(screen.getByLabelText("Prompt text")).toBe(pre);
@@ -334,6 +334,24 @@ describe("BriefStage — copy", () => {
 });
 
 describe("BriefStage — dispatch", () => {
+  it("sums up the brief next to the way on", async () => {
+    const user = userEvent.setup();
+    renderStage();
+    const footer = await screen.findByRole("region", { name: "Brief actions" });
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent(
+        "Thorough · diff + description + project context · 1 file excluded"
+      );
+    });
+
+    await openPreview(user);
+
+    await waitFor(() => {
+      expect(footer).toHaveTextContent(`≈ ${String(PREVIEW.estimated_tokens)} tokens`);
+    });
+  });
+
   it("saves the brief, then moves on to Dispatch", async () => {
     const user = userEvent.setup();
     renderStage();
@@ -368,12 +386,12 @@ describe("BriefStage — saved presets", () => {
       const user = userEvent.setup();
       renderStage();
 
-      await user.click(await screen.findByRole("button", { name: /PUBLIC API/ }));
+      await user.click(await screen.findByRole("radio", { name: /Public API/ }));
 
-      expect(screen.getByRole("button", { name: /PUBLIC API/, pressed: true })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /THOROUGH/, pressed: false })).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: /Public API/, checked: true })).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: /Thorough/, checked: false })).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Major and up", pressed: true })
+        screen.getByRole("radio", { name: "Major and up", checked: true })
       ).toBeInTheDocument();
       await waitFor(() => {
         const saved = lastSavedBrief();
@@ -421,9 +439,9 @@ describe("BriefStage — saved presets", () => {
     renderStage({ ...DEFAULT_BRIEF_CONFIG, custom_preset_id: PRESET_ID, preset: "security" });
 
     expect(
-      await screen.findByText(/was deleted; the built-in SECURITY preset/)
+      await screen.findByText(/was deleted; the built-in Security preset/)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /SECURITY/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Security/, checked: true })).toBeInTheDocument();
   });
 });
 
@@ -464,6 +482,23 @@ describe("BriefStage — advanced", () => {
       "All 2 changed files are excluded by the path filters"
     );
     expect(screen.getByRole("button", { name: /Dispatch/ })).toBeDisabled();
+  });
+
+  it("opens the path filters from the footer when every file is excluded", async () => {
+    api.getExcludedFiles.mockResolvedValue({
+      total: 1,
+      excluded: [{ path: "src/a.py", reason: "(not matched by the include patterns)" }],
+    });
+    const user = userEvent.setup();
+    renderStage({ ...DEFAULT_BRIEF_CONFIG, include_paths: ["docs/**"] });
+
+    await user.click(await screen.findByRole("button", { name: "Edit path filters" }));
+
+    expect(screen.getByRole("button", { name: /Advanced/ })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(screen.getByLabelText("Include only")).toHaveFocus();
   });
 
   it("shows the server's reason when the preview is refused", async () => {

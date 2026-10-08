@@ -9,6 +9,8 @@ export {
   BUILTIN_PRESET_CARDS,
   escapeGlob,
   excludedSummary,
+  formatCompactCount,
+  includedContextSummary,
   isEverythingExcluded,
 } from "./presentation";
 export { useLinesField } from "./useLinesField";
