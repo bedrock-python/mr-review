@@ -69,14 +69,14 @@
     line-height: var(--lh-body);
     resize: vertical;
   }
-  /* Restated here: this layer's border would otherwise hide the base focus rule */
+  /* The same ring as the base rule, restated so this layer's box-shadow resets don't win */
   .ui-input:focus-visible,
   .ui-textarea:focus-visible,
   .ui-select:focus-visible,
   .field:focus-visible {
-    outline: none;
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px var(--focus-ring-soft);
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
   .ui-input[aria-invalid="true"],
   .ui-textarea[aria-invalid="true"],
@@ -111,12 +111,13 @@
   .ui-input-shell--sm {
     height: var(--control-sm);
   }
-  .ui-input-shell:hover:not(:focus-within) {
+  .ui-input-shell:hover:not(:has(> input:focus-visible)) {
     border-color: var(--border-control-hover);
   }
-  .ui-input-shell:focus-within {
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px var(--focus-ring-soft);
+  .ui-input-shell:has(> input:focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
   .ui-input-shell[data-invalid="true"] {
     border-color: var(--c-critical);

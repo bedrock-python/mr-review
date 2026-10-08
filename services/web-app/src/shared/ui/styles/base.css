@@ -74,10 +74,11 @@
 
   /* ── Focus on a wrapper ────────────────────────────────────────
      For a bare input inside a bordered box (search fields, pickers): the box
-     shows the halo, the input inside draws none of its own. */
-  .ui-focus-within:focus-within {
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px var(--focus-ring-soft);
+     shows the ring and halo, the input inside draws none of its own. */
+  .ui-focus-within:has(:is(input, textarea):focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
   .ui-focus-within :is(input, textarea):focus-visible {
     outline: none;

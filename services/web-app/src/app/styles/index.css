@@ -431,15 +431,16 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
-  /* Text fields: accent border and a soft halo instead of an outline */
+  /* Text fields: a 2px ring laid over the border, plus a soft halo. An outline, not a border
+     colour: inline borders and border utilities cannot hide it. */
   :where(
       input:not([type="checkbox"], [type="radio"], [type="range"]),
       textarea,
       select
     ):focus-visible {
-    outline: none;
-    border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px var(--focus-ring-soft);
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 4px var(--focus-ring-soft);
   }
 
   /* The search field's clear button, in the theme instead of the browser's blue */
