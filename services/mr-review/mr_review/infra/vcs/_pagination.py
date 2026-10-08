@@ -6,8 +6,6 @@ from typing import Any
 
 import httpx
 
-from mr_review.core.mrs.entities import MR
-
 
 def has_next_link(response: httpx.Response) -> bool:
     """True when the response's ``Link`` header advertises a ``rel="next"`` page."""
@@ -36,14 +34,6 @@ def json_list(response: httpx.Response) -> list[dict[str, Any]]:
     """Decode a JSON array body; anything else (an error object, null) is treated as empty."""
     data: Any = response.json()
     return data if isinstance(data, list) else []
-
-
-def filter_by_title(mrs: list[MR], query: str | None) -> list[MR]:
-    """Case-insensitive title filter, for hosts whose MR listing cannot search titles itself."""
-    if not query:
-        return mrs
-    needle = query.lower()
-    return [mr for mr in mrs if needle in mr.title.lower()]
 
 
 def optional_str(value: object) -> str | None:

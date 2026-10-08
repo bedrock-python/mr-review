@@ -336,12 +336,13 @@ Merge requests per host:
 |---|---|---|---|
 | GitLab | merge request listing | same, by state | host-side title search |
 | GitHub | pulls API | issue search (`is:merged`; `is:closed is:unmerged`) | issue search, `in:title` |
-| Gitea, Forgejo | pulls API | pulls API `closed`, split per item | filtered on the fetched page |
+| Gitea, Forgejo | pulls API | pulls API `closed`, split per item | issue search (`/issues?type=pulls&q=`): titles, bodies and comments, in Gitea's order |
 | Bitbucket | pull request listing | same (`closed` is `DECLINED` + `SUPERSEDED`) | host-side title search |
 
 GitHub's issue search returns no branch names, so those items have empty `source_branch` and
-`target_branch`, and it allows 30 requests a minute per user. Gitea's per-item split and title
-filter are why its pages can be short.
+`target_branch`, and it allows 30 requests a minute per user. Gitea's issue search has no branch
+names either. Gitea has no merged filter on any endpoint, so its merged/closed split is made on each
+fetched page — the one case where pages can come back short, or empty, while more remain.
 
 The inbox (all scopes list open MRs only, newest update first within a page):
 

@@ -73,9 +73,11 @@ What each host type offers:
 * **GitHub** — open and all pull requests come from the pulls API. Merged and closed ones, and title
   searches, come from GitHub's issue search, which shows no branch names and allows 30 searches a
   minute. Line counts appear once a pull request is opened.
-* **Gitea / Forgejo** — Gitea can only list open or closed pull requests, so merged and closed are
-  told apart, and titles searched, within each page as it arrives. A page can come back short, or
-  empty, while more remain; scrolling keeps loading.
+* **Gitea / Forgejo** — title search is answered by Gitea's issue search, which also matches
+  descriptions and comments and shows no branch names. Gitea can only list open or closed pull
+  requests, so merged and closed are told apart within each page as it arrives: a page can come back
+  short, or empty, while more remain. After a few such pages the list stops and offers
+  **Load more**.
 * **Bitbucket** — states and title search are answered by Bitbucket. Line counts appear once a pull
   request is opened.
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from mr_review.core.mrs.entities import PersonalMRScope
+from mr_review.core.mrs.entities import MRStateFilter, PersonalMRScope
 from mr_review.infra.vcs.gitea import GiteaProvider
 
 from tests.factories.vcs_http import RoutedTransport, json_response
@@ -13,6 +13,7 @@ from tests.factories.vcs_http import RoutedTransport, json_response
 pytestmark = pytest.mark.unit
 
 _API = "/api/v1"
+_NEXT_LINK = '<https://gitea.example.com/api/v1/repos/acme/api/issues?page=3>; rel="next"'
 
 
 def _pull(number: int, *, state: str = "open", merged: bool = False, title: str | None = None) -> dict[str, Any]:
@@ -140,13 +141,38 @@ async def test__list_mrs__closed__excludes_merged_items() -> None:
     assert page.has_more is False
 
 
-async def test__list_mrs__query__filters_titles_on_the_fetched_page() -> None:
-    body = [_pull(1, title="Fix login"), _pull(2, title="Bump deps")]
-    transport = RoutedTransport({f"{_API}/repos/acme/api/pulls": json_response(body)})
+@pytest.mark.parametrize(("state", "upstream_state"), [("opened", "open"), ("all", "all")])
+async def test__list_mrs__query__searched_by_gitea_not_filtered_after_the_fetch(
+    state: MRStateFilter, upstream_state: str
+) -> None:
+    """A title search used to filter one fetched page at a time, walking the whole history for a rare word."""
+    hits = [_issue(5, "acme/api"), _issue(9, "acme/api")]
+    transport = RoutedTransport(
+        {f"{_API}/repos/acme/api/issues": json_response(hits, headers={"X-Total-Count": "40", "Link": _NEXT_LINK})}
+    )
 
-    page = await _provider(transport).list_mrs("acme/api", query="LOGIN")
+    page = await _provider(transport).list_mrs("acme/api", state=state, query="login", page=2, per_page=2)
 
-    assert [mr.iid for mr in page.items] == [1]
+    assert transport.paths() == [f"{_API}/repos/acme/api/issues"]
+    params = transport.last_params()
+    assert dict(params) == {"type": "pulls", "q": "login", "state": upstream_state, "page": "2", "limit": "2"}
+    # Every hit is kept: Gitea matched it (title, body or comments), whatever the title says.
+    assert [mr.iid for mr in page.items] == [5, 9]
+    assert page.has_more is True
+
+
+async def test__list_mrs__query_and_merged__splits_the_searched_page_per_item() -> None:
+    merged = _issue(5, "acme/api")
+    merged["pull_request"]["merged"] = True
+    merged["state"] = "closed"
+    closed = _issue(6, "acme/api")
+    closed["state"] = "closed"
+    transport = RoutedTransport({f"{_API}/repos/acme/api/issues": json_response([merged, closed])})
+
+    page = await _provider(transport).list_mrs("acme/api", state="merged", query="login")
+
+    assert transport.last_params()["state"] == "closed"
+    assert [mr.iid for mr in page.items] == [5]
 
 
 @pytest.mark.parametrize(

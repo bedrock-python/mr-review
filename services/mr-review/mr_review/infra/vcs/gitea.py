@@ -13,7 +13,6 @@ from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 from mr_review.infra.vcs._pagination import (
-    filter_by_title,
     gitea_has_more,
     json_list,
     optional_int,
@@ -135,24 +134,29 @@ class GiteaProvider:
     ) -> Page[MR]:
         """One upstream page of pull requests.
 
-        The pulls API can neither split merged from closed nor search titles, so both are applied to
-        the fetched page: such a page can hold fewer than ``per_page`` items while ``has_more`` is true.
+        A search goes through Gitea's issue search (``/issues?type=pulls&q=``), which matches titles,
+        bodies and comments host-side and returns issue-shaped items (no branches, no stats). Neither
+        endpoint can tell merged from closed, so that split is made on the fetched page: such a page
+        can hold fewer than ``per_page`` items while ``has_more`` is true.
         """
         owner, repo = _split_repo_path(repo_path)
-        response = await self._get_response(
-            f"/repos/{owner}/{repo}/pulls",
-            params={"state": _UPSTREAM_STATE[state], "sort": "recentupdate", "limit": per_page, "page": page},
-        )
-        raw = json_list(response)
-        mrs = [_pr_to_mr(item) for item in raw]
+        if query:
+            response = await self._get_response(
+                f"/repos/{owner}/{repo}/issues",
+                params={"type": "pulls", "q": query, "state": _UPSTREAM_STATE[state], "page": page, "limit": per_page},
+            )
+            raw = json_list(response)
+            mrs = [_issue_to_mr(item) for item in raw]
+        else:
+            response = await self._get_response(
+                f"/repos/{owner}/{repo}/pulls",
+                params={"state": _UPSTREAM_STATE[state], "sort": "recentupdate", "limit": per_page, "page": page},
+            )
+            raw = json_list(response)
+            mrs = [_pr_to_mr(item) for item in raw]
         if state in ("merged", "closed"):
             mrs = [mr for mr in mrs if mr.status == state]
-        return Page(
-            items=filter_by_title(mrs, query),
-            page=page,
-            per_page=per_page,
-            has_more=gitea_has_more(response, len(raw), per_page),
-        )
+        return Page(items=mrs, page=page, per_page=per_page, has_more=gitea_has_more(response, len(raw), per_page))
 
     async def list_my_mrs(
         self, scope: PersonalMRScope, page: int = 1, per_page: int = DEFAULT_MRS_PER_PAGE
