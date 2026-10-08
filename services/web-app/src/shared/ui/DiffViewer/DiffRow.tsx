@@ -62,14 +62,14 @@ const DiffRowBase = <T,>({
       {showOldGutter && (
         <th
           scope="row"
-          className="px-1.5 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
+          className="px-(--space-1) py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
         >
           {line.oldLine ?? ""}
         </th>
       )}
       <th
         scope="row"
-        className="px-2 py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
+        className="px-(--space-1) py-[1px] text-right font-mono text-[11px] font-normal text-[var(--fg-2)] select-none"
       >
         {line.newLine ?? ""}
       </th>
@@ -84,10 +84,10 @@ const DiffRowBase = <T,>({
         <span aria-hidden="true">{SIGNS[line.type]}</span>
         {changeLabel && <span className="sr-only">{changeLabel}</span>}
       </td>
-      <td className="py-[1px] pr-2 break-all whitespace-pre-wrap">{line.content}</td>
+      <td className="py-[1px] pr-(--space-2) break-all whitespace-pre-wrap">{line.content}</td>
       <td>
         {(comments.length > 0 || renderLineDecoration !== undefined) && (
-          <div className="flex gap-[2px] px-1.5 py-[1px]">
+          <div className="flex gap-[2px] px-(--space-1) py-[1px]">
             {renderLineDecoration?.({ line, comments })}
           </div>
         )}
