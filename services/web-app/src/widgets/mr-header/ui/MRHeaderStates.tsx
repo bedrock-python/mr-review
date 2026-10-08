@@ -36,7 +36,7 @@ export const MRBreadcrumbs = ({
     className="mono"
     style={{
       fontSize: 11,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       marginBottom: 6,
       display: "flex",
       alignItems: "center",
@@ -56,7 +56,7 @@ export const MRBreadcrumbs = ({
           border: "1px solid var(--border)",
           borderRadius: 4,
           cursor: "pointer",
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           display: "inline-flex",
           alignItems: "center",
         }}

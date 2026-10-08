@@ -46,7 +46,7 @@ export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactE
       <table className="mono" style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
         <caption className="sr-only">What the prompt is made of</caption>
         <thead>
-          <tr style={{ color: "var(--fg-3)" }}>
+          <tr style={{ color: "var(--fg-2)" }}>
             <th scope="col" style={{ ...CELL, textAlign: "left", fontWeight: 400 }}>
               Part
             </th>
@@ -82,7 +82,7 @@ export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactE
         </div>
       )}
       {preview.excluded_files.length > 0 && (
-        <div style={{ color: "var(--fg-3)" }}>
+        <div style={{ color: "var(--fg-2)" }}>
           {`${String(preview.excluded_files.length)} of ${String(preview.files_total)} changed files excluded by path filters.`}
         </div>
       )}

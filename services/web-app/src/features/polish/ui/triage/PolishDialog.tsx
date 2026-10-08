@@ -40,7 +40,7 @@ export const PolishDialog = ({
       >
         <div className="border-border border-b px-5 pt-4 pb-3">
           <Dialog.Title className="text-fg-0 m-0 text-[15px] font-semibold">{title}</Dialog.Title>
-          <Dialog.Description className="text-fg-3 m-0 mt-1 text-[12px]">
+          <Dialog.Description className="text-fg-2 m-0 mt-1 text-[12px]">
             {description}
           </Dialog.Description>
         </div>

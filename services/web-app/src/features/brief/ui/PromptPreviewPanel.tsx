@@ -192,7 +192,7 @@ export const PromptPreviewPanel = ({
                 justifyContent: "center",
                 height: "100%",
                 gap: 16,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 fontSize: 12,
                 textAlign: "center",
               }}

@@ -145,7 +145,7 @@ type FieldProps = {
 const Field = ({ label, hint, icon, error, children }: FieldProps): React.ReactElement => (
   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      {icon && <span style={{ color: "var(--fg-3)" }}>{icon}</span>}
+      {icon && <span style={{ color: "var(--fg-2)" }}>{icon}</span>}
       <label
         style={{
           fontSize: 11,
@@ -159,7 +159,7 @@ const Field = ({ label, hint, icon, error, children }: FieldProps): React.ReactE
       </label>
     </div>
     {children}
-    {hint && !error && <p style={{ margin: 0, fontSize: 11, color: "var(--fg-3)" }}>{hint}</p>}
+    {hint && !error && <p style={{ margin: 0, fontSize: 11, color: "var(--fg-2)" }}>{hint}</p>}
     {error && <p style={{ margin: 0, fontSize: 11, color: "var(--c-critical)" }}>{error}</p>}
   </div>
 );
@@ -208,7 +208,7 @@ const Section = ({ title, description, children }: SectionProps): React.ReactEle
         {title}
       </h2>
       {description && (
-        <p style={{ margin: 0, fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--fg-2)", lineHeight: 1.5 }}>
           {description}
         </p>
       )}
@@ -501,7 +501,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
           className="mono"
           style={{
             fontSize: 11,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -525,7 +525,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
       <button
         type="button"
         className="btn ghost"
-        style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
+        style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-2)" }}
         onClick={handleEdit}
         title="Edit host"
       >
@@ -540,7 +540,7 @@ const HostRow = ({ host }: HostRowProps): React.ReactElement => {
           padding: "4px 10px",
           gap: 5,
           fontSize: 11,
-          color: confirming ? "var(--c-critical)" : "var(--fg-3)",
+          color: confirming ? "var(--c-critical)" : "var(--fg-2)",
           border: confirming
             ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
             : "1px solid transparent",
@@ -849,7 +849,7 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
 
   if (models.length === 0) {
     return (
-      <span style={{ fontSize: 11, color: "var(--fg-3)", fontStyle: "italic" }}>
+      <span style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic" }}>
         No models configured
       </span>
     );
@@ -893,7 +893,7 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
             borderRadius: 4,
             padding: "2px 6px",
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             whiteSpace: "nowrap",
           }}
@@ -913,7 +913,7 @@ const ModelChips = ({ models }: ModelChipsProps): React.ReactElement => {
             borderRadius: 4,
             padding: "2px 6px",
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             whiteSpace: "nowrap",
           }}
@@ -1167,7 +1167,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
             <span
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 marginLeft: 2,
               }}
             >
@@ -1183,7 +1183,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
         <button
           type="button"
           className="btn ghost"
-          style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-3)" }}
+          style={{ padding: "4px 8px", gap: 5, fontSize: 11, color: "var(--fg-2)" }}
           onClick={handleEdit}
           title="Edit provider"
         >
@@ -1198,7 +1198,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
             padding: "4px 10px",
             gap: 5,
             fontSize: 11,
-            color: confirming ? "var(--c-critical)" : "var(--fg-3)",
+            color: confirming ? "var(--c-critical)" : "var(--fg-2)",
             border: confirming
               ? "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)"
               : "1px solid transparent",
@@ -1452,7 +1452,7 @@ const ThemeOption = ({
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)", marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{description}</div>
+      <div style={{ fontSize: 11, color: "var(--fg-2)" }}>{description}</div>
     </div>
   </button>
 );
@@ -1660,7 +1660,7 @@ const StorageSection = (): React.ReactElement => {
     >
       <div style={{ padding: "14px 16px" }}>
         {isLoading ? (
-          <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Loading…</div>
+          <div style={{ fontSize: 12, color: "var(--fg-2)" }}>Loading…</div>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <code
@@ -1696,7 +1696,7 @@ const StorageSection = (): React.ReactElement => {
         )}
         {info && (
           <div
-            style={{ marginTop: 8, fontSize: 11, color: "var(--fg-3)", display: "flex", gap: 16 }}
+            style={{ marginTop: 8, fontSize: 11, color: "var(--fg-2)", display: "flex", gap: 16 }}
           >
             <span>
               {info.os} {info.os_version.split(" ")[0]}
@@ -1768,7 +1768,7 @@ export const SettingsPage = (): React.ReactElement => {
             description="Add GitLab, GitHub, Gitea, Forgejo or Bitbucket instances to browse their merge requests."
           >
             {hostsLoading && (
-              <div style={{ padding: "12px 16px", color: "var(--fg-3)", fontSize: 12 }}>
+              <div style={{ padding: "12px 16px", color: "var(--fg-2)", fontSize: 12 }}>
                 Loading…
               </div>
             )}
@@ -1778,7 +1778,7 @@ export const SettingsPage = (): React.ReactElement => {
                 style={{
                   padding: "16px",
                   fontSize: 12,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontStyle: "italic",
                 }}
               >
@@ -1798,7 +1798,7 @@ export const SettingsPage = (): React.ReactElement => {
             description="Configure language models used to generate code review comments."
           >
             {providersLoading && (
-              <div style={{ padding: "12px 16px", color: "var(--fg-3)", fontSize: 12 }}>
+              <div style={{ padding: "12px 16px", color: "var(--fg-2)", fontSize: 12 }}>
                 Loading…
               </div>
             )}
@@ -1808,7 +1808,7 @@ export const SettingsPage = (): React.ReactElement => {
                 style={{
                   padding: "16px",
                   fontSize: 12,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontStyle: "italic",
                 }}
               >

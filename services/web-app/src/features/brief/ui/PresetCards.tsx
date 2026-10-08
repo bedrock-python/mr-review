@@ -46,7 +46,7 @@ const PresetCard = ({
     </span>
     {description && (
       <span
-        style={{ fontSize: 11, color: isSelected ? "var(--fg-1)" : "var(--fg-3)", lineHeight: 1.4 }}
+        style={{ fontSize: 11, color: isSelected ? "var(--fg-1)" : "var(--fg-2)", lineHeight: 1.4 }}
       >
         {description}
       </span>

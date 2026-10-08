@@ -63,7 +63,7 @@ const RawResponseViewer = ({
 
   if (rawResponse.isPending) {
     return (
-      <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "8px 0" }}>
+      <div style={{ fontSize: 12, color: "var(--fg-2)", padding: "8px 0" }}>
         Loading raw output…
       </div>
     );
@@ -77,7 +77,7 @@ const RawResponseViewer = ({
   }
   if (rawResponse.data === null) {
     return (
-      <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "8px 0" }}>
+      <div style={{ fontSize: 12, color: "var(--fg-2)", padding: "8px 0" }}>
         No raw output was stored for this run.
       </div>
     );
@@ -170,7 +170,7 @@ const UnusedRunOutcome = ({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: "var(--fg-3)" }}>
+        <span style={{ fontSize: 12, color: "var(--fg-2)" }}>
           {kept > 0 ? `${pluralize(kept, "comment")} kept from before` : "No comments saved"}
         </span>
         <div style={{ flex: 1 }} />
@@ -331,7 +331,7 @@ const SavedRunOutcome = ({
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: "var(--fg-3)" }}>
+        <span style={{ fontSize: 12, color: "var(--fg-2)" }}>
           {pluralize(savedCount, "comment")} saved
         </span>
         {skippedCount > 0 && (

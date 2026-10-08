@@ -81,7 +81,7 @@ export const PolishPinned = ({
               {active.line !== null && (
                 <span
                   className="mono"
-                  style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 4 }}
+                  style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 4 }}
                 >
                   :{active.line}
                 </span>
@@ -129,7 +129,7 @@ export const PolishPinned = ({
                     className="mono"
                     style={{
                       fontSize: 10,
-                      color: "var(--fg-3)",
+                      color: "var(--fg-2)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 4,
@@ -169,7 +169,7 @@ export const PolishPinned = ({
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           className="mono"
-                          style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 2 }}
+                          style={{ fontSize: 10, color: "var(--fg-2)", marginBottom: 2 }}
                         >
                           {c.file?.split("/").pop()}
                           {c.line !== null ? `:${String(c.line)}` : ""}
@@ -194,7 +194,7 @@ export const PolishPinned = ({
                 <div
                   style={{
                     textAlign: "center",
-                    color: "var(--fg-3)",
+                    color: "var(--fg-2)",
                     fontSize: 12,
                     paddingTop: 20,
                   }}
@@ -214,7 +214,7 @@ export const PolishPinned = ({
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                   fontWeight: 600,
                   marginBottom: 10,
                 }}

@@ -20,7 +20,7 @@ const EmptyState = (): React.ReactElement => (
       justifyContent: "center",
       height: "100%",
       gap: 12,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
     }}
   >
     <div
@@ -35,7 +35,7 @@ const EmptyState = (): React.ReactElement => (
     >
       MR
     </div>
-    <p style={{ fontSize: 13, color: "var(--fg-3)" }}>Select a merge request to start a review</p>
+    <p style={{ fontSize: 13, color: "var(--fg-2)" }}>Select a merge request to start a review</p>
   </div>
 );
 
@@ -62,7 +62,7 @@ const CollapseToggle = ({ collapsed }: { collapsed: boolean }): React.ReactEleme
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         padding: 0,
         transition: "color 0.15s",
       }}
@@ -70,7 +70,7 @@ const CollapseToggle = ({ collapsed }: { collapsed: boolean }): React.ReactEleme
         e.currentTarget.style.color = "var(--fg-0)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = "var(--fg-3)";
+        e.currentTarget.style.color = "var(--fg-2)";
       }}
     >
       <svg

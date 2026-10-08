@@ -42,7 +42,7 @@ export const DiffViewer = ({ file }: DiffViewerProps): React.ReactElement => {
         </div>
       </div>
       {file.hunks.length === 0 ? (
-        <div className="flex h-24 items-center justify-center text-sm text-[var(--fg-3)]">
+        <div className="flex h-24 items-center justify-center text-sm text-[var(--fg-2)]">
           Binary file or no diff available
         </div>
       ) : (

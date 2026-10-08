@@ -66,7 +66,7 @@ export const Stat = ({ label, value }: { label: string; value: number }): React.
     <div
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         textTransform: "uppercase",
         letterSpacing: "0.06em",
         marginTop: 2,

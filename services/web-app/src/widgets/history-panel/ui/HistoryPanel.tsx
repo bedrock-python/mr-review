@@ -41,7 +41,7 @@ const pillStyle = (isActive: boolean, color: string): React.CSSProperties => ({
   fontSize: 10,
   fontFamily: "var(--font-mono)",
   background: isActive ? `color-mix(in oklch, ${color} 15%, var(--bg-2))` : "var(--bg-2)",
-  color: isActive ? color : "var(--fg-3)",
+  color: isActive ? color : "var(--fg-2)",
   border: isActive
     ? `1px solid color-mix(in oklch, ${color} 40%, transparent)`
     : "1px solid var(--border)",
@@ -58,7 +58,7 @@ const ReviewCount = (): React.ReactElement | null => {
       aria-label={`${String(reviews.length)} reviews`}
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
         borderRadius: 999,
@@ -159,7 +159,7 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
             padding: "5px 8px",
           }}
         >
-          <span style={{ color: "var(--fg-3)", flexShrink: 0, display: "flex" }}>
+          <span style={{ color: "var(--fg-2)", flexShrink: 0, display: "flex" }}>
             <SearchIcon />
           </span>
           <input
@@ -271,7 +271,7 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
                 borderBottom: "1px solid var(--border)",
                 fontSize: 10,
                 fontWeight: 600,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
               }}

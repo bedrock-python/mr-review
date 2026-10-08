@@ -27,7 +27,7 @@ const InboxMRListItemComponent = ({
         title={mr.repo_path}
         style={{
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
           borderRadius: 3,

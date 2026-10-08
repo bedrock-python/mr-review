@@ -52,7 +52,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
               className="mono"
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 marginBottom: 8,
@@ -70,7 +70,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               textTransform: "uppercase",
               letterSpacing: "0.08em",
               marginBottom: 8,
@@ -139,7 +139,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
               className="mono"
               style={{
                 fontSize: 10,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
                 marginBottom: 8,
@@ -249,7 +249,7 @@ const PickWorkspace = (): React.ReactElement => {
           justifyContent: "center",
           height: "100%",
           gap: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <div
@@ -277,7 +277,7 @@ const PickWorkspace = (): React.ReactElement => {
           justifyContent: "center",
           height: "100%",
           gap: 8,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <span style={{ fontSize: 24 }}>⚠</span>
@@ -314,7 +314,7 @@ const PickWorkspace = (): React.ReactElement => {
               justifyContent: "center",
               height: "100%",
               fontSize: 13,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
             }}
           >
             No changes in this MR

@@ -86,7 +86,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-0)", marginBottom: 6 }}>
               Something went wrong
             </div>
-            <div style={{ fontSize: 12, color: "var(--fg-3)", maxWidth: 360 }}>
+            <div style={{ fontSize: 12, color: "var(--fg-2)", maxWidth: 360 }}>
               {isChunkError
                 ? "Part of the app could not be loaded — it was probably updated. Reload to get the current version."
                 : (this.state.error?.message ?? "An unknown error occurred")}

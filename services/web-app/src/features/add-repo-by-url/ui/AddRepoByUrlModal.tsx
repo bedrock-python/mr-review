@@ -88,7 +88,7 @@ export const AddRepoByUrlModal = ({
           >
             Add repository by URL
           </Dialog.Title>
-          <Dialog.Description style={{ color: "var(--fg-3)", fontSize: 11, margin: "0 0 20px" }}>
+          <Dialog.Description style={{ color: "var(--fg-2)", fontSize: 11, margin: "0 0 20px" }}>
             Pin a repository the host token can read — even if you are not a member.
           </Dialog.Description>
 

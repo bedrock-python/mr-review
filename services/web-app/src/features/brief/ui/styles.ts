@@ -5,14 +5,14 @@ export const SECTION_TITLE_STYLE: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: 10,
   fontWeight: 400,
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
   textTransform: "uppercase",
   letterSpacing: "0.08em",
 };
 
 export const HINT_STYLE: React.CSSProperties = {
   fontSize: 11,
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
   lineHeight: 1.5,
 };
 

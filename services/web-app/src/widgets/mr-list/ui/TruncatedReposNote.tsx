@@ -23,7 +23,7 @@ export const TruncatedReposNote = ({
       borderBottom: "1px solid var(--border)",
       padding: "5px 14px",
       fontSize: 11,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
     }}
   >
     <summary style={{ cursor: "pointer" }}>{describe(repoPaths.length)}</summary>

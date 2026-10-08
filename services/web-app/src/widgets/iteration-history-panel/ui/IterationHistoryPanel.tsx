@@ -179,7 +179,7 @@ const IterationCard = ({
           )}
 
           {!isPosted && !isLatest && (
-            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-3)" }}>
+            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-2)" }}>
               not posted
             </span>
           )}
@@ -189,7 +189,7 @@ const IterationCard = ({
               style={{
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
               }}
             >
               {formatRelative(completedAt)}
@@ -203,7 +203,7 @@ const IterationCard = ({
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               marginBottom: 4,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -219,7 +219,7 @@ const IterationCard = ({
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             marginBottom: keptComments.length > 0 ? 5 : 0,
           }}
         >
@@ -229,7 +229,7 @@ const IterationCard = ({
         {/* Comment severity breakdown */}
         {keptComments.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>
+            <span style={{ fontSize: 10, color: "var(--fg-2)", fontFamily: "var(--font-mono)" }}>
               {keptComments.length} comment{keptComments.length !== 1 ? "s" : ""}
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -327,7 +327,7 @@ const IterationList = ({
           justifyContent: "center",
           flex: 1,
           gap: 8,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <EmptyIcon />
@@ -364,7 +364,7 @@ const IterationCount = (): React.ReactElement | null => {
       aria-label={`${String(count)} iterations`}
       style={{
         fontSize: 10,
-        color: "var(--fg-3)",
+        color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
         borderRadius: 999,

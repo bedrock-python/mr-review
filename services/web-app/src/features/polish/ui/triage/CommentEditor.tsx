@@ -167,7 +167,7 @@ export const CommentEditor = ({
             {state.body.trim().length > 0 ? (
               <Markdown>{state.body}</Markdown>
             ) : (
-              <p className="text-fg-3 text-[12px]">Nothing to preview.</p>
+              <p className="text-fg-2 text-[12px]">Nothing to preview.</p>
             )}
           </div>
         )}
@@ -179,7 +179,7 @@ export const CommentEditor = ({
       )}
 
       <div className="flex items-center justify-end gap-2">
-        <span className="text-fg-3 mr-auto text-[11px]">
+        <span className="text-fg-2 mr-auto text-[11px]">
           <span className="kbd">⌘/Ctrl ↵</span> save · <span className="kbd">Esc</span> cancel
         </span>
         <button

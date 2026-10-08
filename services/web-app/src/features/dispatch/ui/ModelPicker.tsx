@@ -70,7 +70,7 @@ export const ModelPicker = ({
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          style={{ flexShrink: 0, color: "var(--fg-3)" }}
+          style={{ flexShrink: 0, color: "var(--fg-2)" }}
           aria-hidden="true"
         >
           <circle cx="11" cy="11" r="8" />
@@ -171,7 +171,7 @@ export const ModelPicker = ({
             />
           ))}
           {matches.length === 0 && !canUseTyped && (
-            <div style={{ padding: 12, fontSize: 12, color: "var(--fg-3)", textAlign: "center" }}>
+            <div style={{ padding: 12, fontSize: 12, color: "var(--fg-2)", textAlign: "center" }}>
               No models configured — type a model id
             </div>
           )}

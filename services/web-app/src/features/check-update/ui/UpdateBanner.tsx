@@ -77,7 +77,7 @@ const SingleBanner = ({
             background: "transparent",
             border: "none",
             cursor: "pointer",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             fontSize: 14,
             lineHeight: 1,
             padding: "2px 4px",

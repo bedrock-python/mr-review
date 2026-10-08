@@ -296,7 +296,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
           borderBottom: "1px solid var(--border)",
           fontFamily: "var(--font-mono)",
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           display: "flex",
@@ -328,7 +328,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
                 height: 22,
                 borderRadius: 3,
                 cursor: "pointer",
-                color: viewMode === mode ? "var(--accent)" : "var(--fg-3)",
+                color: viewMode === mode ? "var(--accent)" : "var(--fg-2)",
                 background:
                   viewMode === mode
                     ? "color-mix(in oklch, var(--accent) 14%, transparent)"
@@ -355,7 +355,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
             style={{
               position: "absolute",
               left: 7,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               pointerEvents: "none",
               flexShrink: 0,
             }}
@@ -438,7 +438,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
               style={{
                 padding: "12px 10px",
                 fontSize: 11,
-                color: "var(--fg-3)",
+                color: "var(--fg-2)",
                 fontFamily: "var(--font-mono)",
                 textAlign: "center",
               }}

@@ -19,7 +19,7 @@ const centeredStyle: React.CSSProperties = {
   justifyContent: "center",
   height: "100%",
   gap: 10,
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
   fontSize: 13,
 };
 

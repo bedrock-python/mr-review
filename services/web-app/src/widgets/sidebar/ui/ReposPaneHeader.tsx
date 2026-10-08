@@ -28,7 +28,7 @@ export const ReposPaneHeader = ({
           className="mono"
           style={{
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             marginTop: 2,
             overflow: "hidden",
             textOverflow: "ellipsis",

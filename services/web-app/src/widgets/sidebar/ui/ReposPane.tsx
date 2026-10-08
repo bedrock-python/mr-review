@@ -145,7 +145,7 @@ export const ReposPane = (): React.ReactElement => {
         <span
           style={{
             fontSize: 11,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             display: "flex",
             alignItems: "center",
             gap: 5,

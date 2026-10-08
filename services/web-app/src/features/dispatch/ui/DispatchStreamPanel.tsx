@@ -104,7 +104,7 @@ const PanelHeader = memo(
           {run.providerName} · {STATUS_LABEL[status]}
         </span>
         {run.model && (
-          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
             {run.model}
           </span>
         )}
@@ -153,7 +153,7 @@ const CommentPreviewRow = memo(
             className="mono"
             style={{
               fontSize: 10.5,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -163,7 +163,7 @@ const CommentPreviewRow = memo(
             {comment.line !== null ? `:${String(comment.line)}` : ""}
           </span>
         ) : (
-          <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>general note</span>
+          <span style={{ fontSize: 10.5, color: "var(--fg-2)" }}>general note</span>
         )}
       </div>
       <div
@@ -195,7 +195,7 @@ const LiveCommentList = memo(
             display: "flex",
             alignItems: "center",
             gap: 8,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             fontSize: 12,
           }}
         >
@@ -204,7 +204,7 @@ const LiveCommentList = memo(
           <Cursor color={accentColor} />
         </div>
       ) : (
-        <div style={{ padding: "16px 14px", fontSize: 12.5, color: "var(--fg-3)" }}>
+        <div style={{ padding: "16px 14px", fontSize: 12.5, color: "var(--fg-2)" }}>
           No comments were parsed from the response.
         </div>
       );
@@ -231,7 +231,7 @@ const LiveCommentList = memo(
               display: "flex",
               alignItems: "center",
               gap: 6,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               fontSize: 11,
             }}
           >
@@ -262,7 +262,7 @@ const RawStreamView = memo(({ store }: { store: SessionStore }): React.ReactElem
         style={{
           padding: "6px 14px",
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           background: "var(--bg-1)",

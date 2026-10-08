@@ -99,7 +99,7 @@ export const AdvancedSection = ({
           className="mono"
           style={{
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             textTransform: "uppercase",
             letterSpacing: "0.08em",
           }}
@@ -107,7 +107,7 @@ export const AdvancedSection = ({
           Advanced
         </span>
         {summary && (
-          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: "auto" }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)", marginLeft: "auto" }}>
             {summary}
           </span>
         )}

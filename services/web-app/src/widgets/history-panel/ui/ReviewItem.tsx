@@ -222,7 +222,7 @@ export const ReviewItem = ({
             className="mono"
             style={{
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               flexShrink: 1,
               minWidth: 0,
               overflow: "hidden",
@@ -245,7 +245,7 @@ export const ReviewItem = ({
               alignItems: "center",
               gap: 3,
               fontSize: 10,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
             }}
           >
             <ClockIcon />
@@ -261,7 +261,7 @@ export const ReviewItem = ({
           style={{
             display: "block",
             fontSize: 10,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             marginTop: 2,
             overflow: "hidden",
             textOverflow: "ellipsis",

@@ -209,7 +209,7 @@ export const SectionLabelRow = ({ label }: { label: string }): React.ReactElemen
       padding: "0 10px",
       fontSize: 10,
       fontWeight: 600,
-      color: "var(--fg-3)",
+      color: "var(--fg-2)",
       textTransform: "uppercase",
       letterSpacing: "0.06em",
     }}

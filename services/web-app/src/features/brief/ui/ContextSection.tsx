@@ -46,7 +46,7 @@ const BADGE_STYLE: React.CSSProperties = {
 
 const badgeStyle = (warnColor: string | null): React.CSSProperties => ({
   ...BADGE_STYLE,
-  color: warnColor ?? "var(--fg-3)",
+  color: warnColor ?? "var(--fg-2)",
   background: warnColor ? `color-mix(in oklch, ${warnColor} 12%, var(--bg-2))` : "var(--bg-3)",
   border: `1px solid ${warnColor ? `color-mix(in oklch, ${warnColor} 35%, transparent)` : "var(--border)"}`,
 });

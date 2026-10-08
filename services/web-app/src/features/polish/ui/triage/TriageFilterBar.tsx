@@ -52,7 +52,7 @@ export const TriageFilterBar = ({
   return (
     <div className="flex flex-wrap items-center gap-2.5">
       <label className="border-border bg-bg-0 focus-within:border-border-strong flex min-w-[200px] flex-1 items-center gap-2 rounded-md border px-2.5 py-1">
-        <Search size={13} className="text-fg-3" aria-hidden="true" />
+        <Search size={13} className="text-fg-2" aria-hidden="true" />
         <input
           ref={searchRef}
           type="search"

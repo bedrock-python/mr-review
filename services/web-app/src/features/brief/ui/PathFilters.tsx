@@ -119,7 +119,7 @@ export const PathFilters = ({
                 >
                   {file.path}
                 </span>
-                <span className="mono" style={{ color: "var(--fg-3)" }}>
+                <span className="mono" style={{ color: "var(--fg-2)" }}>
                   {file.reason}
                 </span>
                 {file.reason.startsWith("(") ? null : (

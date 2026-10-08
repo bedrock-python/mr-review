@@ -57,7 +57,7 @@ export const TriageBulkBar = ({
         Dismiss {scope}
       </button>
       <div className="flex items-center gap-1" role="group" aria-label={`Set severity of ${scope}`}>
-        <span className="text-fg-3 font-mono text-[10px] tracking-[0.06em] uppercase">set</span>
+        <span className="text-fg-2 font-mono text-[10px] tracking-[0.06em] uppercase">set</span>
         {SEVERITY_ORDER.map((severity) => (
           <button
             key={severity}

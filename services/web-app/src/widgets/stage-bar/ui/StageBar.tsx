@@ -34,7 +34,7 @@ const nodeColors = (isActive: boolean, isReached: boolean): NodeColors => {
       border: "none",
     };
   }
-  return { background: "transparent", color: "var(--fg-3)", border: "1px solid var(--border)" };
+  return { background: "transparent", color: "var(--fg-2)", border: "1px solid var(--border)" };
 };
 
 const NEXT_KEYS: Record<string, (index: number, count: number) => number> = {

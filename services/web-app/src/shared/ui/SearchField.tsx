@@ -50,7 +50,7 @@ export const SearchField = ({
         opacity: isDisabled ? 0.5 : 1,
       }}
     >
-      <span style={{ color: "var(--fg-3)", flexShrink: 0, display: "flex" }}>
+      <span style={{ color: "var(--fg-2)", flexShrink: 0, display: "flex" }}>
         <SearchIcon />
       </span>
       <input

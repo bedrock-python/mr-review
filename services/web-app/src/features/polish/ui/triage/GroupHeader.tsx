@@ -32,7 +32,7 @@ const GroupHeaderBase = ({
       <ChevronRight
         size={13}
         aria-hidden="true"
-        className={cn("text-fg-3 shrink-0 transition-transform", !isCollapsed && "rotate-90")}
+        className={cn("text-fg-2 shrink-0 transition-transform", !isCollapsed && "rotate-90")}
       />
       <span className="text-fg-0 truncate font-mono text-[11.5px]">{group.label}</span>
       <span className="chip">{total}</span>
@@ -50,7 +50,7 @@ const GroupHeaderBase = ({
         ) : null
       )}
       {dismissed > 0 && (
-        <span className="text-fg-3 font-mono text-[10px]">{dismissed} dismissed</span>
+        <span className="text-fg-2 font-mono text-[10px]">{dismissed} dismissed</span>
       )}
     </button>
   );

@@ -490,7 +490,7 @@ export const HostsRail = (): React.ReactElement => {
             justifyContent: "center",
             border: "1px dashed var(--border)",
             background: "transparent",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             cursor: "pointer",
             fontSize: 18,
             transition: "border-color 0.08s, color 0.08s",
@@ -501,7 +501,7 @@ export const HostsRail = (): React.ReactElement => {
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
-            (e.currentTarget as HTMLElement).style.color = "var(--fg-3)";
+            (e.currentTarget as HTMLElement).style.color = "var(--fg-2)";
           }}
         >
           +

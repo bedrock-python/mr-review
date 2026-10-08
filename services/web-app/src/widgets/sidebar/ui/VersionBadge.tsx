@@ -36,7 +36,7 @@ export const VersionBadge = (): React.ReactElement => {
         className="mono"
         style={{
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           background: "transparent",
           border: "none",
           cursor: "pointer",
@@ -48,7 +48,7 @@ export const VersionBadge = (): React.ReactElement => {
           e.currentTarget.style.color = "var(--fg-1)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.color = "var(--fg-3)";
+          e.currentTarget.style.color = "var(--fg-2)";
         }}
       >
         v{__APP_VERSION__}
@@ -86,7 +86,7 @@ export const VersionBadge = (): React.ReactElement => {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: "var(--fg-3)" }}>Backend</span>
+              <span style={{ color: "var(--fg-2)" }}>Backend</span>
               <span
                 className="mono"
                 style={{
@@ -98,7 +98,7 @@ export const VersionBadge = (): React.ReactElement => {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: "var(--fg-3)" }}>Frontend</span>
+              <span style={{ color: "var(--fg-2)" }}>Frontend</span>
               <span
                 className="mono"
                 style={{
@@ -116,7 +116,7 @@ export const VersionBadge = (): React.ReactElement => {
                   borderTop: "1px solid var(--border)",
                   paddingTop: 6,
                   marginTop: 2,
-                  color: "var(--fg-3)",
+                  color: "var(--fg-2)",
                 }}
               >
                 Update available — see banner above

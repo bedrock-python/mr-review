@@ -112,7 +112,7 @@ export const ChangelogModal = ({
                     background: "transparent",
                     border: "none",
                     cursor: "pointer",
-                    color: "var(--fg-3)",
+                    color: "var(--fg-2)",
                     padding: 4,
                     borderRadius: 4,
                     lineHeight: 1,
@@ -123,7 +123,7 @@ export const ChangelogModal = ({
                 </button>
               </Dialog.Close>
             </div>
-            <Dialog.Description style={{ fontSize: 12, color: "var(--fg-3)", margin: 0 }}>
+            <Dialog.Description style={{ fontSize: 12, color: "var(--fg-2)", margin: 0 }}>
               You are on v{component.current}
             </Dialog.Description>
           </div>
@@ -133,7 +133,7 @@ export const ChangelogModal = ({
             {component.release.body ? (
               <Markdown>{component.release.body}</Markdown>
             ) : (
-              <p style={{ fontSize: 12, color: "var(--fg-3)" }}>No changelog provided.</p>
+              <p style={{ fontSize: 12, color: "var(--fg-2)" }}>No changelog provided.</p>
             )}
           </div>
 
@@ -146,7 +146,7 @@ export const ChangelogModal = ({
               background: "var(--bg-0)",
             }}
           >
-            <p style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8 }}>
+            <p style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 8 }}>
               Run this command to update ({deploymentMode}):
             </p>
             <div
@@ -174,7 +174,7 @@ export const ChangelogModal = ({
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  color: isCopied ? "var(--accent)" : "var(--fg-3)",
+                  color: isCopied ? "var(--accent)" : "var(--fg-2)",
                   padding: 4,
                   borderRadius: 4,
                   display: "flex",

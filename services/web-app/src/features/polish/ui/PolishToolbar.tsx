@@ -56,12 +56,12 @@ export const PolishToolbar = ({
         )}
         <span className="chip">{kept.length} kept</span>
         {dismissedCount > 0 && (
-          <span className="chip" style={{ color: "var(--fg-3)" }}>
+          <span className="chip" style={{ color: "var(--fg-2)" }}>
             {dismissedCount} dismissed
           </span>
         )}
         {isSaving && (
-          <span className="chip" style={{ color: "var(--fg-3)" }}>
+          <span className="chip" style={{ color: "var(--fg-2)" }}>
             saving…
           </span>
         )}

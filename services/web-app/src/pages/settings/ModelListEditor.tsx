@@ -24,7 +24,7 @@ const smallButtonCss: React.CSSProperties = {
   borderRadius: 4,
   padding: "1px 6px",
   fontSize: 10,
-  color: "var(--fg-3)",
+  color: "var(--fg-2)",
   cursor: "pointer",
   flexShrink: 0,
 };
@@ -115,7 +115,7 @@ export const ModelListEditor = ({
               borderRadius: 6,
               border: "1px dashed var(--border)",
               fontSize: 11,
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               fontStyle: "italic",
               textAlign: "center",
             }}
@@ -200,7 +200,7 @@ export const ModelListEditor = ({
           {fetchState.status === "loading" ? "Fetching…" : "Fetch models from API"}
         </button>
         {fetchBlockedReason && (
-          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>{fetchBlockedReason}</span>
+          <span style={{ fontSize: 11, color: "var(--fg-2)" }}>{fetchBlockedReason}</span>
         )}
         {fetchState.status === "error" && (
           <span role="alert" style={{ fontSize: 11, color: "var(--c-critical)" }}>

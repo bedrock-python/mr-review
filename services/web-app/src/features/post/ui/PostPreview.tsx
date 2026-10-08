@@ -10,7 +10,7 @@ const OUTCOME_TEXT: Record<CommentPost["outcome"], string> = {
 
 const PostStatus = ({ post }: { post: CommentPost | null | undefined }): React.ReactElement => {
   if (post === null || post === undefined) {
-    return <span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: "auto" }}>not sent</span>;
+    return <span style={{ fontSize: 10, color: "var(--fg-2)", marginLeft: "auto" }}>not sent</span>;
   }
   const color = post.outcome === "failed" ? "var(--c-critical)" : "var(--c-add)";
   return (
@@ -46,7 +46,7 @@ const CommentCard = ({
     }}
   >
     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-3)" }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-2)" }}>
         #{index + 1}
       </span>
       <span className={`sev ${comment.severity}`}>
@@ -68,7 +68,7 @@ const CommentCard = ({
           {comment.line !== null ? `:${String(comment.line)}` : ""}
         </span>
       ) : (
-        <span style={{ fontSize: 10, color: "var(--fg-3)" }}>general note</span>
+        <span style={{ fontSize: 10, color: "var(--fg-2)" }}>general note</span>
       )}
       {isStatusShown && <PostStatus post={comment.post} />}
     </div>
@@ -135,7 +135,7 @@ export const PostPreview = ({
     ) : (
       <div style={{ flex: 1, overflow: "auto", padding: "12px 0" }}>
         {comments.length === 0 ? (
-          <div style={{ padding: "20px 18px", fontSize: 12.5, color: "var(--fg-3)" }}>
+          <div style={{ padding: "20px 18px", fontSize: 12.5, color: "var(--fg-2)" }}>
             No comments to preview.
           </div>
         ) : (

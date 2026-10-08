@@ -415,7 +415,7 @@ const ManualDispatch = ({
               }}
               className="animate-spin"
             />
-            <span style={{ fontSize: 12, color: "var(--fg-3)" }}>Generating prompt…</span>
+            <span style={{ fontSize: 12, color: "var(--fg-2)" }}>Generating prompt…</span>
           </div>
         ) : promptError !== null ? (
           <div
@@ -464,7 +464,7 @@ const ManualDispatch = ({
             marginTop: 1,
             background: "var(--bg-3)",
             border: "1px solid var(--border)",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -489,7 +489,7 @@ const ManualDispatch = ({
               flexShrink: 0,
               background: "var(--bg-3)",
               border: "1px solid var(--border)",
-              color: "var(--fg-3)",
+              color: "var(--fg-2)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -503,7 +503,7 @@ const ManualDispatch = ({
             Import JSON response
           </span>
           {hasJson && importStatus === "idle" && (
-            <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+            <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
               {jsonText.length.toLocaleString()} chars
             </span>
           )}
@@ -531,7 +531,7 @@ const ManualDispatch = ({
               transition: "all 0.1s",
             }}
           >
-            <div style={{ marginBottom: 8, color: "var(--fg-3)" }}>
+            <div style={{ marginBottom: 8, color: "var(--fg-2)" }}>
               <UploadIcon />
             </div>
             <div style={{ fontSize: 12, color: "var(--fg-2)", marginBottom: 6 }}>
@@ -554,7 +554,7 @@ const ManualDispatch = ({
                   style={{ display: "none" }}
                 />
               </label>
-              <span style={{ fontSize: 11, color: "var(--fg-3)" }}>or</span>
+              <span style={{ fontSize: 11, color: "var(--fg-2)" }}>or</span>
               <button
                 type="button"
                 style={{
@@ -899,7 +899,7 @@ const AutoDispatch = ({
         <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "var(--fg-1)" }}>
           No AI providers configured
         </p>
-        <p style={{ margin: 0, fontSize: 12, color: "var(--fg-3)" }}>
+        <p style={{ margin: 0, fontSize: 12, color: "var(--fg-2)" }}>
           Add a provider in{" "}
           <Link to="/settings" style={{ color: "var(--accent)", textDecoration: "underline" }}>
             Settings → AI Providers
@@ -922,7 +922,7 @@ const AutoDispatch = ({
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             textTransform: "uppercase",
             letterSpacing: "0.07em",
             marginBottom: 10,
@@ -1003,7 +1003,7 @@ const AutoDispatch = ({
                     {p.name}
                   </div>
                   <div
-                    style={{ fontSize: 10, color: "var(--fg-3)", lineHeight: 1.4, marginBottom: 4 }}
+                    style={{ fontSize: 10, color: "var(--fg-2)", lineHeight: 1.4, marginBottom: 4 }}
                   >
                     {PROVIDER_LABEL[p.type]}
                     {p.models.length > 0 &&
@@ -1014,7 +1014,7 @@ const AutoDispatch = ({
                       fontSize: 10,
                       color: isSelected
                         ? `color-mix(in oklch, ${color} 80%, var(--fg-2))`
-                        : "var(--fg-3)",
+                        : "var(--fg-2)",
                       lineHeight: 1.4,
                       opacity: 0.85,
                     }}
@@ -1034,7 +1034,7 @@ const AutoDispatch = ({
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             textTransform: "uppercase",
             letterSpacing: "0.07em",
             marginBottom: 10,
@@ -1059,7 +1059,7 @@ const AutoDispatch = ({
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
             textTransform: "uppercase",
             letterSpacing: "0.07em",
             marginBottom: 10,
@@ -1304,7 +1304,7 @@ export const DispatchStage = (): React.ReactElement => {
           alignItems: "center",
           justifyContent: "center",
           height: "100%",
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
           fontSize: 13,
         }}
       >
@@ -1322,7 +1322,7 @@ export const DispatchStage = (): React.ReactElement => {
           justifyContent: "center",
           height: "100%",
           gap: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <div

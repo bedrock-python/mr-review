@@ -114,7 +114,7 @@ export const PinnedCommentEditor = ({
             fontSize: 10,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
-            color: "var(--fg-3)",
+            color: "var(--fg-2)",
           }}
         >
           severity

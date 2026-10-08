@@ -39,7 +39,7 @@ const chipCss = (isActive: boolean, color: string): React.CSSProperties => ({
 });
 
 const labelCss: React.CSSProperties = { fontSize: 12, fontWeight: 500, color: "var(--fg-1)" };
-const hintCss: React.CSSProperties = { fontSize: 11, color: "var(--fg-3)" };
+const hintCss: React.CSSProperties = { fontSize: 11, color: "var(--fg-2)" };
 
 const formatTokens = (tokens: number): string => tokens.toLocaleString("en-US");
 
@@ -203,7 +203,7 @@ const TemperatureControl = ({
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color: isUnset ? "var(--fg-3)" : "var(--fg-0)",
+              color: isUnset ? "var(--fg-2)" : "var(--fg-0)",
             }}
           >
             {isUnset ? "Default" : settings.temperature}
@@ -240,7 +240,7 @@ const TemperatureControl = ({
           display: "flex",
           justifyContent: "space-between",
           fontSize: 10,
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         <span>0 — Deterministic</span>

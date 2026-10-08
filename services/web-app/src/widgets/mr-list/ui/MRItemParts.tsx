@@ -57,7 +57,7 @@ export const MRItemButton = ({
 /** Top line: iid · draft tag · pipeline dot · age. */
 export const MRItemTopLine = ({ mr }: { mr: MR }): React.ReactElement => (
   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-    <span className="mono" style={{ fontSize: 11, color: "var(--fg-3)", flexShrink: 0 }}>
+    <span className="mono" style={{ fontSize: 11, color: "var(--fg-2)", flexShrink: 0 }}>
       !{mr.iid}
     </span>
     {mr.draft && (
@@ -70,7 +70,7 @@ export const MRItemTopLine = ({ mr }: { mr: MR }): React.ReactElement => (
           border: "1px solid var(--border)",
           borderRadius: 3,
           padding: "1px 4px",
-          color: "var(--fg-3)",
+          color: "var(--fg-2)",
         }}
       >
         DRAFT
@@ -89,7 +89,7 @@ export const MRItemTopLine = ({ mr }: { mr: MR }): React.ReactElement => (
         }}
       />
     )}
-    <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--fg-3)" }}>
+    <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--fg-2)" }}>
       {formatAge(mr.created_at)}
     </span>
   </div>
@@ -138,7 +138,7 @@ export const MRDiffStats = ({ mr }: { mr: MR }): React.ReactElement | null => {
   const stats = getDiffStats(mr);
   if (stats === null) return null;
   return (
-    <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
+    <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
       <span style={{ color: "oklch(72% 0.18 145)" }}>+{stats.additions}</span>{" "}
       <span style={{ color: "oklch(68% 0.20 25)" }}>-{stats.deletions}</span>
     </span>
