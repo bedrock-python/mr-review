@@ -1,0 +1,169 @@
+/* Button, IconButton, Tooltip. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Button ────────────────────────────────────────────────── */
+  .ui-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: var(--control-md);
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    font-family: var(--font-sans);
+    font-size: var(--fs-control);
+    font-weight: var(--fw-medium);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background var(--dur-fast),
+      border-color var(--dur-fast),
+      color var(--dur-fast);
+  }
+  .ui-btn svg {
+    flex-shrink: 0;
+  }
+  .ui-btn--sm {
+    height: var(--control-sm);
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .ui-btn--lg {
+    height: var(--control-lg);
+    padding: 0 16px;
+    gap: 8px;
+    font-size: var(--fs-body);
+  }
+  .ui-btn--block {
+    width: 100%;
+  }
+  .ui-btn--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: var(--fw-semibold);
+  }
+  .ui-btn--primary:hover:not(:disabled, [aria-disabled="true"]) {
+    background: color-mix(in oklch, var(--accent) 88%, var(--fg-0));
+  }
+  .ui-btn--secondary {
+    background: var(--bg-2);
+    border-color: var(--border);
+    color: var(--fg-0);
+  }
+  .ui-btn--secondary:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+  }
+  .ui-btn--ghost {
+    background: transparent;
+    color: var(--fg-1);
+  }
+  .ui-btn--ghost:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--bg-hover);
+    color: var(--fg-0);
+  }
+  .ui-btn--danger {
+    background: var(--c-critical-tint);
+    border-color: var(--c-critical-line);
+    color: var(--c-critical-fg);
+  }
+  .ui-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
+    background: color-mix(in oklch, var(--c-critical) 20%, transparent);
+  }
+  .ui-btn:active:not(:disabled, [aria-disabled="true"]) {
+    transform: translateY(0.5px);
+  }
+  .ui-btn:disabled,
+  .ui-btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .ui-btn[aria-busy="true"] {
+    cursor: progress;
+    opacity: 1;
+  }
+
+  /* ── IconButton ────────────────────────────────────────────── */
+  .ui-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--control-md);
+    height: var(--control-md);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--fg-2);
+    cursor: pointer;
+    transition:
+      background var(--dur-fast),
+      color var(--dur-fast);
+  }
+  .ui-icon-btn--sm {
+    width: var(--control-sm);
+    height: var(--control-sm);
+  }
+  .ui-icon-btn--secondary {
+    background: var(--bg-2);
+    border-color: var(--border);
+  }
+  .ui-icon-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--fg-0);
+  }
+  .ui-icon-btn[aria-pressed="true"] {
+    background: var(--accent-tint);
+    color: var(--accent-fg);
+  }
+  .ui-icon-btn--danger:hover:not(:disabled) {
+    background: var(--c-critical-tint);
+    color: var(--c-critical-fg);
+  }
+  .ui-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .ui-icon-btn:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* ── Tooltip ───────────────────────────────────────────────── */
+  .ui-tooltip {
+    z-index: var(--z-tooltip);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 280px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--bg-3);
+    color: var(--fg-0);
+    box-shadow: var(--shadow-pop);
+    font-family: var(--font-sans);
+    font-size: var(--fs-meta);
+    line-height: var(--lh-tight);
+    user-select: none;
+    animation: ui-fade-in var(--dur-base) var(--ease-out);
+  }
+  .ui-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-badge);
+    background: var(--bg-2);
+    color: var(--fg-1);
+    font-family: var(--font-mono);
+    font-size: var(--fs-eyebrow);
+  }
+}
