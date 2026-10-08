@@ -1,5 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { reviewApi } from "../api/reviewApi";
+import { useReviewDiff } from "./useReviewDiff";
 
 // ~1 token per 4 chars — rough estimate
 const CHARS_PER_TOKEN = 4;
@@ -29,12 +28,7 @@ const formatSize = (chars: number): string => {
 export const formatDiffSize = formatSize;
 
 export const useDiffSize = (reviewId: string | null): DiffSizeInfo => {
-  const { data: diff, isLoading } = useQuery({
-    queryKey: ["review-diff", reviewId],
-    queryFn: () => reviewApi.getDiff(reviewId ?? ""),
-    enabled: reviewId !== null,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: diff, isLoading } = useReviewDiff(reviewId);
 
   const chars = diff?.length ?? 0;
   const tokens = Math.round(chars / CHARS_PER_TOKEN);

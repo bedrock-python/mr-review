@@ -25,6 +25,16 @@ export type UpdateCommentInput = {
   body?: string;
   severity?: Comment["severity"];
   resolved?: boolean;
+  // An explicit null clears the anchor (file) or just the line; omit a key to leave it as is.
+  file?: string | null;
+  line?: number | null;
+};
+
+export type NewCommentInput = {
+  file: string | null;
+  line: number | null;
+  severity: Comment["severity"];
+  body: string;
 };
 
 export const reviewApi = {
@@ -175,5 +185,28 @@ export const reviewApi = {
       fallback_to_general_note: fallbackToGeneralNote,
     });
     return res.data as { posted: number };
+  },
+
+  addComment: async (
+    reviewId: string,
+    iterationId: string,
+    input: NewCommentInput
+  ): Promise<Review> => {
+    const res = await httpClient.post<unknown>(
+      `/api/v1/reviews/${reviewId}/iterations/${iterationId}/comments`,
+      input
+    );
+    return ReviewSchema.parse(res.data);
+  },
+
+  deleteComment: async (
+    reviewId: string,
+    iterationId: string,
+    commentId: string
+  ): Promise<Review> => {
+    const res = await httpClient.delete<unknown>(
+      `/api/v1/reviews/${reviewId}/iterations/${iterationId}/comments/${commentId}`
+    );
+    return ReviewSchema.parse(res.data);
   },
 };

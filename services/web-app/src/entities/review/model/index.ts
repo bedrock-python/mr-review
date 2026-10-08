@@ -56,3 +56,4 @@ export {
 export type { DiffSizeLevel, DiffSizeInfo } from "./useDiffSize";
 export { useContextSize, formatContextSize, CONTEXT_LARGE_CHARS } from "./useContextSize";
 export type { ContextSizeLevel, ContextSizeInfo } from "./useContextSize";
+export { useReviewDiff, reviewDiffKey } from "./useReviewDiff";

@@ -54,3 +54,5 @@ export type {
   PatchErrorCode,
   PatchErrorEnvelope,
 } from "./model";
+export { useReviewDiff, reviewDiffKey } from "./model";
+export type { NewCommentInput } from "./api";

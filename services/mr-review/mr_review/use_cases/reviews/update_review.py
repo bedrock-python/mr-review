@@ -1,10 +1,64 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from mr_review.core.reviews.entities import BriefConfig, Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage, Review
 from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.use_cases.reviews._review_change import apply_review_change
+from mr_review.use_cases.reviews.dto import CommentPatchDTO
+from mr_review.use_cases.reviews.iteration_comments import find_iteration_index, patch_comments, replace_iteration
+
+
+def _apply_brief_config(review: Review, brief_config: BriefConfig) -> Review:
+    last = review.iterations[-1] if review.iterations else None
+    if last is None:
+        first = Iteration(
+            id=uuid4(),
+            number=1,
+            stage=IterationStage.brief,
+            comments=[],
+            ai_provider_id=None,
+            model=None,
+            brief_config=brief_config,
+            created_at=datetime.now(timezone.utc),
+            completed_at=None,
+        )
+        return review.model_copy(update={"iterations": [first]})
+    if last.completed_at is None:
+        updated_last = last.model_copy(update={"brief_config": brief_config})
+        return replace_iteration(review, len(review.iterations) - 1, updated_last)
+    return review
+
+
+def apply_review_update(
+    review: Review,
+    brief_config: BriefConfig | None = None,
+    iteration_id: UUID | None = None,
+    iteration_stage: IterationStage | None = None,
+    comment_patches: Sequence[CommentPatchDTO] | None = None,
+) -> Review:
+    """Return ``review`` with the requested changes applied; nothing is persisted.
+
+    ``brief_config`` goes to the last open iteration (or a first one is created). The stage
+    and the comment patches apply to ``iteration_id`` and are ignored without it. Raises
+    ``ValueError`` for an unknown iteration and ``InvalidCommentPatchError`` for a patch that
+    cannot apply.
+    """
+    # brief_config first, so the iteration patch below works on the already-updated list.
+    if brief_config is not None:
+        review = _apply_brief_config(review, brief_config)
+    if iteration_id is None:
+        return review
+
+    index = find_iteration_index(review, iteration_id)
+    if iteration_stage is not None:
+        staged = review.iterations[index].model_copy(update={"stage": iteration_stage})
+        review = replace_iteration(review, index, staged)
+    if comment_patches is not None:
+        review = patch_comments(review, iteration_id, comment_patches)
+    return review
 
 
 class UpdateReviewUseCase:
@@ -17,70 +71,11 @@ class UpdateReviewUseCase:
         brief_config: BriefConfig | None = None,
         iteration_id: UUID | None = None,
         iteration_stage: IterationStage | None = None,
-        iteration_comments: list[Comment] | None = None,
+        comment_patches: Sequence[CommentPatchDTO] | None = None,
     ) -> Review:
-        review = await self._repo.get_by_id(review_id)
-        if review is None:
-            raise ValueError(f"Review {review_id} not found")
-
-        # Build the working iterations list, applying brief_config first so that
-        # a subsequent iteration_id patch operates on the already-updated list.
-        working_iterations = list(review.iterations)
-
-        if brief_config is not None:
-            last = working_iterations[-1] if working_iterations else None
-            if last is None:
-                new_iteration = Iteration(
-                    id=uuid4(),
-                    number=1,
-                    stage=IterationStage.brief,
-                    comments=[],
-                    ai_provider_id=None,
-                    model=None,
-                    brief_config=brief_config,
-                    created_at=datetime.now(timezone.utc),
-                    completed_at=None,
-                )
-                working_iterations = [new_iteration]
-            elif last.completed_at is None:
-                idx = len(working_iterations) - 1
-                working_iterations[idx] = last.model_copy(update={"brief_config": brief_config})
-
-        if iteration_id is not None:
-            working_iterations = self._apply_iteration_update(
-                review.model_copy(update={"iterations": working_iterations}),
-                review_id,
-                iteration_id,
-                iteration_stage,
-                iteration_comments,
-            )
-
-        updated = review.model_copy(update={"iterations": working_iterations})
-        return await self._repo.update(updated)
-
-    def _apply_iteration_update(
-        self,
-        review: Review,
-        review_id: UUID,
-        iteration_id: UUID,
-        iteration_stage: IterationStage | None,
-        iteration_comments: list[Comment] | None,
-    ) -> list[Iteration]:
-        iteration_index = next(
-            (i for i, it in enumerate(review.iterations) if it.id == iteration_id),
-            None,
+        """Apply the update to the stored review in one read-modify-write."""
+        return await apply_review_change(
+            self._repo,
+            review_id,
+            lambda review: apply_review_update(review, brief_config, iteration_id, iteration_stage, comment_patches),
         )
-        if iteration_index is None:
-            raise ValueError(f"Iteration {iteration_id} not found on review {review_id}")
-
-        iteration = review.iterations[iteration_index]
-        iteration_updates: dict[str, object] = {}
-        if iteration_stage is not None:
-            iteration_updates["stage"] = iteration_stage
-        if iteration_comments is not None:
-            iteration_updates["comments"] = iteration_comments
-
-        new_iterations: list[Iteration] = list(review.iterations)
-        if iteration_updates:
-            new_iterations[iteration_index] = iteration.model_copy(update=iteration_updates)
-        return new_iterations

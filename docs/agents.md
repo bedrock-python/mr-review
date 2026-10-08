@@ -77,8 +77,11 @@ The pipeline is the iteration's `stage`, and it only moves forward:
 * **dispatch** — `POST /reviews/{id}/dispatch` streams the model's output back over SSE
   and, when the stream closes, parses it and stores the comments. The provider's fence caps
   how many dispatches to that provider can be in flight at once.
-* **polish** — `PATCH /reviews/{id}` edits comment bodies, severities and `status`
-  (`kept` / `dismissed`).
+* **polish** — `PATCH /reviews/{id}` edits comment bodies, severities, `status`
+  (`kept` / `dismissed`) and the anchor: `file` and `line` count only when present, and an
+  explicit `"file": null` turns the comment into a general note. `POST` and `DELETE` on
+  `/reviews/{id}/iterations/{iteration_id}/comments` add a hand-written comment or remove
+  one.
 * **post** — `POST /reviews/{id}/post` sends every `kept` comment to the merge request,
   five at a time, and marks the iteration completed.
 
@@ -257,6 +260,8 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/dispatch` | POST | Run the review, streamed as SSE |
 | `/api/v1/reviews/{id}/import-response` | POST | Paste a model's answer in by hand |
 | `/api/v1/reviews/{id}/post` | POST | Post `kept` comments to the merge request |
+| `/api/v1/reviews/{id}/iterations/{iteration_id}/comments` | POST | Add a comment (`file`, `line`, `severity`, `body`); the server assigns the id and answers 201 with the review |
+| `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
 | `/api/v1/data/export`, `/api/v1/data/import` | POST | The whole store as one JSON file |
 
 ### What goes into the prompt
@@ -329,7 +334,8 @@ wall-clock time before the model is called at all.
     to be re-dispatched at all — start a new iteration instead.
 15. **Only `kept` comments are posted**, and posting completes the iteration. An inline
     comment the host rejects is retried as a general note unless
-    `fallback_to_general_note` is `false`.
+    `fallback_to_general_note` is `false`. After that the iteration's comment list is
+    frozen: adding or deleting a comment answers 409, though `PATCH` still edits them.
 16. **Local storage is not local inference.** The diff, whatever context you enabled and
     your custom instructions go to whatever endpoint the provider names. Only a provider
     pointed at a model on your own machine keeps the code on it.
@@ -416,8 +422,9 @@ The API answers with a status and a `detail` string; the UI shows it as-is.
 | 400 | `Repo path must include at least 'owner/repo'`, or a host type given a nested path |
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
 | 403 | `Host token cannot access repository` — the token is valid but not entitled |
-| 404 | A host, review or iteration id that does not exist, or a repository the host does not have |
-| 409 | Posting a review whose source is a branch diff |
+| 404 | A host, review, iteration or comment id that does not exist, or a repository the host does not have |
+| 409 | Posting a review whose source is a branch diff, or adding or deleting a comment on an iteration that was posted |
+| 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
 | 502 | `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
 
 Two failures do not surface as a status code:
