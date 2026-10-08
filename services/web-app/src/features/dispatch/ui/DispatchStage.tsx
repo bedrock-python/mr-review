@@ -107,6 +107,8 @@ type ImportStatus = "idle" | "loading" | "done" | "error";
 type ManualDispatchProps = {
   promptText: string | undefined;
   isLoading: boolean;
+  /** Why the prompt could not be built, e.g. every changed file is excluded by the brief. */
+  promptError: string | null;
   reviewId: string;
   excludeDiff: boolean;
   excludeContext: boolean;
@@ -162,6 +164,7 @@ const UploadIcon = (): React.ReactElement => (
 const ManualDispatch = ({
   promptText,
   isLoading,
+  promptError,
   reviewId,
   excludeDiff,
   excludeContext,
@@ -413,6 +416,21 @@ const ManualDispatch = ({
               className="animate-spin"
             />
             <span style={{ fontSize: 12, color: "var(--fg-3)" }}>Generating prompt…</span>
+          </div>
+        ) : promptError !== null ? (
+          <div
+            role="alert"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 6,
+              border: "1px solid color-mix(in oklch, var(--c-critical) 35%, transparent)",
+              background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
+              fontSize: 12,
+              color: "var(--c-critical)",
+              lineHeight: 1.5,
+            }}
+          >
+            {`The prompt could not be built: ${promptError}`}
           </div>
         ) : (
           <pre
@@ -1265,7 +1283,11 @@ export const DispatchStage = (): React.ReactElement => {
         }
       : undefined;
 
-  const { data: promptText, isLoading: isPromptLoading } = useQuery({
+  const {
+    data: promptText,
+    isLoading: isPromptLoading,
+    error: promptError,
+  } = useQuery({
     queryKey: ["review-prompt", activeReviewId, activeIterationId, promptConfig],
     queryFn: () =>
       reviewApi.getPrompt(activeReviewId ?? "", promptConfig, activeIterationId ?? undefined),
@@ -1387,6 +1409,7 @@ export const DispatchStage = (): React.ReactElement => {
           <ManualDispatch
             promptText={promptText}
             isLoading={isPromptLoading}
+            promptError={promptError ? promptError.message : null}
             reviewId={activeReviewId}
             excludeDiff={excludeDiff}
             excludeContext={excludeContext}
