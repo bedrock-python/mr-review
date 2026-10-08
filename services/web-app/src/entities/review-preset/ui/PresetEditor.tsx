@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Callout, Card, Field, Input, Textarea } from "@shared/ui";
@@ -39,11 +40,17 @@ export const PresetEditor = ({
   const {
     register,
     handleSubmit,
+    setFocus,
     formState: { errors },
   } = useForm<ReviewPresetForm>({
     resolver: zodResolver(ReviewPresetFormSchema),
     defaultValues: initial,
   });
+
+  // The editor opens on a click elsewhere; the cursor goes where typing starts.
+  useEffect(() => {
+    setFocus("name");
+  }, [setFocus]);
 
   return (
     <Card padding="md">

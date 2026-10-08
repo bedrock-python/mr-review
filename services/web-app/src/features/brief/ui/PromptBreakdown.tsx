@@ -118,12 +118,8 @@ export const PromptBreakdown = ({ preview }: PromptBreakdownProps): React.ReactE
             under Advanced if the model has room, or narrow the review with path filters.
           </p>
           <ul
-            className="m-0 flex flex-col"
-            style={{
-              paddingLeft: "var(--space-4)",
-              gap: "var(--space-1)",
-              marginTop: "var(--space-1)",
-            }}
+            className="m-0 list-disc space-y-1"
+            style={{ paddingLeft: "var(--space-4)", marginTop: "var(--space-1)" }}
           >
             {lossy.map((section) => (
               <li key={section.key}>

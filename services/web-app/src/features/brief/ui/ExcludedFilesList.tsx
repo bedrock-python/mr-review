@@ -40,10 +40,14 @@ export const ExcludedFilesList = ({
               fontSize: "var(--fs-meta)",
             }}
           >
-            <span className="text-fg-1 min-w-0 flex-1 truncate" title={file.path}>
+            {/* Path and reason share the row 2:1; both clip and show the rest on hover. */}
+            <span className="text-fg-1 min-w-0 flex-[2_1_0%] truncate" title={file.path}>
               {file.path}
             </span>
-            <span className="text-fg-2 min-w-0 truncate" title={file.reason}>
+            <span
+              className="text-fg-2 min-w-0 flex-[1_1_0%] truncate text-right"
+              title={file.reason}
+            >
               {file.reason}
             </span>
             {/* "(not matched by the include patterns)": an exclude pattern cannot undo that. */}

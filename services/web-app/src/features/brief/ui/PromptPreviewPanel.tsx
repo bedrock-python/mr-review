@@ -69,6 +69,11 @@ export const PromptPreviewPanel = ({
           <SectionHeader
             as="h3"
             title="Breakdown"
+            description={
+              <span className="font-mono" title="Estimated at 4 characters per token">
+                ≈ {preview.estimated_tokens.toLocaleString()} tokens (est.)
+              </span>
+            }
             actions={
               <Button
                 variant="ghost"
@@ -127,7 +132,7 @@ export const PromptPreviewPanel = ({
       className="bg-bg-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
     >
       <Toolbar size="sm">
-        <Eyebrow as="h2" id={`${id}-title`}>
+        <Eyebrow as="h2" id={`${id}-title`} className="whitespace-nowrap">
           Prompt preview
         </Eyebrow>
         {isFetching && <Spinner size="sm" label="Building the prompt" />}
@@ -137,15 +142,6 @@ export const PromptPreviewPanel = ({
           </span>
         )}
         <ToolbarSpacer />
-        {preview && (
-          <span
-            className="text-fg-2 font-mono"
-            style={{ fontSize: "var(--fs-meta)" }}
-            title="Estimated at 4 characters per token"
-          >
-            ≈ {preview.estimated_tokens.toLocaleString()} tokens (est.)
-          </span>
-        )}
         {isRequested && (
           <Button
             variant={isStale ? "secondary" : "ghost"}
