@@ -36,6 +36,12 @@ export { Callout } from "./callout";
 export type { CalloutProps, CalloutTone } from "./callout";
 export { EmptyState, ErrorState } from "./state";
 export type { EmptyStateProps, ErrorStateProps } from "./state";
+export { Toolbar, ToolbarSpacer, ToolbarDivider } from "./toolbar";
+export type { ToolbarProps } from "./toolbar";
+export { SegmentedControl } from "./segmented-control";
+export type { SegmentedControlProps, SegmentedOption } from "./segmented-control";
+export { StageFooter } from "./stage-footer";
+export type { StageFooterProps } from "./stage-footer";
 export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,
