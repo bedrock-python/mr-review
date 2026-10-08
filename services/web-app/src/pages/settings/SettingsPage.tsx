@@ -43,6 +43,7 @@ import { ExportImportSection } from "@features/export-import";
 import { ReviewPresetsManager } from "@features/manage-review-presets";
 
 import { ModelListEditor } from "./ModelListEditor";
+import { formatPlatform } from "./formatPlatform";
 
 const UpdateHostFormSchema = UpdateHostSchema.extend({ colorId: z.string() });
 type UpdateHostFormValues = z.infer<typeof UpdateHostFormSchema>;
@@ -1711,9 +1712,7 @@ const StorageSection = (): React.ReactElement => {
           <div
             style={{ marginTop: 8, fontSize: 11, color: "var(--fg-2)", display: "flex", gap: 16 }}
           >
-            <span>
-              {info.os} {info.os_version.split(" ")[0]}
-            </span>
+            <span>{formatPlatform(info.os, info.os_version)}</span>
             <span>Python {info.python_version}</span>
           </div>
         )}
