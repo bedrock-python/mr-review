@@ -9,6 +9,16 @@ export type {
 } from "./button";
 export { Tooltip, Kbd } from "./tooltip";
 export type { TooltipProps, KbdProps } from "./tooltip";
+export { Field, Input, Textarea, Select, useFieldControl } from "./field";
+export type {
+  FieldProps,
+  InputProps,
+  TextareaProps,
+  SelectProps,
+  FieldControlProps,
+} from "./field";
+export { Checkbox, Radio, RadioGroup, Switch } from "./choice";
+export type { CheckboxProps, RadioProps, RadioGroupProps, SwitchProps } from "./choice";
 export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,

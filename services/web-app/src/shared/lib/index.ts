@@ -1,4 +1,5 @@
 export { cn } from "./cn";
+export { joinIds } from "./joinIds";
 export { compareVersions, isNewerVersion } from "./compareVersions";
 export { copyFolderPath } from "./copyFolderPath";
 export { copyText, COPY_BLOCKED_MESSAGE } from "./copyText";
