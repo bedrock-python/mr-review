@@ -95,52 +95,42 @@ export const MetaDivider = (): React.ReactElement => (
   <span aria-hidden="true" className="bg-border h-(--space-3) w-px shrink-0" />
 );
 
-/** Placeholder with the header's footprint while the MR loads. */
-export const MRHeaderSkeleton = ({ topRow }: { topRow: React.ReactNode }): React.ReactElement => (
-  <MRHeaderFrame
-    role="status"
-    aria-label="Loading merge request"
-    topRow={
-      <>
-        {topRow}
-        <Skeleton width="20%" height="var(--fs-meta)" />
-      </>
-    }
-  >
-    <Skeleton width="55%" height="var(--fs-page)" radius="control" />
-  </MRHeaderFrame>
+/** The meta row's placeholder while the MR loads. */
+export const MRMetaSkeleton = (): React.ReactElement => (
+  <Skeleton width="20%" height="var(--fs-meta)" />
+);
+
+/** The title's placeholder while the MR loads, in its footprint. */
+export const MRTitleSkeleton = (): React.ReactElement => (
+  <Skeleton width="55%" height="var(--fs-page)" radius="control" />
 );
 
 export type MRHeaderErrorProps = {
-  topRow: React.ReactNode;
   message: string;
   isRetrying: boolean;
   onRetry: () => void;
 };
 
-/** Compact failure row; keeps the breadcrumbs so the user knows what failed. */
+/** Compact failure row in place of the title; the breadcrumbs above say what failed. */
 export const MRHeaderError = ({
-  topRow,
   message,
   isRetrying,
   onRetry,
 }: MRHeaderErrorProps): React.ReactElement => (
-  <MRHeaderFrame topRow={topRow}>
-    <div
-      role="alert"
-      className="text-fg-1 flex min-h-(--control-md) items-center gap-(--space-2) text-(length:--fs-control)"
+  <div
+    role="alert"
+    className="text-fg-1 flex min-h-(--control-md) items-center gap-(--space-2) text-(length:--fs-control)"
+  >
+    <CircleAlert size={ICON_SIZE.inline} aria-hidden="true" className="text-(--c-danger-fg)" />
+    <span>{message}</span>
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={<RotateCw size={ICON_SIZE.inline} aria-hidden="true" />}
+      isLoading={isRetrying}
+      onClick={onRetry}
     >
-      <CircleAlert size={ICON_SIZE.inline} aria-hidden="true" className="text-(--c-danger-fg)" />
-      <span>{message}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={<RotateCw size={ICON_SIZE.inline} aria-hidden="true" />}
-        isLoading={isRetrying}
-        onClick={onRetry}
-      >
-        Retry
-      </Button>
-    </div>
-  </MRHeaderFrame>
+      Retry
+    </Button>
+  </div>
 );

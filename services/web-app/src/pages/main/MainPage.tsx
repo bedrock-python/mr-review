@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
 import { HostsRail, ReposPane } from "@widgets/sidebar";
@@ -15,6 +15,8 @@ import { WorkspaceEmptyState } from "./ui/WorkspaceEmptyState";
 
 /** Repositories pane (268) + merge request list (360). */
 const NAV_WIDTH_PX = 628;
+/** Where focus goes when the navigator closes under it: the open stage, else the first control. */
+const WORKSPACE_FOCUS_TARGETS = ['[role="tab"][aria-selected="true"]', "button"] as const;
 
 export const MainPage = (): React.ReactElement => {
   // Selectors: a panel toggling elsewhere in the store must not re-render the open stage.
@@ -35,7 +37,24 @@ export const MainPage = (): React.ReactElement => {
     selectedMRIid === null && selectedRepoPath !== null && activeReviewId !== null;
   const isWorkspaceOpen = selectedMRIid !== null || isBranchDiffOpen;
 
+  const navigatorRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+
   useNavigatorHotkey(toggleNav);
+
+  // A collapsed navigator is inert, which would drop the focus of a row just opened (or of
+  // anything in it when "[" closes it) to the page: hand it to the workspace instead. A layout
+  // effect, so it runs before the browser moves focus off the now inert element.
+  useLayoutEffect(() => {
+    if (!navCollapsed || !navigatorRef.current?.contains(document.activeElement)) return;
+    for (const selector of WORKSPACE_FOCUS_TARGETS) {
+      const target = mainRef.current?.querySelector<HTMLElement>(selector);
+      if (target) {
+        target.focus();
+        return;
+      }
+    }
+  }, [navCollapsed]);
 
   // Collapse nav when a MR (or a branch diff review) is opened
   useEffect(() => {
@@ -55,6 +74,7 @@ export const MainPage = (): React.ReactElement => {
 
         {/* Collapsible nav: ReposPane + MRList */}
         <div
+          ref={navigatorRef}
           id={NAVIGATOR_ID}
           className="flex shrink-0 overflow-hidden transition-[width] duration-(--dur-base) ease-(--ease-out)"
           style={{ width: navCollapsed ? 0 : NAV_WIDTH_PX }}
@@ -65,7 +85,7 @@ export const MainPage = (): React.ReactElement => {
           <MRList />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main ref={mainRef} className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {isWorkspaceOpen ? (
             <>
               {isBranchDiffOpen ? <BranchDiffHeader /> : <MRHeader />}

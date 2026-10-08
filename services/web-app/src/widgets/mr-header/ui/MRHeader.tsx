@@ -10,7 +10,8 @@ import {
   MRBreadcrumbs,
   MRHeaderError,
   MRHeaderFrame,
-  MRHeaderSkeleton,
+  MRMetaSkeleton,
+  MRTitleSkeleton,
   NavigatorToggle,
 } from "./MRHeaderStates";
 import type { Host } from "@entities/host";
@@ -28,6 +29,12 @@ const buildMRUrl = (
   return `${base}/${repoPath}/-/merge_requests/${String(mrIid)}`;
 };
 
+const LOADING_ARIA = { role: "status", "aria-label": "Loading merge request" } as const;
+
+/**
+ * One frame for the loading, failed and loaded merge request, so the navigator toggle and
+ * the breadcrumbs stay the same elements (and keep focus) while the merge request arrives.
+ */
 export const MRHeader = (): React.ReactElement | null => {
   const navCollapsed = useAppStore((s) => s.navCollapsed);
   const toggleNav = useAppStore((s) => s.toggleNav);
@@ -44,34 +51,8 @@ export const MRHeader = (): React.ReactElement | null => {
   if (!selectedHostId || !selectedRepoPath || !selectedMRIid) return null;
 
   const host = hosts?.find((h) => h.id === selectedHostId);
-  const lead = (
-    <>
-      <NavigatorToggle isNavCollapsed={navCollapsed} onToggleNav={toggleNav} />
-      <MRBreadcrumbs
-        hostName={host?.name ?? selectedHostId}
-        repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
-        repoPath={selectedRepoPath}
-        leaf={`!${String(selectedMRIid)}`}
-      />
-    </>
-  );
-
   const mr = mrQuery.data;
-  if (!mr) {
-    if (mrQuery.isError) {
-      return (
-        <MRHeaderError
-          topRow={lead}
-          message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
-          isRetrying={mrQuery.isFetching}
-          onRetry={() => {
-            void mrQuery.refetch();
-          }}
-        />
-      );
-    }
-    return <MRHeaderSkeleton topRow={lead} />;
-  }
+  const isLoading = mr === undefined && !mrQuery.isError;
 
   const handleSync = (): void => {
     syncMR.mutate({
@@ -82,25 +63,55 @@ export const MRHeader = (): React.ReactElement | null => {
     });
   };
 
+  const renderTitle = (): React.ReactNode => {
+    if (mr !== undefined) {
+      return (
+        <h1 className="text-fg-0 m-0 line-clamp-2 font-(family-name:--font-display) text-(length:--fs-page) leading-(--lh-tight) font-semibold">
+          {mr.title}
+        </h1>
+      );
+    }
+    if (mrQuery.isError) {
+      return (
+        <MRHeaderError
+          message={`${getVcsErrorMessage(mrQuery.error)} merge request !${String(selectedMRIid)}`}
+          isRetrying={mrQuery.isFetching}
+          onRetry={() => {
+            void mrQuery.refetch();
+          }}
+        />
+      );
+    }
+    return <MRTitleSkeleton />;
+  };
+
   return (
     <MRHeaderFrame
+      {...(isLoading ? LOADING_ARIA : {})}
       topRow={
         <>
-          {lead}
-          <MRHeaderMeta mr={mr} />
-          <MRHeaderActions
-            iterationCount={review?.iterations.length ?? 0}
-            onShowHistory={toggleIterationHistory}
-            isSyncing={syncMR.isPending}
-            onSync={handleSync}
-            mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+          <NavigatorToggle isNavCollapsed={navCollapsed} onToggleNav={toggleNav} />
+          <MRBreadcrumbs
+            hostName={host?.name ?? selectedHostId}
+            repoName={cachedRepo?.name ?? getRepoNameFromPath(selectedRepoPath)}
+            repoPath={selectedRepoPath}
+            leaf={`!${String(selectedMRIid)}`}
           />
+          {isLoading && <MRMetaSkeleton />}
+          {mr !== undefined && <MRHeaderMeta mr={mr} />}
+          {mr !== undefined && (
+            <MRHeaderActions
+              iterationCount={review?.iterations.length ?? 0}
+              onShowHistory={toggleIterationHistory}
+              isSyncing={syncMR.isPending}
+              onSync={handleSync}
+              mrUrl={buildMRUrl(mr.web_url, host, selectedRepoPath, selectedMRIid)}
+            />
+          )}
         </>
       }
     >
-      <h1 className="text-fg-0 m-0 line-clamp-2 font-(family-name:--font-display) text-(length:--fs-page) leading-(--lh-tight) font-semibold">
-        {mr.title}
-      </h1>
+      {renderTitle()}
     </MRHeaderFrame>
   );
 };
