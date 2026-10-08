@@ -1,4 +1,6 @@
+import { useState } from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { isKeyboardNavigationFocus } from "./keyboardNavigation";
 import { Kbd } from "./Kbd";
 
 const OPEN_DELAY_MS = 400;
@@ -21,8 +23,9 @@ export type TooltipProps = {
 };
 
 /**
- * A hint on hover and on keyboard focus. Each tooltip brings its own provider, so it works
- * anywhere, tests included, without an app-level wrapper.
+ * A hint on hover and on keyboard focus — focus the user moved with Tab or the arrow keys,
+ * not focus the app put back (a dialog closing) or moved (a panel opening). Each tooltip
+ * brings its own provider, so it works anywhere, tests included, without an app wrapper.
  */
 export const Tooltip = ({
   content,
@@ -31,22 +34,35 @@ export const Tooltip = ({
   align = "center",
   isDisabled = false,
   children,
-}: TooltipProps): React.ReactElement => (
-  <TooltipPrimitive.Provider delayDuration={OPEN_DELAY_MS}>
-    <TooltipPrimitive.Root {...(isDisabled ? { open: false } : {})}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content
-          className="ui-tooltip"
-          side={side}
-          align={align}
-          sideOffset={SIDE_OFFSET_PX}
-          collisionPadding={8}
+}: TooltipProps): React.ReactElement => {
+  // Always controlled: switching isDisabled never flips Radix between modes.
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <TooltipPrimitive.Provider delayDuration={OPEN_DELAY_MS}>
+      <TooltipPrimitive.Root open={isOpen && !isDisabled} onOpenChange={setIsOpen}>
+        <TooltipPrimitive.Trigger
+          asChild
+          onFocus={(event) => {
+            // Radix skips its own open-on-focus when the event is marked handled.
+            if (!isKeyboardNavigationFocus()) event.preventDefault();
+          }}
         >
-          {content}
-          {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
-  </TooltipPrimitive.Provider>
-);
+          {children}
+        </TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            className="ui-tooltip"
+            side={side}
+            align={align}
+            sideOffset={SIDE_OFFSET_PX}
+            collisionPadding={8}
+          >
+            {content}
+            {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
+  );
+};

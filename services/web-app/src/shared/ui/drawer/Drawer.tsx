@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn, useReturnFocus } from "@shared/lib";
@@ -40,6 +41,7 @@ export const Drawer = ({
 }: DrawerProps): React.ReactElement => {
   // Opened from a store flag, not a Dialog.Trigger: focus goes back to what had it.
   const handleCloseAutoFocus = useReturnFocus(isOpen);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   return (
     <DialogPrimitive.Root
@@ -51,13 +53,16 @@ export const Drawer = ({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="ui-overlay ui-overlay--drawer" />
         <DialogPrimitive.Content
+          ref={contentRef}
+          tabIndex={-1}
           className={cn("ui-drawer", `ui-drawer--${side}`)}
           style={{ width }}
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => {
-            if (!initialFocusRef?.current) return;
+            // The panel itself, unless asked otherwise: the first focusable element is the
+            // header's Close button, and landing there would pop its tooltip on every open.
             event.preventDefault();
-            initialFocusRef.current.focus();
+            (initialFocusRef?.current ?? contentRef.current)?.focus();
           }}
           onCloseAutoFocus={handleCloseAutoFocus}
         >

@@ -153,6 +153,47 @@ describe("Dialog", () => {
   });
 });
 
+describe("Drawer without a focus target", () => {
+  it("focuses the panel, not the Close button, and closes on a single Escape", async () => {
+    const user = userEvent.setup();
+    const Plain = (): React.ReactElement => {
+      const [isOpen, setIsOpen] = useState(false);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(true);
+            }}
+          >
+            Iterations
+          </button>
+          <Drawer
+            isOpen={isOpen}
+            onClose={() => {
+              setIsOpen(false);
+            }}
+            title="Iterations"
+          >
+            <button type="button">Iteration 1</button>
+          </Drawer>
+        </>
+      );
+    };
+    render(<Plain />);
+
+    await user.click(screen.getByRole("button", { name: "Iterations" }));
+
+    const drawer = screen.getByRole("dialog", { name: "Iterations" });
+    expect(drawer).toHaveFocus();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
 describe("Drawer", () => {
   const DrawerHarness = (): React.ReactElement => {
     const [isOpen, setIsOpen] = useState(false);
