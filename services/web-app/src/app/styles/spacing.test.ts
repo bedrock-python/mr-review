@@ -67,7 +67,8 @@ const sourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return sourceFiles(path);
-    return name.endsWith(".tsx") && !name.endsWith(".test.tsx") ? [path] : [];
+    const isSource = /\.tsx?$/.test(name) && !/\.test\.tsx?$|\.d\.ts$/.test(name);
+    return isSource ? [path] : [];
   });
 
 /** The utility a class token applies, without its variants (`hover:`, `[&>svg]:`, `md:`). */
@@ -88,6 +89,9 @@ export const findNumericSpacing = (source: string): string[] =>
     literal
       .slice(1, -1)
       .split(/\s+/)
+      // A template literal's interpolations leave quotes and braces on its tokens:
+      // `${isOpen ? "p-4" : ""}` splits into `${isOpen`, `?`, `"p-4"`, …
+      .map((token) => token.replace(/^["'`${}()]+|["'`{}()]+$/g, ""))
       .filter((token) => {
         const match = NUMERIC_SPACING.exec(utilityOf(token));
         return match !== null && Number(match[1]) !== 0;
@@ -101,6 +105,23 @@ describe("spacing utilities", () => {
         `cn("p-4 hover:mt-2 -mx-1.5 [&>svg]:size-3", "gap-(--space-2) m-0 w-[268px] min-w-0 h-px")`
       )
     ).toEqual(["p-4", "hover:mt-2", "-mx-1.5", "[&>svg]:size-3"]);
+  });
+
+  it("finds them inside a template literal's interpolations", () => {
+    const source = 'const cls = `flex ${isOpen ? "p-4" : ""} ${gap}`;';
+
+    expect(findNumericSpacing(source)).toEqual(["p-4"]);
+  });
+
+  it("scans .ts modules too, where class names are built", () => {
+    const scanned = sourceFiles(SRC).map((path) => relative(SRC, path));
+
+    expect(scanned).toContain(join("widgets", "sidebar", "ui", "sidebarRow.ts"));
+    expect(scanned.some((path) => path.endsWith(".test.ts"))).toBe(false);
+    expect(findNumericSpacing('export const ROW = cn("flex", "px-3 py-1.5");')).toEqual([
+      "px-3",
+      "py-1.5",
+    ]);
   });
 
   it("are tokens in every component, not Tailwind's 3.25px steps", () => {
