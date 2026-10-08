@@ -36,6 +36,8 @@ export const DispatchResultSchema = z.object({
    * previous comments and stage. Its raw output exists only in the streamed text.
    */
   kept_previous: z.boolean().default(false),
+  /** Parsed comments dropped by the brief's minimum severity or comment cap. */
+  filtered: z.number().int().nonnegative().optional(),
 });
 
 /**

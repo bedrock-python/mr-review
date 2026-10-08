@@ -8,8 +8,19 @@ export {
   IterationSchema,
   ReviewSchema,
   DEFAULT_BRIEF_CONFIG,
+  DEFAULT_PROMPT_BUDGET_CHARS,
+  MIN_PROMPT_BUDGET_CHARS,
+  MAX_PROMPT_BUDGET_CHARS,
+  MAX_COMMENTS_LIMIT,
   getReviewBriefConfig,
 } from "./review.schema";
+export {
+  ExcludedFileSchema,
+  ExcludedFilesSchema,
+  PromptPreviewSchema,
+  PromptSectionSchema,
+} from "./prompt.schema";
+export type { ExcludedFile, ExcludedFiles, PromptPreview, PromptSection } from "./prompt.schema";
 export type {
   BriefPreset,
   BriefConfig,

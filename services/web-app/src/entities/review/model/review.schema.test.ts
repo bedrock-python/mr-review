@@ -1,5 +1,47 @@
 import { describe, expect, it } from "vitest";
-import { CommentSchema } from "./review.schema";
+import {
+  BriefConfigSchema,
+  CommentSchema,
+  DEFAULT_BRIEF_CONFIG,
+  getReviewBriefConfig,
+} from "./review.schema";
+import type { BriefConfig, Review } from "./review.schema";
+
+const LEGACY_BRIEF = {
+  preset: "security",
+  include_diff: true,
+  include_description: false,
+  include_full_files: false,
+  include_test_context: false,
+  include_related_code: false,
+  include_commit_history: false,
+  custom_instructions: "Mind the cache",
+};
+
+describe("BriefConfigSchema (backward compat)", () => {
+  it("parses a brief stored before the newer options and defaults them", () => {
+    const parsed = BriefConfigSchema.parse(LEGACY_BRIEF);
+
+    expect(parsed).toEqual({
+      ...DEFAULT_BRIEF_CONFIG,
+      preset: "security",
+      include_description: false,
+      custom_instructions: "Mind the cache",
+    });
+  });
+
+  it("fills a review restored from an old cache with the defaults of the newer options", () => {
+    const review = {
+      iterations: [{ brief_config: LEGACY_BRIEF as unknown as BriefConfig }],
+    } as unknown as Review;
+
+    const brief = getReviewBriefConfig(review);
+
+    expect(brief.focus_areas).toEqual([]);
+    expect(brief.prompt_budget_chars).toBe(DEFAULT_BRIEF_CONFIG.prompt_budget_chars);
+    expect(brief.custom_instructions).toBe("Mind the cache");
+  });
+});
 
 const LEGACY_COMMENT = {
   id: "11111111-1111-4111-8111-111111111111",
