@@ -51,3 +51,4 @@ export {
 } from "./staleChunk";
 export type { StaleChunkReloader, StaleChunkReloaderDeps } from "./staleChunk";
 export { useFittingLayout } from "./useFittingLayout";
+export { focusAfterDialog, neighbourRowControl } from "./neighbourRowControl";

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BookmarkPlus, Eye, EyeOff } from "lucide-react";
 import {
@@ -7,6 +7,7 @@ import {
   useDeleteReviewPreset,
   useReviewPresets,
 } from "@entities/review-preset";
+import { focusAfterDialog, neighbourRowControl } from "@shared/lib";
 import { Button, Callout, Card, ICON_SIZE } from "@shared/ui";
 import { BUILTIN_PRESET_CARDS, applyPreset, changedFields } from "../lib";
 import { BriefSection } from "./BriefSection";
@@ -37,6 +38,9 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
   const [editor, setEditor] = useState<EditorState>(null);
   const [showInstructions, setShowInstructions] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ReviewPreset | null>(null);
+  const [isDeleted, setIsDeleted] = useState(false);
+  const presetListRef = useRef<HTMLDivElement>(null);
+  const savePresetRef = useRef<HTMLButtonElement>(null);
 
   const selectedCustom = presets?.find((p) => p.id === config.custom_preset_id);
   const isMissing = config.custom_preset_id !== null && presets !== undefined && !selectedCustom;
@@ -75,9 +79,15 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
   const handleConfirmDelete = (): void => {
     if (deleteTarget === null) return;
     const { id: presetId } = deleteTarget;
+    // Picked while the row is still here: the next saved preset's Edit, else the previous
+    // one's, else "Save as preset…".
+    const row = presetListRef.current?.querySelector(`[data-preset-id="${CSS.escape(presetId)}"]`);
+    const target = neighbourRowControl(row, "[data-preset-edit]") ?? savePresetRef.current;
     deletePreset.mutate(presetId, {
       onSuccess: () => {
+        setIsDeleted(true);
         setDeleteTarget(null);
+        focusAfterDialog(target);
         if (config.custom_preset_id === presetId) onChange({ custom_preset_id: null });
       },
     });
@@ -103,7 +113,11 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
             onEdit={(preset) => {
               setEditor({ mode: "edit", preset });
             }}
-            onDelete={setDeleteTarget}
+            onDelete={(preset) => {
+              setIsDeleted(false);
+              setDeleteTarget(preset);
+            }}
+            listRef={presetListRef}
           />
         )}
         <DeletePresetConfirm
@@ -113,6 +127,7 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
             setDeleteTarget(null);
           }}
           onConfirm={handleConfirmDelete}
+          shouldRestoreFocus={!isDeleted}
         />
       </div>
       {isMissing && (
@@ -137,6 +152,7 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
           {showInstructions ? "Hide instructions" : "View instructions"}
         </Button>
         <Button
+          ref={savePresetRef}
           variant="ghost"
           size="sm"
           icon={icon(BookmarkPlus)}

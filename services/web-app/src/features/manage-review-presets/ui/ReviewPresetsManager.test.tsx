@@ -78,6 +78,25 @@ describe("ReviewPresetsManager", () => {
     await waitFor(() => {
       expect(screen.queryByText("Public API")).not.toBeInTheDocument();
     });
+    // The only preset is gone: focus goes on under the list, not to the page.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Built-in presets" })).toHaveFocus();
+    });
+  });
+
+  it("moves focus to the next preset's Edit once one is deleted", async () => {
+    const other = { ...PRESET, id: "44444444-4444-4444-8444-444444444444", name: "Migrations" };
+    presetApi.list.mockResolvedValue([PRESET, other]);
+    const user = userEvent.setup();
+    renderWithQueryClient(<ReviewPresetsManager />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete preset Public API" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete preset" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit preset Migrations" })).toHaveFocus();
+    });
   });
 
   it("edits a preset's text", async () => {

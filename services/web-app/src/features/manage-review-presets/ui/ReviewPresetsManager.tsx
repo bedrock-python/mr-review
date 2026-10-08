@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bookmark, Pencil, Trash2 } from "lucide-react";
 import {
   DeletePresetConfirm,
@@ -9,7 +9,10 @@ import {
   useUpdateReviewPreset,
 } from "@entities/review-preset";
 import { Button, Card, Disclosure, EmptyState, ICON_SIZE, Spinner } from "@shared/ui";
+import { focusAfterDialog, neighbourRowControl } from "@shared/lib";
 import type { ReviewPreset } from "@entities/review-preset";
+
+const EDIT_SELECTOR = "[data-preset-edit]";
 
 const ROW_STYLE: React.CSSProperties = { padding: "var(--space-3) var(--space-4)" };
 
@@ -46,6 +49,25 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
   const deletePreset = useDeleteReviewPreset();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  const handleConfirmDelete = (): void => {
+    // Picked while the row is still here: the next preset's Edit, else the previous one's,
+    // else the built-in presets toggle under the list.
+    const row = rowRef.current;
+    const target =
+      neighbourRowControl(row, EDIT_SELECTOR) ??
+      row?.closest("[data-presets-manager]")?.querySelector<HTMLElement>("[aria-expanded]") ??
+      null;
+    deletePreset.mutate(preset.id, {
+      onSuccess: () => {
+        setIsDeleted(true);
+        setIsConfirming(false);
+        focusAfterDialog(target);
+      },
+    });
+  };
 
   if (isEditing) {
     return (
@@ -81,6 +103,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
 
   return (
     <li
+      ref={rowRef}
       className="border-border flex items-start border-b last:border-b-0"
       style={{ ...ROW_STYLE, gap: "var(--space-3)" }}
     >
@@ -98,6 +121,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
           variant="ghost"
           size="sm"
           icon={icon(Pencil)}
+          data-preset-edit=""
           aria-label={`Edit preset ${preset.name}`}
           onClick={() => {
             setIsEditing(true);
@@ -124,13 +148,8 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
         onCancel={() => {
           setIsConfirming(false);
         }}
-        onConfirm={() => {
-          deletePreset.mutate(preset.id, {
-            onSuccess: () => {
-              setIsConfirming(false);
-            },
-          });
-        }}
+        onConfirm={handleConfirmDelete}
+        shouldRestoreFocus={!isDeleted}
       />
     </li>
   );
@@ -142,7 +161,7 @@ export const ReviewPresetsManager = (): React.ReactElement => {
   const { data: builtins } = useBuiltinPresets();
 
   return (
-    <div className="flex flex-col" style={{ gap: "var(--space-4)" }}>
+    <div data-presets-manager="" className="flex flex-col" style={{ gap: "var(--space-4)" }}>
       <Card padding="none" className="overflow-hidden">
         {isLoading && (
           <div className="flex justify-center" style={ROW_STYLE}>

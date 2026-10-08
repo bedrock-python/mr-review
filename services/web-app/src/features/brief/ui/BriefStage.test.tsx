@@ -552,6 +552,10 @@ describe("BriefStage — saved presets", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
       await waitFor(() => {
         expect(presetApi.delete).toHaveBeenCalledWith(OTHER_PRESET.id);
       });
+      // The deleted preset was the last row: focus goes to the one before it.
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Edit preset Public API" })).toHaveFocus();
+      });
       expect(screen.getByRole("radio", { name: /Thorough/, checked: true })).toBeInTheDocument();
       expect(api.update).not.toHaveBeenCalled();
       expect(screen.getByRole("link", { name: /Manage in Settings/ })).toHaveAttribute(
