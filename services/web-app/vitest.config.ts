@@ -4,6 +4,10 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  // Vite defines it from package.json for the build; components that show it render in tests.
+  define: {
+    __APP_VERSION__: JSON.stringify("0.0.0-test"),
+  },
   test: {
     globals: true,
     environment: "jsdom",
