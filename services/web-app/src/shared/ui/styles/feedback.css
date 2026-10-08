@@ -1,0 +1,113 @@
+/* Callout, EmptyState, ErrorState. Conventions: see ../primitives.css. */
+
+@layer components {
+  /* ── Callout ───────────────────────────────────────────────── */
+  .ui-callout {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--tone-line);
+    border-radius: var(--radius-control);
+    background: var(--tone-tint);
+    color: var(--fg-1);
+    font-size: var(--fs-control);
+    line-height: var(--lh-body);
+  }
+  .ui-callout--sm {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .ui-callout__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding-top: 1px;
+    color: var(--tone-fg);
+  }
+  .ui-callout__content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+  }
+  .ui-callout__title {
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    color: var(--fg-0);
+  }
+  .ui-callout__body {
+    color: var(--fg-1);
+    overflow-wrap: anywhere;
+  }
+  .ui-callout__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  /* ── EmptyState / ErrorState ───────────────────────────────── */
+  .ui-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    color: var(--fg-2);
+  }
+  .ui-state--sm {
+    gap: 6px;
+    padding: var(--space-4) var(--space-5);
+  }
+  .ui-state--fill {
+    height: 100%;
+  }
+  .ui-state__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 4px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    color: var(--fg-2);
+  }
+  .ui-state--sm .ui-state__icon {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 0;
+  }
+  .ui-state--error .ui-state__icon {
+    background: var(--c-critical-tint);
+    color: var(--c-critical-fg);
+  }
+  .ui-state__title {
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    color: var(--fg-0);
+  }
+  .ui-state--sm .ui-state__title {
+    font-size: var(--fs-control);
+  }
+  .ui-state__description {
+    margin: 0;
+    max-width: 420px;
+    font-size: var(--fs-control);
+    line-height: var(--lh-body);
+    color: var(--fg-2);
+    overflow-wrap: anywhere;
+  }
+  .ui-state__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+}

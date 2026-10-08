@@ -20,6 +20,12 @@ export { readStorageItem, writeStorageItem } from "./safeStorage";
 export { useStickToBottom } from "./useStickToBottom";
 export type { StickToBottom } from "./useStickToBottom";
 export { useReturnFocus } from "./useReturnFocus";
+export { useRovingRadioGroup } from "./useRovingRadioGroup";
+export type {
+  RovingRadioItem,
+  RovingRadioItemProps,
+  UseRovingRadioGroupParams,
+} from "./useRovingRadioGroup";
 export {
   STALE_CHUNK_RELOAD_KEY,
   STALE_CHUNK_RELOAD_INTERVAL_MS,

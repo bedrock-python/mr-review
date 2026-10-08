@@ -1,0 +1,79 @@
+import { useRef } from "react";
+
+export type RovingRadioItem<T extends string> = { value: T; isDisabled?: boolean };
+
+export type RovingRadioItemProps = {
+  ref: (element: HTMLElement | null) => void;
+  role: "radio";
+  "aria-checked": boolean;
+  "aria-disabled": true | undefined;
+  tabIndex: 0 | -1;
+  onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;
+  onClick: () => void;
+};
+
+export type UseRovingRadioGroupParams<T extends string> = {
+  items: readonly RovingRadioItem<T>[];
+  value: T | undefined;
+  onValueChange: (value: T) => void;
+};
+
+const NEXT_KEYS = new Set(["ArrowRight", "ArrowDown"]);
+const PREVIOUS_KEYS = new Set(["ArrowLeft", "ArrowUp"]);
+
+/**
+ * The ARIA radio-group keyboard model for custom radios (segmented controls, selectable
+ * cards): one tab stop, the arrow keys move focus and selection together and wrap, Home and
+ * End jump to the ends, Space selects. Disabled items are skipped.
+ */
+export const useRovingRadioGroup = <T extends string>({
+  items,
+  value,
+  onValueChange,
+}: UseRovingRadioGroupParams<T>): {
+  getItemProps: (item: RovingRadioItem<T>) => RovingRadioItemProps;
+} => {
+  const elements = useRef(new Map<T, HTMLElement>());
+  const enabled = items.filter((item) => item.isDisabled !== true).map((item) => item.value);
+  const tabStop = value !== undefined && enabled.includes(value) ? value : enabled[0];
+
+  const select = (target: T | undefined): void => {
+    if (target === undefined) return;
+    if (target !== value) onValueChange(target);
+    elements.current.get(target)?.focus();
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>, from: T): void => {
+    if (enabled.length === 0) return;
+    const index = enabled.indexOf(from);
+    let target: T | undefined;
+    if (NEXT_KEYS.has(event.key)) target = enabled[(index + 1) % enabled.length];
+    else if (PREVIOUS_KEYS.has(event.key))
+      target = enabled[(index - 1 + enabled.length) % enabled.length];
+    else if (event.key === "Home") target = enabled[0];
+    else if (event.key === "End") target = enabled[enabled.length - 1];
+    else if (event.key === " ") target = from;
+    else return;
+    event.preventDefault();
+    select(target);
+  };
+
+  const getItemProps = (item: RovingRadioItem<T>): RovingRadioItemProps => ({
+    ref: (element) => {
+      if (element) elements.current.set(item.value, element);
+      else elements.current.delete(item.value);
+    },
+    role: "radio",
+    "aria-checked": item.value === value,
+    "aria-disabled": item.isDisabled === true ? true : undefined,
+    tabIndex: item.value === tabStop ? 0 : -1,
+    onKeyDown: (event) => {
+      handleKeyDown(event, item.value);
+    },
+    onClick: () => {
+      if (item.isDisabled !== true && item.value !== value) onValueChange(item.value);
+    },
+  });
+
+  return { getItemProps };
+};
