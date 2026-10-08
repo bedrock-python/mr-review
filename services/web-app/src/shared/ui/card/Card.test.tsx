@@ -84,6 +84,20 @@ describe("SelectCardGroup", () => {
     expect(handleChange.mock.calls).toEqual([["thorough"], ["quick"]]);
   });
 
+  it("moves with ↑ ↓ as well, since the cards wrap into a grid", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(<Presets onChange={handleChange} />);
+    await user.tab();
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("radio", { name: /Thorough/ })).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+
+    expect(screen.getByRole("radio", { name: /Quick/ })).toHaveFocus();
+    expect(handleChange.mock.calls).toEqual([["thorough"], ["quick"]]);
+  });
+
   it("selects on click but not a disabled card", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

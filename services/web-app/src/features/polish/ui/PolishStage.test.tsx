@@ -1360,6 +1360,21 @@ describe("PolishStage list — toolbar", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     expect(focusedId()).toBe("c2");
   });
 
+  it("moves between comments with ↑ ↓ after a click on the view or status control", async () => {
+    const user = userEvent.setup();
+    renderStage(two());
+
+    await user.click(screen.getByRole("radio", { name: "List" }));
+    await user.keyboard("{ArrowDown}");
+    expect(focusedId()).toBe("c2");
+    expect(usePolishViewStore.getState().viewMode).toBe("list");
+
+    await user.click(screen.getByRole("radio", { name: "All" }));
+    await user.keyboard("{ArrowUp}");
+    expect(focusedId()).toBe("c1");
+    expect(screen.getByRole("radio", { name: "All" })).toBeChecked();
+  });
+
   it("moves status, file and grouping into Filters when the row is narrow", async () => {
     const user = userEvent.setup();
     // jsdom lays nothing out: report every box at two lines of controls, so the row wraps in

@@ -66,7 +66,7 @@ The one eyebrow (section titles, field labels): mono 10/500, 0.08em, uppercase, 
 | `CountBadge` | `count`, `max` (99), `tone`, `label` (read instead of the number) | |
 | `Chip` | `isSelected` + `onSelectedChange` (toggle, `aria-pressed`), `tone`, `hasDot`, `count`, `icon` | filters |
 | `Card` | `as`, `padding` none·sm·md·lg, `surface` default·sunken·raised, `isInteractive` | |
-| `SelectCardGroup` | `options` [{value, title, description, icon, aside, preview, isDisabled}], `value`, `onValueChange`, `aria-label`/`aria-labelledby`, `minCardWidth` | radio group, one tab stop, arrows move and select |
+| `SelectCardGroup` | `options` [{value, title, description, icon, aside, preview, isDisabled}], `value`, `onValueChange`, `aria-label`/`aria-labelledby`, `minCardWidth` | radio group, one tab stop, all four arrows move and select (the cards wrap into a grid) |
 | `SectionHeader` | `title`, `as` h2·h3·h4·div, `id`, `count`, `countLabel`, `description`, `actions` | eyebrow title |
 | `Eyebrow` | `as`, `id` | |
 | `Callout` | `tone` neutral·info·warn·danger·success, `title`, children, `actions`, `icon` (`null` = none), `size`, `role` | default role: danger → alert, success → status, others → note |
@@ -76,7 +76,7 @@ The one eyebrow (section titles, field labels): mono 10/500, 0.08em, uppercase, 
 | `Spinner` | `size` sm·md·lg, `tone` accent·muted·current, `label`, `isDecorative` | |
 | `StageLoading` | `label` | a stage's whole area while it loads |
 | `Toolbar` (+ `ToolbarSpacer`, `ToolbarDivider`) | `size` md (44) · sm (40), `hasBorder` | layout only; with `aria-label` a named group |
-| `SegmentedControl` | `options` [{value, label, icon, count, isDisabled, title}], `value`, `onValueChange`, `aria-label`, `size` | radio group with arrow keys |
+| `SegmentedControl` | `options` [{value, label, icon, count, isDisabled, title}], `value`, `onValueChange`, `aria-label`, `size` | horizontal radio group: ← → and Home/End move and select; ↑ ↓ are left to the page, so a list's own keys work from it |
 | `StageFooter` | `summary`, `secondaryActions`, `primaryAction`, `aria-label` | sticky; the next step is never below the fold |
 | `Dialog` | `isOpen`, `onClose`, `title`, `description`, `size` sm·md·lg / `width`, `footer`, `hasCloseButton`, `shouldRestoreFocus`, `initialFocusRef` | Radix; focuses the body's first control |
 | `Drawer` | `isOpen`, `onClose`, `title`, `headerExtra`, `width` (360), `side`, `initialFocusRef`, `footer` | Radix; content exists only while open |

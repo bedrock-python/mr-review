@@ -32,7 +32,7 @@ const OPEN_LAYER_SELECTOR =
  * The keys listen on the whole document, so they must stand down while any other layer has
  * the user's attention — a dialog, popover or menu the event comes from, or one open anywhere
  * on the page (the triage view's own dialogs switch the keys off through `isEnabled`) — and
- * for a key a control already handled: arrows in a segmented control, a menu button's ↓.
+ * for a key a control already handled: ← → in a segmented control, ↓ on a menu button.
  */
 const isForAnotherLayer = (event: KeyboardEvent): boolean =>
   event.defaultPrevented ||
@@ -68,7 +68,7 @@ export const useTriageHotkeys = ({
     preventDefault: true,
     ignoreEventWhen: isForAnotherLayer,
     // A segmented control (view, status) keeps focus after a click; the triage keys must
-    // still work from there. Its arrow keys are its own: it marks them handled.
+    // still work from there, ↑ ↓ included. Its ← → are its own: it marks them handled.
     enableOnFormTags: SEGMENTED_CONTROL_ROLES,
   };
   const always = { ...base, enabled: isEnabled };

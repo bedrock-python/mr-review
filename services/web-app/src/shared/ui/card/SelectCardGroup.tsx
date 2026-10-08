@@ -28,7 +28,13 @@ export const SelectCardGroup = <T extends string>({
   className,
   ...aria
 }: SelectCardGroupProps<T>): React.ReactElement => {
-  const { getItemProps } = useRovingRadioGroup({ items: options, value, onValueChange });
+  // The cards wrap into a grid, so both arrow pairs move through them.
+  const { getItemProps } = useRovingRadioGroup({
+    items: options,
+    value,
+    onValueChange,
+    orientation: "both",
+  });
   return (
     <div
       role="radiogroup"

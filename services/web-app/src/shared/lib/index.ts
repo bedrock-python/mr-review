@@ -32,6 +32,7 @@ export { useRovingRadioGroup } from "./useRovingRadioGroup";
 export type {
   RovingRadioItem,
   RovingRadioItemProps,
+  RovingRadioOrientation,
   UseRovingRadioGroupParams,
 } from "./useRovingRadioGroup";
 export {

@@ -59,6 +59,34 @@ describe("SegmentedControl", () => {
     expect(handleChange.mock.calls).toEqual([["pinned"], ["list"], ["pinned"]]);
   });
 
+  it("is a horizontal group that leaves ↑ ↓ to the page", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    const pageKeys: { key: string; isHandled: boolean }[] = [];
+    const handlePageKey = (event: KeyboardEvent): void => {
+      pageKeys.push({ key: event.key, isHandled: event.defaultPrevented });
+    };
+    render(<View onChange={handleChange} />);
+
+    await user.tab();
+    document.addEventListener("keydown", handlePageKey);
+    await user.keyboard("{ArrowDown}{ArrowUp}{End}{Home}");
+    document.removeEventListener("keydown", handlePageKey);
+
+    expect(screen.getByRole("radiogroup", { name: "View" })).toHaveAttribute(
+      "aria-orientation",
+      "horizontal"
+    );
+    expect(screen.getByRole("radio", { name: "List 9" })).toHaveFocus();
+    expect(handleChange.mock.calls).toEqual([["pinned"], ["list"]]);
+    expect(pageKeys).toEqual([
+      { key: "ArrowDown", isHandled: false },
+      { key: "ArrowUp", isHandled: false },
+      { key: "End", isHandled: true },
+      { key: "Home", isHandled: true },
+    ]);
+  });
+
   it("selects on click, not on a disabled option", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

@@ -12,24 +12,42 @@ export type RovingRadioItemProps = {
   onClick: () => void;
 };
 
+/**
+ * Which arrow keys move through the group. "horizontal" (a row: ← →) and "vertical" (a column:
+ * ↑ ↓) leave the other pair to the page, for a list's own keys; "both" suits a grid that wraps.
+ */
+export type RovingRadioOrientation = "horizontal" | "vertical" | "both";
+
 export type UseRovingRadioGroupParams<T extends string> = {
   items: readonly RovingRadioItem<T>[];
   value: T | undefined;
   onValueChange: (value: T) => void;
+  /** Defaults to "both". */
+  orientation?: RovingRadioOrientation;
 };
 
-const NEXT_KEYS = new Set(["ArrowRight", "ArrowDown"]);
-const PREVIOUS_KEYS = new Set(["ArrowLeft", "ArrowUp"]);
+const NEXT_KEYS: Record<RovingRadioOrientation, ReadonlySet<string>> = {
+  horizontal: new Set(["ArrowRight"]),
+  vertical: new Set(["ArrowDown"]),
+  both: new Set(["ArrowRight", "ArrowDown"]),
+};
+const PREVIOUS_KEYS: Record<RovingRadioOrientation, ReadonlySet<string>> = {
+  horizontal: new Set(["ArrowLeft"]),
+  vertical: new Set(["ArrowUp"]),
+  both: new Set(["ArrowLeft", "ArrowUp"]),
+};
 
 /**
  * The ARIA radio-group keyboard model for custom radios (segmented controls, selectable
- * cards): one tab stop, the arrow keys move focus and selection together and wrap, Home and
- * End jump to the ends, Space selects. Disabled items are skipped.
+ * cards): one tab stop, the arrow keys of `orientation` move focus and selection together and
+ * wrap, Home and End jump to the ends, Space selects. Disabled items are skipped. Keys the
+ * group does not use are not marked handled.
  */
 export const useRovingRadioGroup = <T extends string>({
   items,
   value,
   onValueChange,
+  orientation = "both",
 }: UseRovingRadioGroupParams<T>): {
   getItemProps: (item: RovingRadioItem<T>) => RovingRadioItemProps;
 } => {
@@ -47,8 +65,8 @@ export const useRovingRadioGroup = <T extends string>({
     if (enabled.length === 0) return;
     const index = enabled.indexOf(from);
     let target: T | undefined;
-    if (NEXT_KEYS.has(event.key)) target = enabled[(index + 1) % enabled.length];
-    else if (PREVIOUS_KEYS.has(event.key))
+    if (NEXT_KEYS[orientation].has(event.key)) target = enabled[(index + 1) % enabled.length];
+    else if (PREVIOUS_KEYS[orientation].has(event.key))
       target = enabled[(index - 1 + enabled.length) % enabled.length];
     else if (event.key === "Home") target = enabled[0];
     else if (event.key === "End") target = enabled[enabled.length - 1];
