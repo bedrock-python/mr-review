@@ -321,11 +321,18 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledTimes(2);
     });
+    // The busy button the run was started from is now its Run again, and keeps the focus.
+    const footer = screen.getByRole("region", { name: "Generation actions" });
+    const runAgain = within(footer).getByRole("button", { name: "Run again" });
+    expect(runAgain).toHaveFocus();
 
     createDispatchChannel();
     await user.click(within(notice).getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("button", { name: "Stop" })).toBeInTheDocument();
     expect(api.dispatchStream).toHaveBeenCalledTimes(2);
+    // Retry left with its notice; the focus went to the footer's busy button.
+    expect(runAgain).toHaveFocus();
+    expect(runAgain).toHaveAttribute("aria-busy", "true");
   });
 
   it("offers Copy & paste when the run fails", async () => {
@@ -462,10 +469,15 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     const channel = await startDispatch(user);
     channel.emit({ type: "chunk", text: "[{" });
 
-    await user.click(screen.getByRole("button", { name: "Stop" }));
+    // Stop sits on the run's own line, not in the footer where Generate and Run again are.
+    const panel = screen.getByRole("region", { name: "Generation output" });
+    const footer = screen.getByRole("region", { name: "Generation actions" });
+    expect(within(footer).queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Stop" }));
 
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run again" })).toBeEnabled();
+    // Stop went away; the focus is on the footer's Run again instead of the page.
+    expect(within(footer).getByRole("button", { name: "Run again" })).toHaveFocus();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledTimes(2);
@@ -594,10 +606,43 @@ describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS
     expect(polish).toBe(generate);
     expect(polish).toHaveFocus();
 
+    // Two quick clicks on Run again start one run and leave it running.
     const runAgain = screen.getByRole("button", { name: "Run again" });
     createDispatchChannel();
-    await user.click(runAgain);
-    expect(await screen.findByRole("button", { name: "Stop" })).not.toBe(runAgain);
+    await user.dblClick(runAgain);
+    const stop = await screen.findByRole("button", { name: "Stop" });
+    expect(stop).not.toBe(runAgain);
+    const footer = screen.getByRole("region", { name: "Generation actions" });
+    expect(within(footer).queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+    expect(api.dispatchStream).toHaveBeenCalledTimes(2);
+    const signal = api.dispatchStream.mock.calls[1]?.[2] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    // Run again went away; the focus moved to the footer's busy button.
+    expect(polish).toHaveFocus();
+    expect(polish).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("warns again after a failure or a stop that the next run replaces the comments", async () => {
+    api.get.mockResolvedValue(
+      reviewAt("polish", [savedComment("66666666-6666-4666-8666-666666666666", "Old")])
+    );
+    const user = userEvent.setup();
+    renderStage();
+    const footer = await screen.findByRole("region", { name: "Generation actions" });
+    const warning = /1 existing comment will be replaced — a failed run keeps them/;
+    expect(await within(footer).findByText(warning)).toBeInTheDocument();
+
+    const channel = await startDispatch(user);
+    expect(within(footer).queryByText(warning)).not.toBeInTheDocument();
+    channel.emit({ type: "error", message: "Rate limit exceeded" });
+    await screen.findByRole("alert");
+    expect(within(footer).getByText(warning)).toBeInTheDocument();
+
+    createDispatchChannel();
+    await user.click(within(footer).getByRole("button", { name: "Run again" }));
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+    await screen.findByText("Stopped");
+    expect(within(footer).getByText(warning)).toBeInTheDocument();
   });
 
   it("folds the form into the run's header line and opens it again on Edit", async () => {
@@ -613,8 +658,10 @@ describe("DispatchStage — after a run", { timeout: INTEGRATION_TEST_TIMEOUT_MS
 
     channel.emit({ type: "done", result: RESULT });
     await user.click(await within(panel).findByRole("button", { name: /Edit/ }));
-    expect(screen.getByRole("radiogroup", { name: "Provider" })).toBeInTheDocument();
+    const providers = screen.getByRole("radiogroup", { name: "Provider" });
     expect(within(panel).queryByRole("button", { name: /Edit/ })).not.toBeInTheDocument();
+    // Edit went away; the focus followed into the form, onto the chosen provider.
+    expect(within(providers).getByRole("radio", { name: /^Claude/ })).toHaveFocus();
   });
 
   it("lists the saved comments once done, not the previews streamed before", async () => {
@@ -780,7 +827,7 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     const user = userEvent.setup();
     renderStage();
 
-    const picker = await screen.findByRole("textbox", { name: "Model" });
+    const picker = await screen.findByRole("combobox", { name: "Model" });
     expect(picker).toHaveValue("gpt-a");
     await user.click(picker);
     const list = screen.getByRole("listbox", { name: "Models" });
@@ -812,11 +859,58 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     expect(screen.queryByRole("listbox", { name: "Models" })).not.toBeInTheDocument();
   });
 
+  it("moves through the models with the arrow keys as a combobox", async () => {
+    providersQuery.data = [OTHER_PROVIDER];
+    const user = userEvent.setup();
+    renderStage();
+
+    const picker = await screen.findByRole("combobox", { name: "Model" });
+    expect(picker).toHaveAttribute("aria-expanded", "false");
+    await user.click(picker);
+    expect(picker).toHaveAttribute("aria-expanded", "true");
+    expect(picker).not.toHaveAttribute("aria-activedescendant");
+
+    await user.keyboard("{ArrowDown}");
+    const list = screen.getByRole("listbox", { name: "Models" });
+    expect(picker).toHaveAttribute("aria-controls", list.id);
+    const first = within(list).getByRole("option", { name: "gpt-a" });
+    expect(picker).toHaveAttribute("aria-activedescendant", first.id);
+    await user.keyboard("{ArrowDown}");
+    const second = within(list).getByRole("option", { name: "gpt-b" });
+    expect(picker).toHaveAttribute("aria-activedescendant", second.id);
+    await user.keyboard("{ArrowDown}");
+    expect(picker).toHaveAttribute("aria-activedescendant", first.id);
+    await user.keyboard("{ArrowUp}{Enter}");
+
+    expect(picker).toHaveValue("gpt-b");
+    expect(picker).toHaveAttribute("aria-expanded", "false");
+    expect(picker).toHaveFocus();
+
+    // Closed, an arrow opens the list on the chosen model.
+    await user.keyboard("{ArrowDown}");
+    expect(picker).toHaveAttribute(
+      "aria-activedescendant",
+      screen.getByRole("option", { name: "gpt-b" }).id
+    );
+  });
+
+  it("keeps a typed model id when the field is left without Enter", async () => {
+    const user = userEvent.setup();
+    renderStage();
+
+    const picker = await screen.findByRole("combobox", { name: "Model" });
+    await user.click(picker);
+    await user.keyboard("my-custom-model");
+    await generate(user);
+
+    expect(dispatchedRequest().model).toBe("my-custom-model");
+  });
+
   it("takes a model id typed into the picker", async () => {
     const user = userEvent.setup();
     renderStage();
 
-    await user.click(await screen.findByRole("textbox", { name: "Model" }));
+    await user.click(await screen.findByRole("combobox", { name: "Model" }));
     await user.paste("my-gateway-model");
     await user.keyboard("{Enter}");
     await generate(user);
@@ -857,7 +951,7 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
     expect(screen.getByTestId("selected-model")).toHaveValue("gpt-a");
 
     await user.click(screen.getByRole("radio", { name: /^Claude/ }));
-    expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("claude-model");
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("claude-model");
     expect(screen.getByTestId("temperature-value")).toHaveTextContent("0.3");
     const saved = JSON.parse(localStorage.getItem("mr-review:dispatch:settings") ?? "{}") as Record<
       string,
@@ -922,6 +1016,43 @@ describe("DispatchStage — copy & paste import", { timeout: INTEGRATION_TEST_TI
     expect(screen.getByPlaceholderText("Paste AI response JSON here…")).toHaveValue(
       '[{"severity": "minor", "body": "ok"}, {}]'
     );
+  });
+
+  it("keeps the pasted response and its report when the mode switch goes there and back", async () => {
+    const pasted = '[{"severity": "minor", "body": "ok"}, {}]';
+    api.importResponse.mockResolvedValue({
+      imported: 1,
+      errors: [{ index: 1, reason: "body: Field required", raw: "{}" }],
+      json_error: null,
+    });
+    const user = userEvent.setup();
+    renderStage();
+    const switchThereAndBack = async (): Promise<void> => {
+      await user.click(screen.getByRole("radio", { name: "Copy & paste" }));
+      await user.keyboard("{ArrowRight}");
+      expect(screen.getByRole("radio", { name: "Run in app" })).toHaveAttribute(
+        "aria-checked",
+        "true"
+      );
+      await user.keyboard("{ArrowLeft}");
+    };
+
+    await user.click(await screen.findByRole("radio", { name: "Copy & paste" }));
+    await user.click(screen.getByRole("button", { name: "Paste text" }));
+    await user.click(screen.getByPlaceholderText("Paste AI response JSON here…"));
+    await user.paste(pasted);
+    await switchThereAndBack();
+    expect(screen.getByPlaceholderText("Paste AI response JSON here…")).toHaveValue(pasted);
+
+    await user.click(screen.getByRole("button", { name: "Import comments" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "1 comment imported, 1 item skipped"
+    );
+    await switchThereAndBack();
+    expect(screen.getByRole("alert")).toHaveTextContent("1 comment imported, 1 item skipped");
+    await user.click(screen.getByRole("button", { name: "Edit & re-import" }));
+    expect(screen.getByPlaceholderText("Paste AI response JSON here…")).toHaveValue(pasted);
+    expect(api.importResponse).toHaveBeenCalledTimes(1);
   });
 });
 

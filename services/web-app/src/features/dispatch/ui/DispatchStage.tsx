@@ -23,6 +23,7 @@ import {
 } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
+import { useResponseDraft } from "../model/useResponseDraft";
 import { AutoDispatch } from "./AutoDispatch";
 import { ManualDispatch } from "./ManualDispatch";
 import { DISPATCH_COLUMN_WIDTH, StageBody } from "./StageLayout";
@@ -66,23 +67,23 @@ export const DispatchStage = (): React.ReactElement => {
   const { data: review } = useReview(activeReviewId);
   const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = useAIProviders();
   const [mode, setMode] = useState<Mode>("auto");
-  const [manualDraft, setManualDraft] = useState<string | null>(null);
+  // Held here, not in Copy & paste: switching modes must not lose a pasted response.
+  const responseDraft = useResponseDraft(activeReviewId, activeIterationId);
+  const { load: loadResponse } = responseDraft;
   // Switching modes unmounts the generator and would cut a running generation short.
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleEditInManual = useCallback((rawText: string): void => {
-    setManualDraft(rawText);
-    setMode("manual");
-  }, []);
-
-  const handleModeChange = useCallback((next: Mode): void => {
-    setMode(next);
-    setManualDraft(null);
-  }, []);
+  const handleEditInManual = useCallback(
+    (rawText: string): void => {
+      loadResponse(rawText);
+      setMode("manual");
+    },
+    [loadResponse]
+  );
 
   const handleUseManual = useCallback((): void => {
-    handleModeChange("manual");
-  }, [handleModeChange]);
+    setMode("manual");
+  }, []);
 
   const existingCommentsCount =
     review?.iterations.find((it) => it.id === activeIterationId)?.comments.length ?? 0;
@@ -163,7 +164,7 @@ export const DispatchStage = (): React.ReactElement => {
             },
           ]}
           value={mode}
-          onValueChange={handleModeChange}
+          onValueChange={setMode}
         />
         <ToolbarSpacer />
       </Toolbar>
@@ -177,7 +178,7 @@ export const DispatchStage = (): React.ReactElement => {
           excludeDiff={excludeDiff}
           excludeContext={excludeContext}
           existingCommentsCount={existingCommentsCount}
-          initialResponseText={manualDraft}
+          draft={responseDraft}
         />
       )}
       {/* AutoDispatch restores the saved provider and model when it mounts, so it

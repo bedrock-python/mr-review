@@ -1,10 +1,11 @@
-import { ArrowRight, RotateCcw, Sparkles, Square, TriangleAlert } from "lucide-react";
+import { ArrowRight, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
 
 import { Button, ICON_SIZE } from "@shared/ui";
 
 import { pluralize } from "../model/runOutcome";
 import { ColumnFooter } from "./StageLayout";
 
+import type { ButtonProps } from "@shared/ui";
 import type { RunOutcomeSummary } from "../model/runOutcome";
 import type { DispatchStatus } from "../model/useDispatchRun";
 
@@ -18,8 +19,9 @@ export type RunFooterProps = {
   existingCommentsCount: number;
   /** What the finished run saved; set once it is done. */
   outcome: RunOutcomeSummary | null;
+  /** The primary button, whatever it says: a run started elsewhere moves the focus here. */
+  primaryRef: React.Ref<HTMLButtonElement>;
   onGenerate: () => void;
-  onStop: () => void;
   onPolish: () => void;
 };
 
@@ -29,50 +31,69 @@ const inlineIconStyle: React.CSSProperties = {
   marginRight: "var(--space-2)",
 };
 
-/*
- * Keys decide which button keeps its DOM node, and so the focus, from one state to the next.
- * The primary slot is always "primary": Generate turns into the busy Generating… and then into
- * Polish, so a keyboard user lands on the next step. A secondary button is keyed by what it
- * does: Run again must never become Stop under a second click.
- */
-const PRIMARY_KEY = "primary";
-
-const polishButton = (
-  count: number,
-  variant: "primary" | "secondary",
-  onClick: () => void
-): React.ReactElement => (
-  <Button
-    key={variant === "primary" ? PRIMARY_KEY : "polish"}
-    size="lg"
-    variant={variant}
-    iconRight={<ArrowRight size={ICON_SIZE.inline} aria-hidden="true" />}
-    onClick={onClick}
-  >
-    Polish {pluralize(count, "comment")}
-  </Button>
-);
-
-const runAgainButton = (
-  variant: "primary" | "secondary",
-  onClick: () => void
-): React.ReactElement => (
-  <Button
-    key={variant === "primary" ? PRIMARY_KEY : "run-again"}
-    size="lg"
-    variant={variant}
-    icon={<RotateCcw size={ICON_SIZE.inline} aria-hidden="true" />}
-    onClick={onClick}
-  >
-    Run again
-  </Button>
-);
+/** What a footer button does and says; the slot decides its look. */
+type Action = {
+  /** Keeps a secondary button's node, and so its focus, only while it does the same thing. */
+  key: string;
+  props: Pick<
+    ButtonProps,
+    "icon" | "iconRight" | "isLoading" | "disabled" | "onClick" | "children"
+  >;
+};
 
 type FooterContent = {
   summary: React.ReactNode;
-  secondary?: React.ReactNode;
-  primary?: React.ReactNode;
+  secondary?: Action | null;
+  primary?: Action;
 };
+
+const polishAction = (count: number, onPolish: () => void): Action => ({
+  key: "polish",
+  props: {
+    iconRight: <ArrowRight size={ICON_SIZE.inline} aria-hidden="true" />,
+    onClick: onPolish,
+    children: `Polish ${pluralize(count, "comment")}`,
+  },
+});
+
+const runAgainAction = (onGenerate: () => void): Action => ({
+  key: "run-again",
+  props: {
+    icon: <RotateCcw size={ICON_SIZE.inline} aria-hidden="true" />,
+    onClick: onGenerate,
+    children: "Run again",
+  },
+});
+
+const generateAction = (model: string, canGenerate: boolean, onGenerate: () => void): Action => ({
+  key: "generate",
+  props: {
+    icon: <Sparkles size={ICON_SIZE.inline} aria-hidden="true" />,
+    disabled: !canGenerate,
+    onClick: onGenerate,
+    children: (
+      <>
+        Generate review
+        {/* Read as "Generate review gpt-4o"; the flex gap does the spacing on screen. */}
+        {model && " "}
+        {model && (
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--fs-meta)",
+              fontWeight: "var(--fw-regular)",
+            }}
+          >
+            {model}
+          </span>
+        )}
+      </>
+    ),
+  },
+});
+
+// Busy, not disabled: it keeps the focus, and a second click does nothing.
+const BUSY_ACTION: Action = { key: "busy", props: { isLoading: true, children: "Generating…" } };
 
 const doneContent = (
   outcome: RunOutcomeSummary,
@@ -88,8 +109,8 @@ const doneContent = (
           {count > 0 ? `${pluralize(count, "comment")} kept from before` : "No comments saved"}
         </span>
       ),
-      secondary: count > 0 ? polishButton(count, "secondary", onPolish) : null,
-      primary: runAgainButton("primary", onGenerate),
+      secondary: count > 0 ? polishAction(count, onPolish) : null,
+      primary: runAgainAction(onGenerate),
     };
   }
   return {
@@ -103,120 +124,87 @@ const doneContent = (
         )}
       </>
     ),
-    secondary: count > 0 ? runAgainButton("secondary", onGenerate) : null,
-    primary:
-      count > 0 ? polishButton(count, "primary", onPolish) : runAgainButton("primary", onGenerate),
+    secondary: count > 0 ? runAgainAction(onGenerate) : null,
+    primary: count > 0 ? polishAction(count, onPolish) : runAgainAction(onGenerate),
   };
 };
 
 /**
- * The stage's next step for the run's state: Generate; Stop while it streams; Polish what it
- * saved, or run again. A failed run offers its retry in its notice, so the footer doesn't.
+ * The stage's next step for the run's state: Generate; a busy Generating… while it streams;
+ * Polish what it saved, or run again. Before any run that would replace comments — the first
+ * one, or one after a stop or a failure — it says so.
+ *
+ * The primary button is one node throughout (Generate → Generating… → Polish or Run again), so
+ * the focus stays on the next step. Stop is not in the footer but on the run's own line, so no
+ * click meant for Generate or Run again can land on it.
  */
 export const RunFooter = ({
   status,
   providerName,
   model,
   canGenerate,
-  existingCommentsCount,
+  existingCommentsCount: existing,
   outcome,
+  primaryRef,
   onGenerate,
-  onStop,
   onPolish,
 }: RunFooterProps): React.ReactElement => {
-  const existing = existingCommentsCount;
-  const onIteration = existing > 0 ? ` · ${pluralize(existing, "comment")} on this iteration` : "";
   const replaceWarning = `${pluralize(existing, "existing comment")} will be replaced — a failed run keeps them`;
+  // The footer is one line; the title keeps the whole warning when it gets cut.
+  const warning =
+    existing > 0 ? (
+      <span title={replaceWarning}>
+        <TriangleAlert
+          size={ICON_SIZE.inline}
+          aria-hidden="true"
+          color="var(--c-warn-fg)"
+          style={inlineIconStyle}
+        />
+        {replaceWarning}
+      </span>
+    ) : null;
+  const polishExisting = existing > 0 ? polishAction(existing, onPolish) : null;
   let content: FooterContent;
 
   if (status === "idle") {
     content = {
-      summary:
-        existing > 0 ? (
-          // The footer is one line; the title keeps the whole warning when it gets cut.
-          <span title={replaceWarning}>
-            <TriangleAlert
-              size={ICON_SIZE.inline}
-              aria-hidden="true"
-              color="var(--c-warn-fg)"
-              style={inlineIconStyle}
-            />
-            {replaceWarning}
-          </span>
-        ) : (
-          `${providerName}${model ? ` · ${model}` : ""}`
-        ),
-      primary: (
-        <Button
-          key={PRIMARY_KEY}
-          size="lg"
-          variant="primary"
-          icon={<Sparkles size={ICON_SIZE.inline} aria-hidden="true" />}
-          disabled={!canGenerate}
-          onClick={onGenerate}
-        >
-          Generate review
-          {/* Read as "Generate review gpt-4o"; the flex gap does the spacing on screen. */}
-          {model && " "}
-          {model && (
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--fs-meta)",
-                fontWeight: "var(--fw-regular)",
-              }}
-            >
-              {model}
-            </span>
-          )}
-        </Button>
-      ),
+      summary: warning ?? `${providerName}${model ? ` · ${model}` : ""}`,
+      primary: generateAction(model, canGenerate, onGenerate),
     };
   } else if (status === "streaming") {
-    content = {
-      summary: `Generating with ${providerName}…`,
-      secondary: (
-        <Button
-          key="stop"
-          size="lg"
-          icon={<Square size={ICON_SIZE.inline} aria-hidden="true" />}
-          onClick={onStop}
-        >
-          Stop
-        </Button>
-      ),
-      // Busy, not disabled: it keeps the focus Generate had, and a second click does nothing.
-      primary: (
-        <Button key={PRIMARY_KEY} size="lg" variant="primary" isLoading>
-          Generating…
-        </Button>
-      ),
-    };
+    content = { summary: `Generating with ${providerName}…`, primary: BUSY_ACTION };
   } else if (status === "done" && outcome) {
     content = doneContent(outcome, onGenerate, onPolish);
   } else if (status === "stopped") {
     content = {
-      summary: `Generation stopped${onIteration}`,
-      secondary: existing > 0 ? polishButton(existing, "secondary", onPolish) : null,
-      primary: runAgainButton("primary", onGenerate),
+      summary: warning ?? "Generation stopped",
+      secondary: polishExisting,
+      primary: runAgainAction(onGenerate),
     };
   } else {
-    // The notice above says what failed; the iteration may have kept what arrived before it.
+    // A failed run: its notice says what went wrong and offers the same retry.
     content = {
-      summary:
-        existing > 0
-          ? `${pluralize(existing, "comment")} on this iteration`
-          : "No comments on this iteration",
-      secondary: existing > 0 ? polishButton(existing, "secondary", onPolish) : null,
+      summary: warning ?? "No comments on this iteration",
+      secondary: polishExisting,
+      primary: runAgainAction(onGenerate),
     };
   }
 
+  const { secondary, primary } = content;
   return (
     <ColumnFooter
       aria-label="Generation actions"
       summary={content.summary}
-      secondaryActions={content.secondary}
-      primaryAction={content.primary}
+      secondaryActions={
+        secondary && (
+          <Button key={secondary.key} size="lg" variant="secondary" {...secondary.props} />
+        )
+      }
+      primaryAction={
+        primary && (
+          <Button key="primary" ref={primaryRef} size="lg" variant="primary" {...primary.props} />
+        )
+      }
     />
   );
 };

@@ -5,6 +5,7 @@ import { Check, Copy, Download } from "lucide-react";
 import { Button, Callout, ICON_SIZE, Spinner } from "@shared/ui";
 
 import { downloadText } from "../lib/downloadText";
+import type { ResponseDraft } from "../model/useResponseDraft";
 import { PromptSizeNotices } from "./PromptSizeNotices";
 import { ResponseImport } from "./ResponseImport";
 import { StageBody } from "./StageLayout";
@@ -22,8 +23,8 @@ export type ManualDispatchProps = {
   excludeDiff: boolean;
   excludeContext: boolean;
   existingCommentsCount: number;
-  /** Pre-fills the response to import, e.g. model output that wasn't valid JSON. */
-  initialResponseText: string | null;
+  /** The response to import and its report, kept by the stage across mode switches. */
+  draft: ResponseDraft;
 };
 
 const PromptView = ({
@@ -87,7 +88,7 @@ export const ManualDispatch = ({
   excludeDiff,
   excludeContext,
   existingCommentsCount,
-  initialResponseText,
+  draft,
 }: ManualDispatchProps): React.ReactElement => {
   const [isCopied, setIsCopied] = useState(false);
   const isPromptReady = !isLoading && Boolean(promptText);
@@ -171,12 +172,7 @@ export const ManualDispatch = ({
           </p>
         </StepCard>
 
-        <ResponseImport
-          step={3}
-          reviewId={reviewId}
-          existingCommentsCount={existingCommentsCount}
-          initialResponseText={initialResponseText}
-        />
+        <ResponseImport step={3} existingCommentsCount={existingCommentsCount} draft={draft} />
       </ol>
     </StageBody>
   );

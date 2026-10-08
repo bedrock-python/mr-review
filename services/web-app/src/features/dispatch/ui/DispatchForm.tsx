@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { Field, SectionHeader } from "@shared/ui";
 
@@ -19,6 +19,8 @@ export type DispatchFormProps = {
   capabilities: ModelCapabilities | undefined;
   onSettingsChange: (patch: Partial<ProviderDispatchSettings>) => void;
   isDisabled: boolean;
+  /** Opened on request (Edit): the chosen provider takes the focus when the form appears. */
+  isFocusedOnOpen?: boolean;
 };
 
 const sectionStyle: React.CSSProperties = {
@@ -37,13 +39,23 @@ export const DispatchForm = ({
   capabilities,
   onSettingsChange,
   isDisabled,
+  isFocusedOnOpen = false,
 }: DispatchFormProps): React.ReactElement => {
   const providerHeadingId = useId();
   const settingsHeadingId = useId();
+  const providerSectionRef = useRef<HTMLElement>(null);
+  // Read once, on mount: later renders must not pull the focus back.
+  const isFocusedOnMount = useRef(isFocusedOnOpen);
+
+  useEffect(() => {
+    if (!isFocusedOnMount.current) return;
+    // The radio group's tab stop is the chosen provider.
+    providerSectionRef.current?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]')?.focus();
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
-      <section aria-labelledby={providerHeadingId} style={sectionStyle}>
+      <section ref={providerSectionRef} aria-labelledby={providerHeadingId} style={sectionStyle}>
         <SectionHeader id={providerHeadingId} title="Provider" />
         <ProviderPicker
           providers={providers}

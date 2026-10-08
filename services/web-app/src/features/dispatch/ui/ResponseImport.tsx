@@ -1,9 +1,7 @@
 import { useRef, useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { ClipboardPaste, FileUp, TriangleAlert, Upload } from "lucide-react";
 
-import { reviewApi, reviewKeys } from "@entities/review";
 import { Button, Callout, ICON_SIZE, Textarea } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
@@ -11,18 +9,15 @@ import { pluralize } from "../model/runOutcome";
 import { ImportReport } from "./ImportReport";
 import { StepCard } from "./StepCard";
 
-import type { ImportResponseResult } from "@entities/review";
-
-type ImportStatus = "idle" | "loading" | "done" | "error";
+import type { ResponseDraft } from "../model/useResponseDraft";
 
 const RESPONSE_ROWS = 8;
 
 export type ResponseImportProps = {
   step: number;
-  reviewId: string;
   existingCommentsCount: number;
-  /** Pre-fills the response, e.g. model output that wasn't valid JSON. */
-  initialResponseText: string | null;
+  /** The pasted response and its import, kept by the stage across mode switches. */
+  draft: ResponseDraft;
 };
 
 const helperStyle: React.CSSProperties = {
@@ -36,31 +31,23 @@ const helperStyle: React.CSSProperties = {
 /** The last step of Copy & paste: drop, browse or paste the AI's answer and import it. */
 export const ResponseImport = ({
   step,
-  reviewId,
   existingCommentsCount,
-  initialResponseText,
+  draft,
 }: ResponseImportProps): React.ReactElement => {
   const setStage = useStageBarStore((s) => s.setStage);
-  const activeIterationId = useStageBarStore((s) => s.activeIterationId);
-  const qc = useQueryClient();
-  const [isEditorOpen, setIsEditorOpen] = useState(initialResponseText !== null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [jsonText, setJsonText] = useState(initialResponseText ?? "");
-  const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
-  const [importResult, setImportResult] = useState<ImportResponseResult | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    text: jsonText,
+    isEditorOpen,
+    status: importStatus,
+    result: importResult,
+    error: importError,
+    load: loadText,
+  } = draft;
 
   const hasJson = jsonText.trim().length > 0;
-
-  const loadText = (text: string): void => {
-    setJsonText(text);
-    setIsEditorOpen(true);
-    setImportStatus("idle");
-    setImportResult(null);
-    setImportError(null);
-  };
 
   const handleDrop = (e: React.DragEvent): void => {
     e.preventDefault();
@@ -74,30 +61,6 @@ export const ResponseImport = ({
     const file = e.target.files?.[0];
     if (!file) return;
     void file.text().then(loadText);
-  };
-
-  const handleImport = (): void => {
-    if (!hasJson || importStatus === "loading") return;
-    setImportStatus("loading");
-    setImportResult(null);
-    setImportError(null);
-    void reviewApi
-      .importResponse(reviewId, jsonText, activeIterationId)
-      .then((result) => {
-        setImportResult(result);
-        setImportStatus("done");
-        void qc.invalidateQueries({ queryKey: reviewKeys.detail(reviewId) });
-      })
-      .catch((err: unknown) => {
-        setImportError(err instanceof Error ? err.message : "Import failed");
-        setImportStatus("error");
-      });
-  };
-
-  const handleClear = (): void => {
-    setJsonText("");
-    setIsEditorOpen(false);
-    setImportStatus("idle");
   };
 
   const isEditorShown = (hasJson || isEditorOpen) && importStatus !== "done";
@@ -187,7 +150,7 @@ export const ResponseImport = ({
               size="sm"
               icon={<ClipboardPaste size={ICON_SIZE.inline} aria-hidden="true" />}
               onClick={() => {
-                setIsEditorOpen(true);
+                draft.openEditor();
                 // The textarea mounts on this render; focus it once it is there.
                 requestAnimationFrame(() => {
                   textareaRef.current?.focus();
@@ -224,10 +187,10 @@ export const ResponseImport = ({
             rows={RESPONSE_ROWS}
           />
           <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
-            <Button onClick={handleClear}>Clear</Button>
+            <Button onClick={draft.clear}>Clear</Button>
             <Button
               variant="primary"
-              onClick={handleImport}
+              onClick={draft.submit}
               disabled={!hasJson}
               isLoading={importStatus === "loading"}
             >
@@ -257,10 +220,7 @@ export const ResponseImport = ({
       {importStatus === "done" && importResult && (
         <ImportReport
           result={importResult}
-          onEdit={() => {
-            setImportStatus("idle");
-            setImportResult(null);
-          }}
+          onEdit={draft.edit}
           onContinue={() => {
             setStage("polish");
           }}

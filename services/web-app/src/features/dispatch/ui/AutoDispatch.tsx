@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ClipboardPaste, RotateCcw, Settings, SlidersHorizontal } from "lucide-react";
+import { ClipboardPaste, RotateCcw, Settings, SlidersHorizontal, Square } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useModelCapabilities } from "@entities/ai-provider";
@@ -62,6 +62,9 @@ export const AutoDispatch = ({
     loadProviderSettings(providers.find((p) => p.id === selectedProviderId))
   );
   const [isFormOpen, setIsFormOpen] = useState(true);
+  // Opened from Edit: the focus follows into the form instead of dropping to the page.
+  const [isFormFocused, setIsFormFocused] = useState(false);
+  const primaryRef = useRef<HTMLButtonElement>(null);
   const { session, status, run, result, error, start, stop } = useDispatchRun(activeReviewId);
   const reparse = useReparseIteration(activeReviewId);
 
@@ -100,10 +103,24 @@ export const AutoDispatch = ({
     const provider = providers.find((p) => p.id === selectedProviderId);
     reparse.reset();
     setIsFormOpen(false);
+    setIsFormFocused(false);
     void start(
       buildDispatchRequest(selectedProviderId, settings, capabilities, activeIterationId),
       { providerName: provider?.name ?? "AI", model: selectedModel }
     );
+    // Run again, Retry and the rest go away once the run starts; the footer's busy button stays.
+    primaryRef.current?.focus();
+  };
+
+  const handleStop = (): void => {
+    stop();
+    // Stop goes away with the run; the footer's button turns into Run again.
+    primaryRef.current?.focus();
+  };
+
+  const handleEdit = (): void => {
+    setIsFormOpen(true);
+    setIsFormFocused(true);
   };
 
   const handleContinue = (): void => {
@@ -140,6 +157,34 @@ export const AutoDispatch = ({
   const outcome = status === "done" && result ? summarizeRunOutcome(result, reparse.data) : null;
   const isOutputUnsaved = result?.kept_previous === true;
 
+  // The run's own line carries Stop while it streams and Edit once it is over (form folded).
+  let runAction: React.ReactNode;
+  if (isStreaming) {
+    runAction = (
+      <Button
+        key="stop"
+        size="sm"
+        icon={<Square size={ICON_SIZE.inline} aria-hidden="true" />}
+        onClick={handleStop}
+      >
+        Stop
+      </Button>
+    );
+  } else if (!isFormOpen) {
+    runAction = (
+      <Button
+        key="edit"
+        variant="ghost"
+        size="sm"
+        icon={<SlidersHorizontal size={ICON_SIZE.inline} aria-hidden="true" />}
+        aria-label="Edit provider and settings"
+        onClick={handleEdit}
+      >
+        Edit
+      </Button>
+    );
+  }
+
   const panel =
     status !== "idle" && run ? (
       <DispatchStreamPanel
@@ -148,21 +193,7 @@ export const AutoDispatch = ({
         run={run}
         isOutputUnsaved={status === "done" && isOutputUnsaved}
         needsAttention={outcome?.needsAttention ?? false}
-        actions={
-          !isStreaming && !isFormOpen ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<SlidersHorizontal size={ICON_SIZE.inline} aria-hidden="true" />}
-              aria-label="Edit provider and settings"
-              onClick={() => {
-                setIsFormOpen(true);
-              }}
-            >
-              Edit
-            </Button>
-          ) : undefined
-        }
+        actions={runAction}
       />
     ) : null;
 
@@ -179,6 +210,7 @@ export const AutoDispatch = ({
             capabilities={capabilities}
             onSettingsChange={handleSettingsChange}
             isDisabled={isStreaming}
+            isFocusedOnOpen={isFormFocused}
           />
         )}
 
@@ -230,8 +262,8 @@ export const AutoDispatch = ({
         canGenerate={Boolean(selectedProviderId)}
         existingCommentsCount={existingCommentsCount}
         outcome={outcome}
+        primaryRef={primaryRef}
         onGenerate={handleDispatch}
-        onStop={stop}
         onPolish={handleContinue}
       />
     </>
