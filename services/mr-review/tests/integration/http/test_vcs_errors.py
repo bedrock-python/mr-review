@@ -5,6 +5,7 @@ The review endpoints have no VCS error handling of their own, so they are what t
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 
@@ -28,38 +29,87 @@ pytestmark = [pytest.mark.integration, pytest.mark.http]
 _MR_PATH = "/api/v4/projects/team%2Fsvc/merge_requests/7"
 
 
-def _status_error(status_code: int, headers: dict[str, str] | None = None) -> httpx.HTTPStatusError:
+def _status_error(
+    status_code: int, headers: dict[str, str] | None = None, body: object = None
+) -> httpx.HTTPStatusError:
     request = httpx.Request("GET", "https://gitlab.example.com/api/v4/projects/1")
-    response = httpx.Response(status_code, headers=headers or {}, request=request)
+    response = httpx.Response(status_code, headers=headers or {}, json=body, request=request)
     return httpx.HTTPStatusError("boom", request=request, response=response)
 
 
 @pytest.mark.parametrize(
     ("upstream", "headers", "expected"),
     [
+        (400, {}, 400),
         (401, {}, 401),
         (403, {}, 403),
         (403, {"X-RateLimit-Remaining": "0"}, 429),
+        (403, {"Retry-After": "60"}, 429),
         (429, {}, 429),
         (404, {}, 404),
         (409, {}, 502),
+        (422, {}, 422),
         (500, {}, 502),
         (503, {}, 502),
     ],
 )
 def test__vcs_status_error_to_http__maps_upstream_status(upstream: int, headers: dict[str, str], expected: int) -> None:
-    status_code, detail = vcs_status_error_to_http(_status_error(upstream, headers))
+    failure = vcs_status_error_to_http(_status_error(upstream, headers))
 
-    assert status_code == expected
-    assert detail
+    assert failure.status_code == expected
+    assert failure.detail
+
+
+@pytest.mark.parametrize("status_code", [400, 422])
+def test__vcs_status_error_to_http__rejected_request__passes_status_and_host_message(status_code: int) -> None:
+    body = {"message": "Validation Failed", "errors": [{"message": "per_page is too large"}]}
+
+    failure = vcs_status_error_to_http(_status_error(status_code, body=body))
+
+    assert failure.status_code == status_code
+    assert "Validation Failed" in failure.detail
+
+
+@pytest.mark.parametrize(
+    ("status_code", "headers", "body"),
+    [
+        (403, {}, {"message": "You have exceeded a secondary rate limit. Please wait a few minutes."}),
+        (403, {"Retry-After": "30"}, {"message": "slow down"}),
+        (429, {"Retry-After": "30"}, None),
+    ],
+)
+def test__vcs_status_error_to_http__github_secondary_rate_limit__is_429(
+    status_code: int, headers: dict[str, str], body: object
+) -> None:
+    failure = vcs_status_error_to_http(_status_error(status_code, headers, body))
+
+    assert failure.status_code == 429
+    assert failure.headers.get("Retry-After") == headers.get("Retry-After")
+
+
+def test__vcs_status_error_to_http__primary_limit_reset__becomes_retry_after() -> None:
+    reset_at = int(time.time()) + 120
+    failure = vcs_status_error_to_http(
+        _status_error(403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(reset_at)})
+    )
+
+    assert failure.status_code == 429
+    assert 100 <= int(failure.headers["Retry-After"]) <= 121
+
+
+def test__vcs_status_error_to_http__plain_forbidden__stays_403() -> None:
+    failure = vcs_status_error_to_http(_status_error(403, body={"message": "Resource not accessible by token"}))
+
+    assert failure.status_code == 403
+    assert "Retry-After" not in failure.headers
 
 
 def test__vcs_request_error_to_http__timeout_is_504_other_transport_errors_502() -> None:
     request = httpx.Request("GET", "https://gitlab.example.com/")
 
-    assert vcs_request_error_to_http(httpx.ReadTimeout("slow", request=request))[0] == 504
-    assert vcs_request_error_to_http(httpx.ConnectTimeout("slow", request=request))[0] == 504
-    assert vcs_request_error_to_http(httpx.ConnectError("refused", request=request))[0] == 502
+    assert vcs_request_error_to_http(httpx.ReadTimeout("slow", request=request)).status_code == 504
+    assert vcs_request_error_to_http(httpx.ConnectTimeout("slow", request=request)).status_code == 504
+    assert vcs_request_error_to_http(httpx.ConnectError("refused", request=request)).status_code == 502
 
 
 @pytest.fixture
@@ -105,6 +155,8 @@ def _raise(exc_type: type[httpx.RequestError]) -> Callable[[httpx.Request], http
         (json_response({"message": "401 Unauthorized"}, status_code=401), 401),
         (json_response({"message": "403 Forbidden"}, status_code=403), 403),
         (json_response({"message": "404 Not found"}, status_code=404), 404),
+        (json_response({"message": "400 Bad request"}, status_code=400), 400),
+        (json_response({"message": "secondary rate limit"}, status_code=403, headers={"Retry-After": "7"}), 429),
         (json_response({"message": "boom"}, status_code=500), 502),
         (_raise(httpx.ReadTimeout), 504),
         (_raise(httpx.ConnectError), 502),
@@ -134,6 +186,8 @@ async def test__review_endpoints__vcs_failure__mapped_status(
 
     assert response.status_code == expected
     assert response.json()["detail"]
+    if expected == 429:
+        assert response.headers["Retry-After"] == "7"
 
 
 async def test__repos_endpoint__vcs_404__is_404(api: AsyncClient, review_id: str, gitlab: RoutedTransport) -> None:
