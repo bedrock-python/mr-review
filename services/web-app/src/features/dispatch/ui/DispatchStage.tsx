@@ -32,7 +32,10 @@ import type { AIProvider } from "@entities/ai-provider";
 type Mode = "auto" | "manual";
 
 const PROMPT_STALE_TIME_MS = 5 * 60 * 1000;
-const SKELETON_CARDS = [0, 1, 2];
+const SKELETON_CARDS = [0, 1];
+// The shapes of the form that replaces it: a section label, a provider card.
+const SKELETON_LABEL_WIDTH_PX = 72;
+const SKELETON_CARD_HEIGHT_PX = 64;
 
 const ProvidersSkeleton = (): React.ReactElement => (
   <div
@@ -40,13 +43,18 @@ const ProvidersSkeleton = (): React.ReactElement => (
     aria-label="Loading AI providers"
     style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}
   >
-    <Skeleton width={72} height={10} />
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-2)" }}>
+    <Skeleton width={SKELETON_LABEL_WIDTH_PX} height="var(--fs-eyebrow)" />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "var(--space-2)" }}>
       {SKELETON_CARDS.map((i) => (
-        <Skeleton key={i} height={72} radius="card" />
+        <Skeleton key={i} height={SKELETON_CARD_HEIGHT_PX} radius="card" />
       ))}
     </div>
-    <Skeleton height={30} radius="control" style={{ marginTop: "var(--space-5)" }} />
+    <Skeleton
+      width={SKELETON_LABEL_WIDTH_PX}
+      height="var(--fs-eyebrow)"
+      style={{ marginTop: "var(--space-5)" }}
+    />
+    <Skeleton height="var(--control-md)" radius="control" />
   </div>
 );
 
