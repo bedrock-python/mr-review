@@ -219,7 +219,8 @@
   .ui-choice:hover .ui-choice__control > input:not(:disabled) {
     border-color: var(--fg-3);
   }
-  .ui-choice__control > input:checked {
+  .ui-choice__control > input:checked,
+  .ui-choice__control > input[type="checkbox"]:indeterminate {
     background: var(--accent);
     border-color: var(--accent);
   }
