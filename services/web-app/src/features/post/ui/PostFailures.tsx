@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { Ban, CircleQuestionMark, CircleX, MapPinOff } from "lucide-react";
-import { Button, Card, Dialog, ICON_SIZE, SectionHeader } from "@shared/ui";
+import { Card, ConfirmDialog, ICON_SIZE, SectionHeader } from "@shared/ui";
 import { MONO_META, SECTION } from "./postStyles";
 import type { Comment, PostFailureKind } from "@entities/review";
 import type { LucideIcon } from "lucide-react";
@@ -92,20 +92,14 @@ export const ResendConfirm = ({
 }: ResendConfirmProps): React.ReactElement => {
   const them = count === 1 ? "it" : "them";
   return (
-    <Dialog
+    <ConfirmDialog
       isOpen={isOpen}
-      onClose={onCancel}
-      size="sm"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      tone="primary"
       title={`Send ${them} again?`}
       description={`${count === 1 ? "1 comment" : `${String(count)} comments`} may already be on the MR: the host did not answer in time. Check the MR first — posting ${them} again can duplicate ${them}.`}
-      footer={
-        <>
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" onClick={onConfirm}>
-            Post {them} again
-          </Button>
-        </>
-      }
+      confirmLabel={`Post ${them} again`}
     />
   );
 };

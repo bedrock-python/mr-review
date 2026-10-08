@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Bookmark, Pencil, Trash2 } from "lucide-react";
 import {
+  DeletePresetConfirm,
   PresetEditor,
   useBuiltinPresets,
   useDeleteReviewPreset,
@@ -105,24 +106,32 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
           Edit
         </Button>
         <Button
-          variant={isConfirming ? "danger" : "ghost"}
+          variant="ghost"
+          tone="danger"
           size="sm"
           icon={icon(Trash2)}
-          isLoading={deletePreset.isPending}
-          aria-label={
-            isConfirming ? `Confirm deleting preset ${preset.name}` : `Delete preset ${preset.name}`
-          }
+          aria-label={`Delete preset ${preset.name}`}
           onClick={() => {
-            if (!isConfirming) {
-              setIsConfirming(true);
-              return;
-            }
-            deletePreset.mutate(preset.id);
+            setIsConfirming(true);
           }}
         >
-          {isConfirming ? "Confirm" : "Delete"}
+          Delete
         </Button>
       </div>
+      <DeletePresetConfirm
+        preset={isConfirming ? preset : null}
+        isPending={deletePreset.isPending}
+        onCancel={() => {
+          setIsConfirming(false);
+        }}
+        onConfirm={() => {
+          deletePreset.mutate(preset.id, {
+            onSuccess: () => {
+              setIsConfirming(false);
+            },
+          });
+        }}
+      />
     </li>
   );
 };

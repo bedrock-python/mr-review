@@ -153,6 +153,11 @@
     border-top: 1px solid var(--border);
   }
 
+  /* No body between them: one rule, not the header's and the footer's stacked */
+  .ui-dialog__header + .ui-dialog__footer {
+    border-top: 0;
+  }
+
   .ui-drawer {
     position: fixed;
     top: 0;

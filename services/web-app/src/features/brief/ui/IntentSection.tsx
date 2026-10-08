@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 import { BookmarkPlus, Eye, EyeOff } from "lucide-react";
 import {
+  DeletePresetConfirm,
   useBuiltinPresets,
   useDeleteReviewPreset,
   useReviewPresets,
@@ -35,7 +36,7 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
   const deletePreset = useDeleteReviewPreset();
   const [editor, setEditor] = useState<EditorState>(null);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ReviewPreset | null>(null);
 
   const selectedCustom = presets?.find((p) => p.id === config.custom_preset_id);
   const isMissing = config.custom_preset_id !== null && presets !== undefined && !selectedCustom;
@@ -48,7 +49,6 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
 
   // Applying a saved preset overwrites brief settings; Undo puts back what it changed.
   const handleToggleSaved = (preset: ReviewPreset): void => {
-    setConfirmingDeleteId(null);
     if (preset.id === config.custom_preset_id) {
       onChange({ custom_preset_id: null });
       return;
@@ -72,15 +72,13 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
     );
   };
 
-  const handleDelete = (preset: ReviewPreset): void => {
-    if (confirmingDeleteId !== preset.id) {
-      setConfirmingDeleteId(preset.id);
-      return;
-    }
-    setConfirmingDeleteId(null);
-    deletePreset.mutate(preset.id, {
+  const handleConfirmDelete = (): void => {
+    if (deleteTarget === null) return;
+    const { id: presetId } = deleteTarget;
+    deletePreset.mutate(presetId, {
       onSuccess: () => {
-        if (config.custom_preset_id === preset.id) onChange({ custom_preset_id: null });
+        setDeleteTarget(null);
+        if (config.custom_preset_id === presetId) onChange({ custom_preset_id: null });
       },
     });
   };
@@ -94,7 +92,6 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
         <PresetPicker
           selected={builtinSelected}
           onSelect={(preset) => {
-            setConfirmingDeleteId(null);
             onChange({ preset, custom_preset_id: null });
           }}
         />
@@ -102,16 +99,21 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
           <SavedPresetList
             presets={presets}
             selectedId={selectedCustom?.id ?? null}
-            confirmingDeleteId={confirmingDeleteId}
-            deletingId={deletePreset.isPending ? deletePreset.variables : null}
             onToggle={handleToggleSaved}
             onEdit={(preset) => {
-              setConfirmingDeleteId(null);
               setEditor({ mode: "edit", preset });
             }}
-            onDelete={handleDelete}
+            onDelete={setDeleteTarget}
           />
         )}
+        <DeletePresetConfirm
+          preset={deleteTarget}
+          isPending={deletePreset.isPending}
+          onCancel={() => {
+            setDeleteTarget(null);
+          }}
+          onConfirm={handleConfirmDelete}
+        />
       </div>
       {isMissing && (
         <Callout tone="warn" size="sm" role="status" style={{ marginTop: "var(--space-3)" }}>

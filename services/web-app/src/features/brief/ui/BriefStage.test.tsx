@@ -542,9 +542,9 @@ describe("BriefStage — saved presets", () => {
         screen.getByRole("form", { name: "Edit preset Release hardening" })
       ).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Delete preset Release hardening" }));
-      await user.click(
-        screen.getByRole("button", { name: "Confirm deleting preset Release hardening" })
-      );
+      const confirm = screen.getByRole("dialog", { name: "Delete preset Release hardening?" });
+      expect(within(confirm).getByRole("button", { name: "Cancel" })).toHaveFocus();
+      await user.click(within(confirm).getByRole("button", { name: "Delete preset" }));
 
       await waitFor(() => {
         expect(presetApi.delete).toHaveBeenCalledWith(OTHER_PRESET.id);

@@ -55,13 +55,22 @@ describe("ReviewPresetsManager", () => {
     expect(screen.getByText("Focus on security.")).toBeInTheDocument();
   });
 
-  it("deletes a preset only after a second, confirming click", async () => {
+  it("deletes a preset only after the confirmation dialog, which Cancel leaves", async () => {
     const user = userEvent.setup();
     renderWithQueryClient(<ReviewPresetsManager />);
 
-    await user.click(await screen.findByRole("button", { name: "Delete preset Public API" }));
+    const remove = await screen.findByRole("button", { name: "Delete preset Public API" });
+    await user.click(remove);
+    let dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(remove).toHaveFocus();
+
+    await user.click(remove);
     expect(presetApi.delete).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm deleting preset Public API" }));
+    dialog = screen.getByRole("dialog", { name: "Delete preset Public API?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete preset" }));
 
     await waitFor(() => {
       expect(presetApi.delete).toHaveBeenCalledWith(PRESET.id);

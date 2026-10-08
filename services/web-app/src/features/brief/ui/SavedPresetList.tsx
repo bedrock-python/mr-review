@@ -14,11 +14,10 @@ const icon = (Icon: typeof Pencil): React.ReactNode => (
 export type SavedPresetListProps = {
   presets: ReviewPreset[];
   selectedId: string | null;
-  confirmingDeleteId: string | null;
-  deletingId: string | null;
   /** Click, Enter or Space on a preset: use it, or stop using the one in use. */
   onToggle: (preset: ReviewPreset) => void;
   onEdit: (preset: ReviewPreset) => void;
+  /** Asks first (a ConfirmDialog), like every delete in the app. */
   onDelete: (preset: ReviewPreset) => void;
 };
 
@@ -30,8 +29,6 @@ export type SavedPresetListProps = {
 export const SavedPresetList = ({
   presets,
   selectedId,
-  confirmingDeleteId,
-  deletingId,
   onToggle,
   onEdit,
   onDelete,
@@ -56,7 +53,6 @@ export const SavedPresetList = ({
       >
         {presets.map((preset) => {
           const isSelected = preset.id === selectedId;
-          const isConfirming = preset.id === confirmingDeleteId;
           return (
             <li
               key={preset.id}
@@ -113,20 +109,16 @@ export const SavedPresetList = ({
                 Edit
               </Button>
               <Button
-                variant={isConfirming ? "danger" : "ghost"}
+                variant="ghost"
+                tone="danger"
                 size="sm"
                 icon={icon(Trash2)}
-                isLoading={preset.id === deletingId}
-                aria-label={
-                  isConfirming
-                    ? `Confirm deleting preset ${preset.name}`
-                    : `Delete preset ${preset.name}`
-                }
+                aria-label={`Delete preset ${preset.name}`}
                 onClick={() => {
                   onDelete(preset);
                 }}
               >
-                {isConfirming ? "Confirm" : "Delete"}
+                Delete
               </Button>
             </li>
           );
