@@ -4,11 +4,13 @@ Layout, top to bottom: the task (preset instructions, additional instructions, f
 project context, MR title and description, comments already reported, the diff, full files,
 tests, related code, commit history, and the output format.
 
-Budget (``BriefConfig.prompt_budget_chars``): the task and the output format always go in. The
-rest is added in priority order — diff, description, previous comments, project context, full
-files, tests, related code, commit history — item by item (a file, a comment) while it fits. The
-first item that does not fit is cut short at a line break when at least ``_MIN_PARTIAL_CHARS`` of
-it fits; the rest of that section is left out, with a note in the prompt naming what is missing.
+Budget (``BriefConfig.prompt_budget_chars``): the output format always goes in, and the task —
+however long the saved or additional instructions — takes at most a quarter of the budget (cut
+from the end, with a marker). The rest is added in priority order — diff, description, previous
+comments, project context, full files, tests, related code, commit history — item by item (a
+file, a comment) while it fits. The first item that does not fit is cut short at a line break
+when at least ``_MIN_PARTIAL_CHARS`` of it fits; the rest of that section is left out, with a
+note in the prompt naming what is missing.
 Lower-priority sections then get whatever room is left. Every file is also capped at
 ``MAX_FILE_CHARS``, and file content that looks binary is skipped.
 """
@@ -20,19 +22,25 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final
 
-from mr_review.core.mrs.entities import DiffFile
+from mr_review.core.mrs.entities import DiffFile, DiffHunk
 from mr_review.core.review_presets.entities import BUILTIN_PRESETS
 from mr_review.core.reviews.entities import BriefConfig, Comment
 from mr_review.core.reviews.severity import severities_at_least
 from mr_review.use_cases.reviews.context_files import GatheredContext
 
 MAX_FILE_CHARS: Final = 50_000
+# The most of the budget the task text (intent, additional instructions, focus areas) may take.
+_TASK_SHARE: Final = 0.25
 # An item is cut short only when at least this much of it fits; otherwise it is left out.
 _MIN_PARTIAL_CHARS: Final = 2_000
 # Room kept free in a section that does not fit whole, for the note on what was left out.
 _NOTE_RESERVE: Final = 600
 _PREVIOUS_BODY_CHARS: Final = 400
 _BINARY_SAMPLE_CHARS: Final = 8_000
+# Hosts decode files as UTF-8, replacing what is not. Source in a legacy 8-bit encoding (cp1252,
+# cp1251) comes out with a U+FFFD per accented letter — a few percent of the text — and is still
+# worth reviewing; only text that is mostly replacement characters is binary.
+_BINARY_REPLACEMENT_SHARE: Final = 0.3
 _SECTION_JOIN: Final = "\n\n"
 _FILE_SEPARATOR: Final = "\n\n---\n\n"
 _DIFF_PREFIX: Final = {"context": " ", "added": "+", "removed": "-"}
@@ -40,9 +48,11 @@ _BACKTICK_RUN_RE: Final = re.compile(r"`{3,}")
 
 
 def looks_binary(content: str) -> bool:
-    """NUL bytes, or many U+FFFD from bytes that were not valid UTF-8, at the start of the text."""
+    """NUL bytes, or mostly U+FFFD (bytes that were not UTF-8), at the start of the text."""
     sample = content[:_BINARY_SAMPLE_CHARS]
-    return "\x00" in sample or sample.count("�") > max(2, len(sample) // 200)
+    if "\x00" in sample:
+        return True
+    return bool(sample) and sample.count("�") / len(sample) > _BINARY_REPLACEMENT_SHARE
 
 
 def _fence(*texts: str) -> str:
@@ -201,6 +211,15 @@ def _fit(section: _Section, room: int) -> tuple[str, SectionSize]:
 # ── diff ──────────────────────────────────────────────────────────────────────
 
 
+def _hunk_header(hunk: DiffHunk) -> str:
+    """The ``@@`` line with counts of the lines that follow it — not the counts the host sent: a
+    reader of this text trusts them to know where the hunk ends, and a patch cut short by the
+    host would otherwise pull the next file's header into this hunk."""
+    old_count = sum(line.type != "added" for line in hunk.lines)
+    new_count = sum(line.type != "removed" for line in hunk.lines)
+    return f"@@ -{hunk.old_start},{old_count} +{hunk.new_start},{new_count} @@"
+
+
 def format_diff_file(diff_file: DiffFile, *, annotate_lines: bool = False) -> str:
     """One file of a unified diff. With ``annotate_lines`` every line reads
     ``<marker><new-file line number> | <code>``; removed lines have no number."""
@@ -211,7 +230,7 @@ def format_diff_file(diff_file: DiffFile, *, annotate_lines: bool = False) -> st
         default=1,
     )
     for hunk in diff_file.hunks:
-        lines.append(f"@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@")
+        lines.append(_hunk_header(hunk))
         for line in hunk.lines:
             prefix = _DIFF_PREFIX[line.type]
             if not annotate_lines:
@@ -438,19 +457,35 @@ def _output_format(config: BriefConfig) -> str:
     )
 
 
+def _instructions_size(task: str, full_task: str, output: str) -> SectionSize:
+    truncated = ("instructions",) if len(task) < len(full_task) else ()
+    return SectionSize(
+        "instructions",
+        "Instructions",
+        len(task) + len(_SECTION_JOIN) + len(output),
+        len(full_task) + len(_SECTION_JOIN) + len(output),
+        1,
+        1,
+        truncated,
+    )
+
+
 def compose_prompt(config: BriefConfig, inputs: PromptInputs) -> ComposedPrompt:
     """The prompt for ``config`` over ``inputs``, cut to the brief's budget, with a size breakdown."""
     intent = inputs.intent or BUILTIN_PRESETS[config.preset].instructions
-    task = _task(config, intent)
-    output = _output_format(config)
     budget = config.prompt_budget_chars
+    full_task = _task(config, intent)
+    # The task text — preset or saved instructions, additional instructions, focus areas — may
+    # take only a share of the budget, so the diff always keeps most of it; what is cut goes
+    # from the end (focus areas first, the review intent last).
+    task_room = int(budget * _TASK_SHARE)
+    task = full_task if len(full_task) <= task_room else _cut(full_task, task_room)
+    output = _output_format(config)
     used = len(task) + len(_SECTION_JOIN) + len(output)
 
     sections = _sections(config, inputs)
     rendered: dict[str, str] = {}
-    sizes: list[SectionSize] = [
-        SectionSize("instructions", "Instructions", used - len(_SECTION_JOIN), used - len(_SECTION_JOIN), 1, 1)
-    ]
+    sizes: list[SectionSize] = [_instructions_size(task, full_task, output)]
     for key in _PRIORITY:
         section = sections.get(key)
         if section is None:

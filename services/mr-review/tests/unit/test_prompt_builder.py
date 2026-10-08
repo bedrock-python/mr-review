@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from mr_review.core.mrs.entities import DiffFile, DiffHunk, DiffLine
 from mr_review.core.reviews.entities import MIN_PROMPT_BUDGET_CHARS, BriefConfig
+from mr_review.infra.vcs._diff_parser import diff_file_from_patch
 from mr_review.use_cases.reviews.context_files import GatheredContext
 from mr_review.use_cases.reviews.prompt_builder import (
     MAX_FILE_CHARS,
@@ -213,14 +214,78 @@ def test__budget__lower_priority_section_uses_the_room_left() -> None:
     assert "`abc1234` 2026-01-01 **dev**: Fix" in prompt.text
 
 
-def test__budget__instructions_always_whole() -> None:
+def test__budget__huge_instructions_cut_so_the_diff_still_fits() -> None:
     config = BriefConfig(prompt_budget_chars=MIN_PROMPT_BUDGET_CHARS, custom_instructions="z" * 25_000)
 
     prompt = _compose(config, diff_files=[_numbered_file()])
 
-    assert "z" * 25_000 in prompt.text
-    assert _section(prompt, "diff").included == 0
+    assert prompt.total_chars <= MIN_PROMPT_BUDGET_CHARS
+    assert prompt.text.startswith("# Code Review Task\n\nPerform a thorough code review.")
+    assert "… [cut:" in prompt.text
+    assert _section(prompt, "instructions").truncated == ("instructions",)
+    assert _section(prompt, "diff").included == 1
+    assert "+11 |     return compute()" in prompt.text
     assert "## Output Format" in prompt.text
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"custom_instructions": "c" * 3_000, "focus_areas": [f"{i} " + "f" * 150 for i in range(30)]},
+        {"custom_instructions": "c" * 30_000},
+    ],
+)
+def test__budget__diff_keeps_most_of_a_small_budget_whatever_the_instructions(fields: dict[str, object]) -> None:
+    config = BriefConfig.model_validate({"prompt_budget_chars": MIN_PROMPT_BUDGET_CHARS, **fields})
+    files = [_big_file(f"src/m{i}.py", 60) for i in range(8)]
+
+    prompt = _compose(config, diff_files=files, intent="Review the API." * 2_000)
+
+    assert prompt.total_chars <= MIN_PROMPT_BUDGET_CHARS
+    assert _section(prompt, "diff").chars >= MIN_PROMPT_BUDGET_CHARS // 2
+
+
+def test__hunk_header__counts_the_lines_actually_written() -> None:
+    """A host may send a hunk shorter than its header claims; the header must not promise lines
+    that are not there, or the next file's header is read as part of this hunk."""
+    short = DiffHunk(
+        old_start=1,
+        old_count=40,
+        new_start=1,
+        new_count=42,
+        lines=[
+            DiffLine(type="context", old_line=1, new_line=1, content="a"),
+            DiffLine(type="removed", old_line=2, content="b"),
+            DiffLine(type="added", new_line=2, content="c"),
+            DiffLine(type="added", new_line=3, content="d"),
+        ],
+    )
+    files = [DiffFile(path="a.py", additions=2, deletions=1, hunks=[short]), _numbered_file("b.py")]
+
+    lines = format_diff(files).splitlines()
+
+    assert lines[2] == "@@ -1,2 +1,3 @@"
+    assert lines[3:7] == [" a", "-b", "+c", "+d"]
+    assert lines[7] == "--- a/b.py"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the diff parser counts '\\ No newline at end of file' as a context line and numbers the "
+        "lines after it one too high (infra/vcs/_diff_parser.py); fixed by fix/posting-and-diffs"
+    ),
+)
+def test__annotation__no_newline_marker_does_not_shift_line_numbers() -> None:
+    patch = (
+        "@@ -1,2 +1,3 @@\n first\n-second\n\\ No newline at end of file\n+second\n+third\n"
+        "\\ No newline at end of file\n"
+    )
+    diff_file = diff_file_from_patch("a.txt", None, patch)
+
+    lines = format_diff_file(diff_file, annotate_lines=True).splitlines()
+
+    assert lines[3:] == [" 1 | first", "-  | second", "+2 | second", "+3 | third"]
 
 
 def test__budget__breakdown_lists_sections_in_priority_order_with_sizes() -> None:
@@ -273,6 +338,35 @@ def test__binary_content__skipped_and_reported() -> None:
 )
 def test__looks_binary(content: str, binary: bool) -> None:
     assert looks_binary(content) is binary
+
+
+def _as_host_decodes(source: str, encoding: str) -> str:
+    """What a host returns for a file stored in ``encoding``: its bytes read as UTF-8."""
+    return source.encode(encoding).decode("utf-8", errors="replace")
+
+
+@pytest.mark.parametrize(
+    ("source", "encoding"),
+    [
+        (
+            "// Prüfe die Größe der Übergabe; Fehler früh melden\n"
+            + "public int size(List<String> items) { return items.size(); }\n" * 3,
+            "cp1252",
+        ),
+        ("# Проверка размера\n" + "def size(items):\n    return len(items)\n" * 4, "cp1251"),
+    ],
+)
+def test__looks_binary__legacy_encoded_source_is_still_text(source: str, encoding: str) -> None:
+    text = _as_host_decodes(source * 30, encoding)
+
+    assert "�" in text
+    assert looks_binary(text) is False
+
+
+def test__looks_binary__undecodable_bytes_are_binary() -> None:
+    noise = bytes((i * 151 + 7) % 128 + 128 for i in range(4_000)).decode("utf-8", errors="replace")
+
+    assert looks_binary(noise) is True
 
 
 def test__code_fence__longer_than_backticks_inside_the_file() -> None:
