@@ -211,7 +211,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
   );
 };
 
-export const PickStage = (): React.ReactElement => {
+const PickWorkspace = (): React.ReactElement => {
   const { selectedHostId, selectedRepoPath, selectedMRIid } = useNav();
   const { goToStage, isPending } = useStageNavigation();
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -287,47 +287,54 @@ export const PickStage = (): React.ReactElement => {
   }
 
   return (
-    <>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "240px 1fr 320px",
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
-        {/* Left: file tree */}
-        <FileList
-          files={diff ?? []}
-          selectedPath={activeFile?.path ?? null}
-          onSelect={setSelectedFilePath}
-        />
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "240px 1fr 320px",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
+      {/* Left: file tree */}
+      <FileList
+        files={diff ?? []}
+        selectedPath={activeFile?.path ?? null}
+        onSelect={setSelectedFilePath}
+      />
 
-        {/* Center: diff viewer — it scrolls its own rows, so it can render only the visible ones */}
-        <div style={{ overflow: "hidden", minWidth: 0, minHeight: 0 }}>
-          {activeFile ? (
-            <DiffViewer file={activeFile} />
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                fontSize: 13,
-                color: "var(--fg-3)",
-              }}
-            >
-              No changes in this MR
-            </div>
-          )}
-        </div>
-
-        {/* Right: sidebar */}
-        {mr && (
-          <Sidebar mr={mr} diffStats={diffStats} onCompose={handleCompose} isCreating={isPending} />
+      {/* Center: diff viewer — it scrolls its own rows, so it can render only the visible ones */}
+      <div style={{ overflow: "hidden", minWidth: 0, minHeight: 0 }}>
+        {activeFile ? (
+          <DiffViewer file={activeFile} />
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              fontSize: 13,
+              color: "var(--fg-3)",
+            }}
+          >
+            No changes in this MR
+          </div>
         )}
       </div>
-    </>
+
+      {/* Right: sidebar */}
+      {mr && (
+        <Sidebar mr={mr} diffStats={diffStats} onCompose={handleCompose} isCreating={isPending} />
+      )}
+    </div>
   );
+};
+
+/**
+ * The file tree keeps its expanded folders, filter and selection per merge request: a new
+ * one starts from its own files, not from the previous merge request's view.
+ */
+export const PickStage = (): React.ReactElement => {
+  const { selectedHostId, selectedRepoPath, selectedMRIid } = useNav();
+  return <PickWorkspace key={[selectedHostId, selectedRepoPath, selectedMRIid].join("|")} />;
 };
