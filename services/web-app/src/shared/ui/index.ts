@@ -27,13 +27,14 @@ export type {
   RadioGroupProps,
   SwitchProps,
 } from "./choice";
-export { Badge, StatusBadge, CountBadge, Chip, Tag, toneAttribute } from "./badge";
+export { Badge, StatusBadge, StatusDot, CountBadge, Chip, Tag, toneAttribute } from "./badge";
 export { Meter } from "./meter";
 export type { MeterProps } from "./meter";
 export type {
   BadgeProps,
   Status,
   StatusBadgeProps,
+  StatusDotProps,
   CountBadgeProps,
   ChipProps,
   TagProps,

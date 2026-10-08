@@ -1,13 +1,7 @@
-import { getDiffStats } from "@entities/mr";
+import { getDiffStats, pipelineStatus } from "@entities/mr";
 import { ROW_FOCUS_ATTR, cn, formatRelative } from "@shared/lib";
-import { StatusBadge } from "@shared/ui";
-import type { MR, PipelineStatus } from "@entities/mr";
-
-const PIPELINE_DOT: Record<Exclude<PipelineStatus, "none">, { color: string; label: string }> = {
-  passed: { color: "var(--c-success)", label: "Pipeline passed" },
-  failed: { color: "var(--c-danger)", label: "Pipeline failed" },
-  running: { color: "var(--c-warn)", label: "Pipeline running" },
-};
+import { StatusBadge, StatusDot } from "@shared/ui";
+import type { MR } from "@entities/mr";
 
 const rowFocusProps = { [ROW_FOCUS_ATTR]: "" };
 
@@ -75,17 +69,9 @@ export const MRItemHeadline = ({
 );
 
 const PipelineDot = ({ status }: { status: MR["pipeline"] }): React.ReactElement | null => {
-  if (status === null || status === "none") return null;
-  const look = PIPELINE_DOT[status];
-  return (
-    <span
-      role="img"
-      aria-label={look.label}
-      title={look.label}
-      className="size-(--dot-size) shrink-0 rounded-full"
-      style={{ background: look.color }}
-    />
-  );
+  const look = pipelineStatus(status);
+  if (look === null) return null;
+  return <StatusDot status={look.status} label={look.description} isLive={look.isLive} />;
 };
 
 /** "+12 −3", or nothing when the host did not report stats for list views. */

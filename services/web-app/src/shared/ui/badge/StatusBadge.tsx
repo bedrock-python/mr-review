@@ -1,4 +1,6 @@
+import { cn } from "@shared/lib";
 import { Badge } from "./Badge";
+import { toneAttribute } from "./tone";
 import type { Tone } from "./tone";
 
 /**
@@ -25,6 +27,30 @@ export type StatusBadgeProps = {
   title?: string;
   className?: string;
 };
+
+export type StatusDotProps = {
+  status: Status;
+  /** Its name, read and shown on hover: "Pipeline running". */
+  label: string;
+  isLive?: boolean;
+  className?: string;
+};
+
+/** A status as a lone dot, where a badge would crowd the row (the MR list's pipeline). */
+export const StatusDot = ({
+  status,
+  label,
+  isLive = false,
+  className,
+}: StatusDotProps): React.ReactElement => (
+  <span
+    role="img"
+    aria-label={label}
+    title={label}
+    data-tone={toneAttribute(STATUS_TONE[status])}
+    className={cn("ui-dot", isLive && "ui-dot--pulse", className)}
+  />
+);
 
 /** The state of a thing (an MR, a run, an iteration) as a dotted badge. */
 export const StatusBadge = ({

@@ -5,8 +5,18 @@ import { describe, expect, it, vi } from "vitest";
 import { Badge } from "./Badge";
 import { Chip } from "./Chip";
 import { CountBadge } from "./CountBadge";
-import { StatusBadge } from "./StatusBadge";
+import { StatusBadge, StatusDot } from "./StatusBadge";
 import { Tag } from "./Tag";
+
+describe("StatusDot", () => {
+  it("is a named image in the status's tone, pulsing while live", () => {
+    render(<StatusDot status="active" label="Pipeline running" isLive />);
+
+    const dot = screen.getByRole("img", { name: "Pipeline running" });
+    expect(dot).toHaveAttribute("data-tone", "accent");
+    expect(dot).toHaveClass("ui-dot", "ui-dot--pulse");
+  });
+});
 
 describe("Tag", () => {
   it("keeps an identifier as it is and titles it for when it is cut", () => {

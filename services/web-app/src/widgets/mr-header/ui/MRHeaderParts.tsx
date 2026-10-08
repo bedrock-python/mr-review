@@ -1,8 +1,16 @@
 import { toast } from "sonner";
 import { ExternalLink, GitBranch, History, RefreshCw } from "lucide-react";
-import { formatBranchRange } from "@entities/mr";
+import { formatBranchRange, mrStateStatus, pipelineStatus } from "@entities/mr";
 import { copyText, formatRelative } from "@shared/lib";
-import { Button, CountBadge, ICON_SIZE, StatusBadge, Tooltip, buttonClassName } from "@shared/ui";
+import {
+  Button,
+  CountBadge,
+  ICON_SIZE,
+  StatusBadge,
+  StatusDot,
+  Tooltip,
+  buttonClassName,
+} from "@shared/ui";
 import { truncateMiddle } from "../lib/truncateMiddle";
 import { MetaDivider } from "./MRHeaderStates";
 import type { MR } from "@entities/mr";
@@ -127,6 +135,9 @@ const BranchChip = ({ mr }: { mr: MR }): React.ReactElement | null => {
 /** Author · age · branches · sha · draft, in the header's meta row. */
 export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
   const sha = (mr as MR & { sha?: string }).sha;
+  // An open MR is the normal case and says nothing; merged or closed is worth a badge.
+  const state = mrStateStatus(mr.status);
+  const pipeline = pipelineStatus(mr.pipeline);
   return (
     // Takes what the row leaves (basis 0): the branch chip gets cut before the actions wrap.
     <div className="text-fg-2 flex min-w-0 flex-1 basis-0 items-center gap-(--space-2) text-(length:--fs-meta)">
@@ -145,7 +156,11 @@ export const MRHeaderMeta = ({ mr }: { mr: MR }): React.ReactElement => {
       </span>
       <BranchChip mr={mr} />
       {sha && <span className="shrink-0 font-mono">{sha.slice(0, SHA_CHARS)}</span>}
+      {mr.status !== "opened" && <StatusBadge status={state.status} label={state.label} />}
       {mr.draft && <StatusBadge status="neutral" label="Draft" />}
+      {pipeline !== null && (
+        <StatusDot status={pipeline.status} label={pipeline.description} isLive={pipeline.isLive} />
+      )}
     </div>
   );
 };

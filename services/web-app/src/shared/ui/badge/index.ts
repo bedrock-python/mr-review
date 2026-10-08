@@ -1,7 +1,7 @@
 export { Badge } from "./Badge";
 export type { BadgeProps } from "./Badge";
-export { StatusBadge } from "./StatusBadge";
-export type { Status, StatusBadgeProps } from "./StatusBadge";
+export { StatusBadge, StatusDot } from "./StatusBadge";
+export type { Status, StatusBadgeProps, StatusDotProps } from "./StatusBadge";
 export { CountBadge } from "./CountBadge";
 export type { CountBadgeProps } from "./CountBadge";
 export { Chip } from "./Chip";
