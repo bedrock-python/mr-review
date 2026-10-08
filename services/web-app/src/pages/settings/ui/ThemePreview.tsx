@@ -1,19 +1,5 @@
 export type ThemeName = "ink" | "paper" | "phosphor";
 
-/**
- * The token file defines ink on `:root` alone, so a subtree cannot switch back to ink while
- * another theme is active. Until `[data-theme="ink"]` joins that selector, the ink preview
- * carries ink's values for the few tokens it draws with. Delete this once the selector exists.
- */
-const INK_TOKENS = {
-  "--bg-0": "#0c0d10",
-  "--bg-1": "#14161b",
-  "--border": "#2a2e36",
-  "--border-strong": "#3a3f48",
-  "--fg-2": "#8a8f8a",
-  "--accent": "oklch(86% 0.22 120)",
-} as React.CSSProperties;
-
 const frameStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "var(--space-4) minmax(0, 1fr)",
@@ -55,11 +41,7 @@ const line = (width: string, color: string): React.CSSProperties => ({
  * `var(--…)` inside it resolve to that theme, whichever theme the page is in.
  */
 export const ThemePreview = ({ theme }: { theme: ThemeName }): React.ReactElement => (
-  <div
-    data-theme={theme}
-    aria-hidden="true"
-    style={theme === "ink" ? { ...INK_TOKENS, ...frameStyle } : frameStyle}
-  >
+  <div data-theme={theme} aria-hidden="true" style={frameStyle}>
     <span style={barStyle} />
     <span style={railStyle} />
     <span style={bodyStyle}>
