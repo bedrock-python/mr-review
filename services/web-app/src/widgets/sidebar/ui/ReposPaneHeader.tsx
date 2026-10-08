@@ -1,4 +1,5 @@
-import { SearchField } from "@shared/ui";
+import { Plus } from "lucide-react";
+import { ICON_SIZE, IconButton, SearchField, Toolbar } from "@shared/ui";
 import type { Host } from "@entities/host";
 
 export type ReposPaneHeaderProps = {
@@ -10,6 +11,10 @@ export type ReposPaneHeaderProps = {
   onAddRepo: () => void;
 };
 
+/**
+ * The host and the repository search, in two rows as tall as the merge request list's
+ * toolbar next to it, so the two panes share one header line.
+ */
 export const ReposPaneHeader = ({
   host,
   search,
@@ -18,71 +23,35 @@ export const ReposPaneHeader = ({
   canAddRepo,
   onAddRepo,
 }: ReposPaneHeaderProps): React.ReactElement => (
-  <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--border)" }}>
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-0)", lineHeight: 1.3 }}>
-        {host?.name ?? "No host selected"}
+  <>
+    <Toolbar size="sm" hasBorder={false} className="gap-(--space-2) px-(--space-3) pt-(--space-1)">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="text-fg-0 truncate text-(length:--fs-body) leading-(--lh-tight) font-semibold">
+          {host?.name ?? "No host selected"}
+        </span>
+        {host && (
+          <span className="text-fg-2 truncate font-mono text-(length:--fs-meta) leading-(--lh-tight)">
+            {host.base_url}
+          </span>
+        )}
       </div>
-      {host && (
-        <div
-          className="mono"
-          style={{
-            fontSize: 10,
-            color: "var(--fg-2)",
-            marginTop: 2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {host.base_url}
-        </div>
-      )}
-    </div>
-
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <IconButton
+        size="sm"
+        label="Add repository by URL"
+        disabled={!canAddRepo}
+        onClick={onAddRepo}
+        icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
+      />
+    </Toolbar>
+    <Toolbar size="sm" className="px-(--space-3) pb-(--space-1)">
       <SearchField
         value={search}
         onValueChange={onSearchChange}
         placeholder="Search repos…"
         ariaLabel="Search repositories"
         isBusy={isSearchBusy}
+        isDisabled={!canAddRepo}
       />
-      <button
-        type="button"
-        title="Add repository by URL"
-        aria-label="Add repository by URL"
-        disabled={!canAddRepo}
-        onClick={onAddRepo}
-        style={{
-          flexShrink: 0,
-          width: 28,
-          height: 28,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--bg-2)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-2)",
-          cursor: canAddRepo ? "pointer" : "not-allowed",
-          color: canAddRepo ? "var(--fg-0)" : "var(--fg-3)",
-          opacity: canAddRepo ? 1 : 0.5,
-          padding: 0,
-        }}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
-    </div>
-  </div>
+    </Toolbar>
+  </>
 );

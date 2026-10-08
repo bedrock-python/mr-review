@@ -1,5 +1,7 @@
 import { memo } from "react";
-import { ROW_FOCUS_ATTR } from "@shared/lib";
+import { ChevronRight, FolderGit2, Star } from "lucide-react";
+import { ROW_FOCUS_ATTR, cn } from "@shared/lib";
+import { ICON_SIZE } from "@shared/ui";
 import { REPO_ROW_HEIGHT } from "../lib/repoTree";
 import type { Repo } from "@entities/mr";
 
@@ -8,37 +10,6 @@ const INDENT_BASE_PX = 10;
 const rowFocusProps = { [ROW_FOCUS_ATTR]: "" };
 
 const getIndent = (depth: number): number => depth * INDENT_STEP_PX + INDENT_BASE_PX;
-
-const RepoIcon = (): React.ReactElement => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    style={{ flexShrink: 0 }}
-    aria-hidden="true"
-  >
-    <path d="M3 3h18v18H3z" />
-    <path d="M9 3v18M9 9h12" />
-  </svg>
-);
-
-const StarIcon = ({ isFilled }: { isFilled: boolean }): React.ReactElement => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill={isFilled ? "currentColor" : "none"}
-    stroke="currentColor"
-    strokeWidth="1.5"
-    style={{ flexShrink: 0 }}
-    aria-hidden="true"
-  >
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
 
 export type RepoRowProps = {
   repo: Repo;
@@ -62,11 +33,8 @@ const RepoRowComponent = ({
     style={{
       height: REPO_ROW_HEIGHT.repo,
       paddingLeft: getIndent(depth),
-      paddingRight: 4,
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      width: "100%",
+      paddingRight: "var(--space-1)",
+      gap: "var(--space-1)",
     }}
   >
     <button
@@ -77,33 +45,10 @@ const RepoRowComponent = ({
       }}
       aria-pressed={isSelected}
       title={repo.path}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        flex: 1,
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        minWidth: 0,
-        padding: 0,
-        color: "inherit",
-      }}
+      className="flex min-w-0 flex-1 items-center gap-(--space-2) text-left"
     >
-      <RepoIcon />
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          flex: 1,
-          textAlign: "left",
-        }}
-      >
-        {repo.name}
-      </span>
+      <FolderGit2 size={ICON_SIZE.inline} aria-hidden="true" className="text-fg-2 shrink-0" />
+      <span className="flex-1 truncate text-(length:--fs-control) font-medium">{repo.name}</span>
     </button>
     <button
       type="button"
@@ -116,19 +61,17 @@ const RepoRowComponent = ({
         onToggleFavourite(repo.path);
       }}
       data-active={isFavourite ? "true" : undefined}
-      className="fav-star"
-      style={{
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        padding: "2px 4px",
-        color: isFavourite ? "var(--c-warn-fg)" : "var(--fg-3)",
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-      }}
+      className={cn(
+        // Shown on row hover by .row-btn; on keyboard focus too, or Tab would land on nothing.
+        "fav-star flex size-(--control-sm) shrink-0 items-center justify-center rounded-(--radius-1) focus-visible:opacity-100!",
+        isFavourite ? "text-(--c-major)" : "text-fg-3 hover:text-fg-1"
+      )}
     >
-      <StarIcon isFilled={isFavourite} />
+      <Star
+        size={ICON_SIZE.inline}
+        aria-hidden="true"
+        fill={isFavourite ? "currentColor" : "none"}
+      />
     </button>
   </div>
 );
@@ -158,43 +101,15 @@ const NamespaceRowComponent = ({
     }}
     aria-expanded={isOpen}
     title={fullPath}
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      width: "100%",
-      height: REPO_ROW_HEIGHT.namespace,
-      padding: `0 10px 0 ${String(getIndent(depth))}px`,
-      background: "transparent",
-      border: "none",
-      cursor: "pointer",
-      color: "var(--fg-2)",
-      fontSize: 11,
-      fontWeight: 600,
-      textAlign: "left",
-      textTransform: "uppercase",
-      letterSpacing: "0.06em",
-    }}
+    className="ui-eyebrow hover:text-fg-1 flex w-full items-center gap-(--space-1) text-left"
+    style={{ height: REPO_ROW_HEIGHT.namespace, padding: `0 10px 0 ${String(getIndent(depth))}px` }}
   >
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
+    <ChevronRight
+      size={ICON_SIZE.inline}
       aria-hidden="true"
-      style={{
-        flexShrink: 0,
-        transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
-        transition: "transform 0.15s",
-      }}
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-      {name}
-    </span>
+      className={cn("shrink-0 transition-transform duration-(--dur-base)", isOpen && "rotate-90")}
+    />
+    <span className="truncate">{name}</span>
   </button>
 );
 
@@ -202,27 +117,15 @@ export const NamespaceRow = memo(NamespaceRowComponent);
 
 export const SectionLabelRow = ({ label }: { label: string }): React.ReactElement => (
   <div
-    style={{
-      height: REPO_ROW_HEIGHT.section,
-      display: "flex",
-      alignItems: "center",
-      padding: "0 10px",
-      fontSize: 10,
-      fontWeight: 600,
-      color: "var(--fg-2)",
-      textTransform: "uppercase",
-      letterSpacing: "0.06em",
-    }}
+    className="ui-eyebrow flex items-center"
+    style={{ height: REPO_ROW_HEIGHT.section, padding: `0 ${String(INDENT_BASE_PX)}px` }}
   >
     {label}
   </div>
 );
 
 export const DividerRow = (): React.ReactElement => (
-  <div
-    aria-hidden="true"
-    style={{ height: REPO_ROW_HEIGHT.divider, display: "flex", alignItems: "center" }}
-  >
-    <div style={{ height: 1, width: "100%", background: "var(--border)" }} />
+  <div aria-hidden="true" className="flex items-center" style={{ height: REPO_ROW_HEIGHT.divider }}>
+    <div className="bg-border h-px w-full" />
   </div>
 );

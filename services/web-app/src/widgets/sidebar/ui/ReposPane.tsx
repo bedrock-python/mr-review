@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { Plus, Server } from "lucide-react";
 import { useNav } from "@app/navigation";
+import { useAppStore } from "@app/store";
 import { MIN_REPO_QUERY_LENGTH } from "@entities/mr";
 import { useHosts, useToggleFavouriteRepo } from "@entities/host";
-import { ListMessage, ListStatusBar } from "@shared/ui";
+import { Button, EmptyState, ICON_SIZE } from "@shared/ui";
 import { useDebouncedSearch, useStableCallback } from "@shared/lib";
 import { AddRepoByUrlModal } from "@features/add-repo-by-url";
 import { useRepoListRows } from "../model/useRepoListRows";
@@ -11,12 +13,49 @@ import { HostStatus } from "./HostStatus";
 import { InboxEntry } from "./InboxEntry";
 import { RepoList } from "./RepoList";
 import { ReposPaneHeader } from "./ReposPaneHeader";
+import { ReposStatusLine } from "./ReposStatusLine";
 import { VersionBadge } from "./VersionBadge";
 
+/** Width of the pane; the navigator is this plus the merge request list. */
+const REPOS_PANE_WIDTH_PX = 268;
 const NO_FAVOURITES: readonly string[] = [];
 
 /** Namespaces collapsed by the user; reset whenever another host is selected. */
 type CollapsedNamespaces = { hostId: string | null; paths: ReadonlySet<string> };
+
+const NoHostSelected = (): React.ReactElement => {
+  const { data: hosts } = useHosts();
+  const setAddHostOpen = useAppStore((s) => s.setAddHostOpen);
+  if (hosts?.length === 0) {
+    return (
+      <EmptyState
+        size="sm"
+        icon={<Server size={ICON_SIZE.inline} />}
+        title="No hosts yet"
+        description="Add a Git host to browse its repositories."
+        actions={
+          <Button
+            size="sm"
+            icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
+            onClick={() => {
+              setAddHostOpen(true);
+            }}
+          >
+            Add host
+          </Button>
+        }
+      />
+    );
+  }
+  return (
+    <EmptyState
+      size="sm"
+      icon={<Server size={ICON_SIZE.inline} />}
+      title="No host selected"
+      description="Pick a host in the rail on the left to browse its repositories."
+    />
+  );
+};
 
 export const ReposPane = (): React.ReactElement => {
   const [isAddRepoOpen, setIsAddRepoOpen] = useState(false);
@@ -72,16 +111,8 @@ export const ReposPane = (): React.ReactElement => {
   return (
     <aside
       aria-label="Repositories"
-      style={{
-        width: 268,
-        flexShrink: 0,
-        display: "flex",
-        flexDirection: "column",
-        borderRight: "1px solid var(--border)",
-        background: "var(--bg-1)",
-        height: "100%",
-        overflow: "hidden",
-      }}
+      className="border-border bg-bg-1 flex h-full shrink-0 flex-col overflow-hidden border-r"
+      style={{ width: REPOS_PANE_WIDTH_PX }}
     >
       <ReposPaneHeader
         host={selectedHost}
@@ -103,12 +134,15 @@ export const ReposPane = (): React.ReactElement => {
         />
       )}
 
-      {!selectedHostId && <ListMessage>Select a host to browse repositories</ListMessage>}
+      {!selectedHostId && <NoHostSelected />}
 
       {selectedHostId && isTyping && (
-        <ListMessage>
+        <p
+          role="status"
+          className="text-fg-2 m-0 px-(--space-3) py-(--space-3) text-(length:--fs-meta)"
+        >
           Type {String(remainingChars)} more character{remainingChars !== 1 ? "s" : ""} to search
-        </ListMessage>
+        </p>
       )}
 
       {isListVisible && (
@@ -127,23 +161,14 @@ export const ReposPane = (): React.ReactElement => {
       )}
 
       {isListVisible && reposQuery.data !== undefined && (
-        <ListStatusBar
+        <ReposStatusLine
           loadedCount={repos.length}
           hasNextPage={reposQuery.hasNextPage}
           isFetchingNextPage={reposQuery.isFetchingNextPage}
         />
       )}
 
-      <div
-        style={{
-          marginTop: "auto",
-          borderTop: "1px solid var(--border)",
-          padding: "8px 14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="border-border mt-auto flex min-h-(--control-lg) shrink-0 items-center justify-between gap-(--space-2) border-t px-(--space-3)">
         {selectedHostId === null ? (
           <span />
         ) : (

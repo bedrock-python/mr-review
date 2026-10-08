@@ -90,7 +90,7 @@ afterAll(() => {
 });
 
 // Page 1 holds 50 listed repositories plus the externally pinned one.
-const FIRST_PAGE_STATUS = "51 loaded · more available";
+const FIRST_PAGE_STATUS = "Showing 51 · scroll for more";
 
 /** Waits for the first page and for the host (favourites come from it). */
 const waitForFirstPage = async (): Promise<void> => {
@@ -163,8 +163,27 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
 
     scrollToEnd(getVirtualScrollContainer(screen.getByRole("list", { name: "Repository list" })));
 
-    expect(await screen.findByText("101 loaded · more available")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 101 · scroll for more")).toBeInTheDocument();
     expect(repoRequests().map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
+  });
+
+  it("says nothing about loading once every repository is here", async () => {
+    server.use(
+      http.get(REPOS_URL, () =>
+        HttpResponse.json({
+          items: [{ id: "7", path: "solo/only-repo", name: "only-repo", description: null }],
+          page: 1,
+          per_page: 50,
+          has_more: false,
+        })
+      )
+    );
+    renderWithQueryClient(<ReposPane />);
+
+    await waitFor(() => {
+      expect(rowLabels()).toContain("only-repo");
+    });
+    expect(screen.queryByText(/Showing|loaded/)).not.toBeInTheDocument();
   });
 
   it("shows a per-page error with a retry that resumes loading", async () => {
@@ -186,7 +205,7 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     server.resetHandlers();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText("101 loaded · more available")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 101 · scroll for more")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -235,11 +254,12 @@ describe("ReposPane", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
     renderWithQueryClient(<ReposPane />);
     await waitForFirstPage();
 
+    // Listed twice (favourites and its namespace) but highlighted once, in favourites.
+    expect(screen.getAllByRole("button", { name: "api-1" })).toHaveLength(2);
     const selected = screen.getAllByRole("button", { name: "api-1", pressed: true });
-    expect(selected.length).toBeGreaterThan(0);
-    for (const button of selected) {
-      expect(button.parentElement).toHaveClass("row-btn", "active");
-    }
+    expect(selected).toHaveLength(1);
+    expect(getAt(selected, 0).parentElement).toHaveClass("row-btn", "active");
+    expect(document.querySelectorAll(".row-btn.active")).toHaveLength(1);
 
     const namespace = screen.getByRole("button", { name: "platform", expanded: true });
     await userEvent.click(namespace);

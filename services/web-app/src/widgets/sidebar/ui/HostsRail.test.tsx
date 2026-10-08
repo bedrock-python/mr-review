@@ -57,7 +57,7 @@ describe("HostsRail add-host modal", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, (
     await userEvent.type(within(dialog).getByLabelText("Name"), "Work GitLab");
     await userEvent.type(within(dialog).getByLabelText("Base URL"), "https://gitlab.work.test");
     await userEvent.type(within(dialog).getByLabelText("Access Token"), "glpat-secret");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add Host" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add host" }));
 
     await waitFor(() => {
       expect(created).toHaveLength(1);
