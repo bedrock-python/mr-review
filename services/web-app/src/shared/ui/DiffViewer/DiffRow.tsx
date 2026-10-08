@@ -6,7 +6,7 @@ import type { DiffLineWithFile, LineDecorationRenderer } from "./types";
 const rowBackgroundClass = (type: DiffLineWithFile["type"]): string => {
   switch (type) {
     case "file":
-      return "bg-[var(--bg-2)] text-[var(--accent-fg)]";
+      return "bg-[var(--bg-2)] text-[var(--fg-0)] font-medium border-t border-[var(--border)]";
     case "header":
       return "bg-[var(--diff-hunk)] text-[var(--fg-2)]";
     case "added":

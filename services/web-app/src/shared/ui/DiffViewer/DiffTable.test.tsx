@@ -61,7 +61,8 @@ describe("DiffViewer on a long diff", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, 
     const rows = bodyRows();
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThan(MAX_RENDERED_ROWS);
-    expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", String(LINE_COUNT + 3));
+    // The lines, the hunk header and one title row for the file (its ---/+++ fold into it).
+    expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", String(LINE_COUNT + 2));
   });
 
   it("scrolls a far line into the window and highlights it", async () => {
@@ -79,6 +80,6 @@ describe("DiffViewer on a long diff", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, 
   it("renders a short diff whole", () => {
     render(<DiffViewer diff={bigDiff(VIRTUALIZE_FROM_LINES - 10)} />);
 
-    expect(bodyRows()).toHaveLength(VIRTUALIZE_FROM_LINES - 10 + 3);
+    expect(bodyRows()).toHaveLength(VIRTUALIZE_FROM_LINES - 10 + 2);
   });
 });
