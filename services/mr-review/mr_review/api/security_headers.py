@@ -12,8 +12,6 @@ from urllib.parse import urlsplit
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-_HSTS_VALUE = "max-age=31536000; includeSubDomains"
-
 
 def build_ui_security_headers(api_base_url: str) -> dict[str, str]:
     """The headers the web-app nginx sends with the UI, for the all-in-one image to send too.
@@ -59,8 +57,9 @@ class SecurityHeadersMiddleware:
     """Add security headers and the CSP to the UI's responses.
 
     Paths under ``skip_prefixes`` (the JSON API, its SSE stream, the Swagger pages that load
-    their assets from a CDN) are passed through as they are. HSTS is only sent over HTTPS,
-    where a browser honours it.
+    their assets from a CDN) are passed through as they are. No HSTS: like the web container,
+    this server speaks plain HTTP and cannot know which names are served over HTTPS — the
+    proxy that terminates TLS sends it.
     """
 
     def __init__(self, app: ASGIApp, headers: Mapping[str, str], skip_prefixes: Iterable[str]) -> None:
@@ -74,15 +73,11 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
-        is_https = scope.get("scheme") == "https"
-
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
                 for name, value in self._headers.items():
                     headers.setdefault(name, value)
-                if is_https:
-                    headers.setdefault("Strict-Transport-Security", _HSTS_VALUE)
             await send(message)
 
         await self.app(scope, receive, send_with_headers)

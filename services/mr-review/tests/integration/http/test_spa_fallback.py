@@ -106,15 +106,15 @@ async def test__api_and_system_responses__spa_mounted__get_no_csp(spa_client: As
     assert "content-security-policy" not in response.headers
 
 
-async def test__ui_over_https__spa_mounted__adds_hsts(spa_app: FastAPI) -> None:
-    """HSTS is sent only where a browser honours it: over HTTPS."""
+async def test__ui_behind_a_tls_proxy__spa_mounted__leaves_hsts_to_the_proxy(spa_app: FastAPI) -> None:
+    """HSTS is opt-in at the proxy that terminates TLS, as for the web container."""
     # Arrange
     async with AsyncClient(transport=ASGITransport(app=spa_app), base_url="https://test") as client:
         # Act
         response = await client.get("/")
 
     # Assert
-    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+    assert "strict-transport-security" not in response.headers
 
 
 async def test__api_on_another_origin__spa_mounted__is_allowed_by_connect_src(
