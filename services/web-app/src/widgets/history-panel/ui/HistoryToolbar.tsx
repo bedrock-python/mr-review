@@ -1,5 +1,4 @@
-import { Search } from "lucide-react";
-import { Chip, ICON_SIZE, Input } from "@shared/ui";
+import { Chip, SearchField } from "@shared/ui";
 import { STAGE_META } from "./historyStyles";
 import type { ReviewStage } from "@entities/review";
 
@@ -32,16 +31,12 @@ export const HistoryToolbar = ({
   onStageFilterChange,
 }: HistoryToolbarProps): React.ReactElement => (
   <div style={TOOLBAR}>
-    <Input
+    <SearchField
       ref={searchRef}
-      type="search"
-      aria-label="Search reviews"
+      ariaLabel="Search reviews"
       placeholder="Search by host, repository or MR…"
       value={search}
-      onChange={(event) => {
-        onSearchChange(event.target.value);
-      }}
-      leadingIcon={<Search size={ICON_SIZE.inline} />}
+      onValueChange={onSearchChange}
     />
     {stageCounts.size > 1 && (
       <div

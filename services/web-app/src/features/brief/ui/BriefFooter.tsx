@@ -5,9 +5,6 @@ import { BUILTIN_PRESET_CARDS, formatCompactCount, includedContextSummary } from
 import type { PromptPreviewState } from "../model";
 import type { BriefConfig, DiffSizeInfo, ExcludedFiles } from "@entities/review";
 
-// The footer's summary line clips; a message in its place wraps instead.
-const WRAPPING: React.CSSProperties = { whiteSpace: "normal" };
-
 export type BriefFooterProps = {
   config: BriefConfig;
   diffSize: DiffSizeInfo;
@@ -59,13 +56,13 @@ export const BriefFooter = ({
   let message: React.ReactNode = null;
   if (saveError) {
     message = (
-      <Callout tone="danger" size="sm" style={WRAPPING}>
+      <Callout tone="danger" size="sm">
         {saveError}
       </Callout>
     );
   } else if (nothingToReview) {
     message = (
-      <Callout tone="danger" size="sm" style={WRAPPING}>
+      <Callout tone="danger" size="sm">
         {`All ${String(totalFiles)} changed files are excluded by the path filters, so there is nothing to review. Loosen the include or exclude patterns under Advanced.`}
       </Callout>
     );
@@ -74,7 +71,8 @@ export const BriefFooter = ({
   return (
     <StageFooter
       aria-label="Brief actions"
-      summary={message ?? <span title={summary}>{summary}</span>}
+      summary={<span title={summary}>{summary}</span>}
+      message={message}
       secondaryActions={
         nothingToReview && !saveError ? (
           <Button

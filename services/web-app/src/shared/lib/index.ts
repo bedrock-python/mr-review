@@ -33,6 +33,7 @@ export { useReturnFocus } from "./useReturnFocus";
 export { useRovingRadioGroup } from "./useRovingRadioGroup";
 export type {
   RovingRadioItem,
+  RovingRadioActivation,
   RovingRadioItemProps,
   RovingRadioOrientation,
   UseRovingRadioGroupParams,

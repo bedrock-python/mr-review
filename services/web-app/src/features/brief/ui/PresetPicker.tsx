@@ -37,6 +37,6 @@ export const PresetPicker = ({ selected, onSelect }: PresetPickerProps): React.R
     value={selected ?? undefined}
     onValueChange={onSelect}
     // Two cards a row: four presets read as a 2×2 block at every stage width.
-    className="grid-cols-2"
+    columns={2}
   />
 );

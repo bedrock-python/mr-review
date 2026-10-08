@@ -2,11 +2,51 @@ import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Search } from "lucide-react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { SearchField } from "../SearchField";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { Select } from "./Select";
 import { Textarea } from "./Textarea";
+
+describe("Select width", () => {
+  it("fills its container by default and takes its own width in a row when asked", () => {
+    render(
+      <>
+        <Select aria-label="Type">
+          <option>GitLab</option>
+        </Select>
+        <Select aria-label="Sort by" isFullWidth={false}>
+          <option>Updated</option>
+        </Select>
+      </>
+    );
+
+    expect(screen.getByRole("combobox", { name: "Type" }).parentElement).not.toHaveClass(
+      "ui-select-shell--auto"
+    );
+    expect(screen.getByRole("combobox", { name: "Sort by" }).parentElement).toHaveClass(
+      "ui-select-shell--auto"
+    );
+  });
+});
+
+describe("SearchField", () => {
+  it("forwards its ref to the input", () => {
+    const ref = { current: null as HTMLInputElement | null };
+    render(
+      <SearchField
+        ref={ref}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Search"
+        ariaLabel="Search"
+      />
+    );
+
+    expect(ref.current).toBe(screen.getByRole("searchbox", { name: "Search" }));
+  });
+});
 
 describe("Field", () => {
   it("labels its control", () => {

@@ -28,13 +28,13 @@ type ViewMode = "tree" | "list";
 const VIEW_OPTIONS = [
   {
     value: "tree",
-    label: <span className="ui-visually-hidden">Tree</span>,
+    "aria-label": "Tree",
     icon: <ListTree size={ICON_SIZE.inline} aria-hidden="true" />,
     title: "Tree view",
   },
   {
     value: "list",
-    label: <span className="ui-visually-hidden">List</span>,
+    "aria-label": "List",
     icon: <List size={ICON_SIZE.inline} aria-hidden="true" />,
     title: "List view",
   },

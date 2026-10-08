@@ -39,6 +39,15 @@
     border-radius: var(--radius-control);
     background: var(--bg-2);
   }
+  /* Spans the row, one equal part per option */
+  .ui-segmented--full {
+    display: flex;
+    width: 100%;
+  }
+  .ui-segmented--full > .ui-segmented__item {
+    flex: 1;
+    min-width: 0;
+  }
   .ui-segmented--sm {
     height: var(--control-sm);
     padding: 1px;
@@ -108,6 +117,15 @@
     white-space: nowrap;
     font-size: var(--fs-control);
     color: var(--fg-2);
+  }
+  /* Content lined up with a centred column of --stage-footer-content */
+  .ui-stage-footer--column {
+    padding-inline: max(var(--space-5), calc((100% - var(--stage-footer-content)) / 2));
+  }
+  /* A message wraps; the summary is one line */
+  .ui-stage-footer__message {
+    flex: 1;
+    min-width: 0;
   }
   .ui-stage-footer__actions {
     display: flex;

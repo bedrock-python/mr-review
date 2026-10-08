@@ -152,6 +152,11 @@
     width: 100%;
     min-width: 0;
   }
+  /* In a row of controls: as wide as its longest option, not the whole row */
+  .ui-select-shell--auto {
+    width: auto;
+    flex-shrink: 0;
+  }
   .ui-select {
     appearance: none;
     padding-right: 28px;
