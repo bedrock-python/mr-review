@@ -248,7 +248,7 @@ const startDispatch = async (
   user: ReturnType<typeof userEvent.setup>
 ): Promise<ReturnType<typeof createDispatchChannel>> => {
   const channel = createDispatchChannel();
-  await user.click(await screen.findByRole("button", { name: /Generate with Claude/ }));
+  await user.click(await screen.findByRole("button", { name: /Generate review/ }));
   await screen.findByRole("button", { name: "Stop" });
   return channel;
 };
@@ -375,7 +375,7 @@ describe("DispatchStage — run in app", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
     providersQuery.isPending = false;
     rerender();
 
-    const generate = screen.getByRole("button", { name: /Generate with OpenAI.*gpt-b/ });
+    const generate = screen.getByRole("button", { name: /Generate review gpt-b/ });
     createDispatchChannel();
     await user.click(generate);
     expect(api.dispatchStream).toHaveBeenCalledWith(
@@ -698,7 +698,7 @@ describe("DispatchStage — generation settings", { timeout: INTEGRATION_TEST_TI
 
   const generate = async (user: ReturnType<typeof userEvent.setup>): Promise<void> => {
     createDispatchChannel();
-    await user.click(screen.getByRole("button", { name: /Generate with/ }));
+    await user.click(screen.getByRole("button", { name: /Generate review/ }));
     await screen.findByRole("button", { name: "Stop" });
   };
 
@@ -941,7 +941,7 @@ describe(
       const user = userEvent.setup();
       renderStage();
 
-      await user.click(await screen.findByRole("button", { name: /Generate with Claude/ }));
+      await user.click(await screen.findByRole("button", { name: /Generate review/ }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(EXCLUDED);
     });

@@ -7,7 +7,9 @@ import type { SelectCardOption } from "@shared/ui";
 
 type ProviderType = AIProvider["type"];
 
-const PROVIDER_CARD_MIN_WIDTH_PX = 200;
+// Two providers share the row; three or more go three to a row and wrap.
+const TWO_UP_MIN_WIDTH_PX = 300;
+const THREE_UP_MIN_WIDTH_PX = 200;
 
 /**
  * A provider's identity hue: only ever an icon tint, never a fill, a CTA or a selection ring.
@@ -74,7 +76,7 @@ export const ProviderPicker = ({
       value={value}
       onValueChange={onValueChange}
       aria-labelledby={labelledBy}
-      minCardWidth={PROVIDER_CARD_MIN_WIDTH_PX}
+      minCardWidth={providers.length > 2 ? THREE_UP_MIN_WIDTH_PX : TWO_UP_MIN_WIDTH_PX}
     />
   );
 };

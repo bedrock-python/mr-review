@@ -24,6 +24,7 @@ export type RunFooterProps = {
 };
 
 const inlineIconStyle: React.CSSProperties = {
+  display: "inline-block",
   verticalAlign: "-2px",
   marginRight: "var(--space-2)",
 };
@@ -127,22 +128,26 @@ export const RunFooter = ({
 }: RunFooterProps): React.ReactElement => {
   const existing = existingCommentsCount;
   const onIteration = existing > 0 ? ` · ${pluralize(existing, "comment")} on this iteration` : "";
+  const replaceWarning = `${pluralize(existing, "existing comment")} will be replaced — a failed run keeps them`;
   let content: FooterContent;
 
   if (status === "idle") {
     content = {
       summary:
         existing > 0 ? (
-          <>
+          // The footer is one line; the title keeps the whole warning when it gets cut.
+          <span title={replaceWarning}>
             <TriangleAlert
               size={ICON_SIZE.inline}
               aria-hidden="true"
               color="var(--c-warn-fg)"
               style={inlineIconStyle}
             />
-            {`${pluralize(existing, "existing comment")} will be replaced — a failed run keeps them`}
-          </>
-        ) : null,
+            {replaceWarning}
+          </span>
+        ) : (
+          `${providerName}${model ? ` · ${model}` : ""}`
+        ),
       primary: (
         <Button
           size="lg"
@@ -151,7 +156,9 @@ export const RunFooter = ({
           disabled={!canGenerate}
           onClick={onGenerate}
         >
-          Generate with {providerName}
+          Generate review
+          {/* Read as "Generate review gpt-4o"; the flex gap does the spacing on screen. */}
+          {model && " "}
           {model && (
             <span
               style={{

@@ -239,7 +239,11 @@ export const ResponseImport = ({
                 size={ICON_SIZE.inline}
                 aria-hidden="true"
                 color="var(--c-warn-fg)"
-                style={{ verticalAlign: "-2px", marginRight: "var(--space-1)" }}
+                style={{
+                  display: "inline-block",
+                  verticalAlign: "-2px",
+                  marginRight: "var(--space-1)",
+                }}
               />
               {`${pluralize(existingCommentsCount, "existing comment")} will be replaced on import`}
             </p>

@@ -247,6 +247,9 @@ const TemperatureControl = ({
         onChange={(e) => {
           onChange({ temperature: parseFloat(e.target.value) });
         }}
+        // Unset reads as neutral: the thumb sits mid-scale but no temperature is sent. fg-2, not
+        // fg-3: the browser draws the empty track dark or light against the accent's lightness.
+        style={isUnset ? { accentColor: "var(--fg-2)" } : undefined}
       />
     </Field>
   );
