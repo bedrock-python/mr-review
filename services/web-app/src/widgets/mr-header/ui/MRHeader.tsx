@@ -29,7 +29,9 @@ const buildMRUrl = (
 };
 
 export const MRHeader = (): React.ReactElement | null => {
-  const { navCollapsed, toggleNav, toggleIterationHistory } = useAppStore();
+  const navCollapsed = useAppStore((s) => s.navCollapsed);
+  const toggleNav = useAppStore((s) => s.toggleNav);
+  const toggleIterationHistory = useAppStore((s) => s.toggleIterationHistory);
   const { selectedHostId, selectedRepoPath, selectedMRIid, activeReviewId } = useNav();
   const { data: hosts } = useHosts();
   // Only reuses repo data the sidebar already loaded: fetching the repository

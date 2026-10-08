@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
+import { Book, SearchX } from "lucide-react";
 import { ApiError } from "@shared/api";
-import { EmptyState, ErrorState, InfiniteVirtualList, Skeleton } from "@shared/ui";
+import { EmptyState, ErrorState, ICON_SIZE, InfiniteVirtualList, Skeleton } from "@shared/ui";
 import { getVcsErrorMessage } from "@shared/lib";
 import {
   REPO_ROW_HEIGHT,
@@ -151,12 +152,14 @@ export const RepoList = ({
       return isSearching ? (
         <EmptyState
           size="sm"
+          icon={<SearchX size={ICON_SIZE.inline} />}
           title="No repositories found"
           description="Search matches repository names and paths the host token can read."
         />
       ) : (
         <EmptyState
           size="sm"
+          icon={<Book size={ICON_SIZE.inline} />}
           title="No repositories yet"
           description="The host token cannot see any. Pin one by its URL with the + above."
         />

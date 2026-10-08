@@ -10,7 +10,9 @@ import { MRBreadcrumbs, MRHeaderFrame, MetaDivider, NavigatorToggle } from "@wid
 /** Header of a review that has no merge request: the repository and the two refs. */
 export const BranchDiffHeader = (): React.ReactElement | null => {
   const { selectedHostId, selectedRepoPath, activeReviewId } = useNav();
-  const { navCollapsed, toggleNav, toggleIterationHistory } = useAppStore();
+  const navCollapsed = useAppStore((s) => s.navCollapsed);
+  const toggleNav = useAppStore((s) => s.toggleNav);
+  const toggleIterationHistory = useAppStore((s) => s.toggleIterationHistory);
   const { data: review } = useReview(activeReviewId);
   const { data: hosts } = useHosts();
   if (!review || selectedRepoPath === null) return null;

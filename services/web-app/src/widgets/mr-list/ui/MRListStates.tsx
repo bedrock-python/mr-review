@@ -1,4 +1,5 @@
-import { Button, Callout, EmptyState, Skeleton } from "@shared/ui";
+import { GitPullRequest, SearchX } from "lucide-react";
+import { Button, Callout, EmptyState, ICON_SIZE, Skeleton } from "@shared/ui";
 import type { InboxScope } from "@entities/mr";
 
 const SKELETON_ROWS = 6;
@@ -49,6 +50,7 @@ export const EmptyList = ({
     return (
       <EmptyState
         size="sm"
+        icon={<SearchX size={ICON_SIZE.inline} />}
         title="No merge requests match"
         description="Nothing loaded matches the search or the filter."
         actions={
@@ -62,6 +64,7 @@ export const EmptyList = ({
   return (
     <EmptyState
       size="sm"
+      icon={<GitPullRequest size={ICON_SIZE.inline} />}
       title={scope === null ? "No merge requests here" : "Inbox zero"}
       description={
         scope === null ? "Try another state above, or another repository." : EMPTY_INBOX[scope]
