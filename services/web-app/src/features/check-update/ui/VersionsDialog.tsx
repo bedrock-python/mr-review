@@ -10,15 +10,10 @@ const UNKNOWN_VERSION = "unknown";
 
 type VersionRowProps = {
   version: ComponentVersion;
-  isCheckKnown: boolean;
   onShowChanges: () => void;
 };
 
-const VersionRow = ({
-  version,
-  isCheckKnown,
-  onShowChanges,
-}: VersionRowProps): React.ReactElement => (
+const VersionRow = ({ version, onShowChanges }: VersionRowProps): React.ReactElement => (
   <div className="border-border flex min-h-(--control-lg) items-center gap-(--space-3) border-b py-(--space-2) last:border-b-0">
     <dt className="ui-eyebrow m-0 w-1/4 shrink-0">{COMPONENT_LABEL[version.component]}</dt>
     <dd className="m-0 flex min-w-0 flex-1 items-center gap-(--space-2)">
@@ -33,7 +28,7 @@ const VersionRow = ({
           </Button>
         </>
       )}
-      {version.update === null && isCheckKnown && version.current !== null && (
+      {version.update === null && version.isChecked && (
         <StatusBadge status="success" label="Up to date" />
       )}
     </dd>
@@ -54,7 +49,6 @@ export const VersionsDialog = ({
 }: VersionsDialogProps): React.ReactElement => {
   const queryClient = useQueryClient();
   const [changelogFor, setChangelogFor] = useState<ComponentVersion | null>(null);
-  const isCheckKnown = !versions.hasCheckFailed && !versions.isChecking;
 
   const handleCheck = (): void => {
     void queryClient.invalidateQueries({ queryKey: updateKeys.all });
@@ -83,7 +77,6 @@ export const VersionsDialog = ({
             <VersionRow
               key={version.component}
               version={version}
-              isCheckKnown={isCheckKnown}
               onShowChanges={() => {
                 // One dialog at a time: the release notes replace this one.
                 onClose();

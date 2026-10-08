@@ -52,6 +52,8 @@ describe("VersionBadge", () => {
     expect(
       await within(dialog).findByText("Could not reach GitHub to look for updates.")
     ).toBeInTheDocument();
+    // Nothing was compared, so nothing is called up to date.
+    expect(within(dialog).queryByText("Up to date")).not.toBeInTheDocument();
   });
 
   it("says which part has a newer release and shows what is new in it", async () => {

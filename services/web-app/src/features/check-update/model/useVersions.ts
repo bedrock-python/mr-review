@@ -19,6 +19,11 @@ export type ComponentVersion = {
   current: string | null;
   /** Set when GitHub has a newer release of this part. */
   update: ComponentUpdateInfo | null;
+  /**
+   * The running version was compared with the latest release. Not when GitHub was out of
+   * reach, nor for a web app served by a dev server, which the API cannot name.
+   */
+  isChecked: boolean;
 };
 
 export type Versions = {
@@ -39,6 +44,9 @@ const SYSTEM_INFO_KEY = ["system-info"] as const;
 const updateOf = (info: ComponentUpdateInfo | null | undefined): ComponentUpdateInfo | null =>
   info?.isUpdateAvailable === true ? info : null;
 
+const isCompared = (info: ComponentUpdateInfo | null | undefined): boolean =>
+  info !== null && info !== undefined;
+
 /**
  * One version story: what runs (the web app is this bundle, the API reports its own), and
  * which of the two has a newer release. Versions come from the API even when GitHub is out
@@ -56,11 +64,17 @@ export const useVersions = (): Versions => {
   const backendUpdate = updateOf(updates?.backend);
 
   return {
-    frontend: { component: "frontend", current: __APP_VERSION__, update: frontendUpdate },
+    frontend: {
+      component: "frontend",
+      current: __APP_VERSION__,
+      update: frontendUpdate,
+      isChecked: isCompared(updates?.frontend),
+    },
     backend: {
       component: "backend",
       current: system?.backend_version ?? null,
       update: backendUpdate,
+      isChecked: isCompared(updates?.backend),
     },
     isAnyUpdateAvailable: frontendUpdate !== null || backendUpdate !== null,
     isChecking: isFetching,
