@@ -16,18 +16,21 @@ import {
   formatContextSize,
   getReviewBriefConfig,
 } from "@entities/review";
-import type { ImportResponseResult } from "@entities/review";
+import type { DispatchResult, ImportResponseResult, Review } from "@entities/review";
+import { readStorageItem, writeStorageItem } from "@shared/lib";
+import { Skeleton } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
-type Mode = "auto" | "manual";
-type DispatchStatus = "idle" | "streaming" | "done" | "error";
+import { createDispatchSession } from "../model/dispatchSession";
+import { waitForSavedRun } from "../model/waitForSavedRun";
+import { DispatchOutcome } from "./DispatchOutcome";
+import { DispatchStreamPanel } from "./DispatchStreamPanel";
+import { ImportReport } from "./ImportReport";
 
-type ParsedComment = {
-  file: string | null;
-  line: number | null;
-  severity: "critical" | "major" | "minor" | "suggestion";
-  body: string;
-};
+import type { DispatchRunInfo, DispatchRunStatus } from "./DispatchStreamPanel";
+
+type Mode = "auto" | "manual";
+type DispatchStatus = "idle" | DispatchRunStatus;
 
 type ReasoningMode = "budget" | "effort";
 type ReasoningEffort = "low" | "medium" | "high";
@@ -37,13 +40,6 @@ type ModelSettings = {
   reasoningBudget: number | null;
   reasoningEffort: ReasoningEffort | null;
   reasoningMode: ReasoningMode;
-};
-
-const SEV_COLOR: Record<string, string> = {
-  critical: "var(--c-critical)",
-  major: "var(--c-major)",
-  minor: "var(--c-minor)",
-  suggestion: "var(--c-suggestion)",
 };
 
 const LAST_PROVIDER_KEY = "mr-review:dispatch:last-provider";
@@ -109,51 +105,6 @@ const ProviderIcon = ({
   );
 };
 
-/* ── Partial comment parser ─────────────────────────────────── */
-function extractJsonCandidate(raw: string): string {
-  const stripped = raw.trim();
-  // 1. Unwrap ```json ... ``` or ``` ... ``` fences
-  const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(stripped);
-  if (fenceMatch) return (fenceMatch[1] ?? "").trim();
-  // 2. Find first '[' ... last ']' anywhere in the text (handles preamble/postamble)
-  const arrayMatch = /(\[[\s\S]*\])/.exec(stripped);
-  if (arrayMatch) return (arrayMatch[1] ?? "").trim();
-  return stripped;
-}
-
-function tryParsePartialComments(raw: string): ParsedComment[] {
-  const candidate = extractJsonCandidate(raw);
-
-  try {
-    const arr: unknown = JSON.parse(candidate);
-    if (Array.isArray(arr)) return arr as ParsedComment[];
-  } catch {
-    // fall through to partial
-  }
-
-  const results: ParsedComment[] = [];
-  let depth = 0;
-  let start = -1;
-  for (let i = 0; i < candidate.length; i++) {
-    if (candidate[i] === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (candidate[i] === "}") {
-      depth--;
-      if (depth === 0 && start !== -1) {
-        try {
-          const obj = JSON.parse(candidate.slice(start, i + 1)) as ParsedComment;
-          if (obj.body) results.push(obj);
-        } catch {
-          // skip malformed
-        }
-        start = -1;
-      }
-    }
-  }
-  return results;
-}
-
 /* ── Manual dispatch ────────────────────────────────────────── */
 type DropState = "idle" | "over" | "done";
 type ImportStatus = "idle" | "loading" | "done" | "error";
@@ -165,6 +116,8 @@ type ManualDispatchProps = {
   excludeDiff: boolean;
   excludeContext: boolean;
   existingCommentsCount: number;
+  /** Pre-fills the response to import, e.g. model output that wasn't valid JSON. */
+  initialResponseText: string | null;
 };
 
 const CopyIcon = (): React.ReactElement => (
@@ -218,17 +171,17 @@ const ManualDispatch = ({
   excludeDiff,
   excludeContext,
   existingCommentsCount,
+  initialResponseText,
 }: ManualDispatchProps): React.ReactElement => {
   const setStage = useStageBarStore((s) => s.setStage);
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
-  const [dropState, setDropState] = useState<DropState>("idle");
-  const [jsonText, setJsonText] = useState("");
+  const [dropState, setDropState] = useState<DropState>(initialResponseText ? "done" : "idle");
+  const [jsonText, setJsonText] = useState(initialResponseText ?? "");
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
   const [importResult, setImportResult] = useState<ImportResponseResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [showErrors, setShowErrors] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const diffSize = useDiffSize(reviewId);
   const contextSize = useContextSize(reviewId);
@@ -284,7 +237,6 @@ const ManualDispatch = ({
     setImportStatus("idle");
     setImportResult(null);
     setImportError(null);
-    setShowErrors(false);
   };
 
   const handleDrop = (e: React.DragEvent): void => {
@@ -712,162 +664,75 @@ const ManualDispatch = ({
           </div>
         )}
 
-        {importStatus === "done" &&
-          importResult &&
-          (() => {
-            const hasJsonError = Boolean(importResult.json_error);
-            const hasItemErrors = importResult.errors.length > 0;
-            const succeeded = importResult.imported > 0;
-            return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 14px",
-                    borderRadius: 6,
-                    border: `1px solid color-mix(in oklch, ${succeeded ? "var(--accent)" : "var(--c-critical)"} 35%, transparent)`,
-                    background: `color-mix(in oklch, ${succeeded ? "var(--accent)" : "var(--c-critical)"} 8%, var(--bg-2))`,
-                  }}
-                >
-                  <span style={{ fontSize: 18 }}>{succeeded ? "✓" : "✗"}</span>
-                  <div style={{ flex: 1 }}>
-                    {succeeded ? (
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-0)" }}>
-                        {importResult.imported} comment{importResult.imported !== 1 ? "s" : ""}{" "}
-                        imported
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-critical)" }}>
-                        Import failed — no valid comments found
-                      </span>
-                    )}
-                    {hasItemErrors && (
-                      <span style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 8 }}>
-                        · {importResult.errors.length} skipped
-                      </span>
-                    )}
-                  </div>
-                  {hasItemErrors && (
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: 11, padding: "3px 8px" }}
-                      onClick={() => {
-                        setShowErrors((v) => !v);
-                      }}
-                    >
-                      {showErrors ? "Hide" : "Show"} errors
-                    </button>
-                  )}
-                  {!succeeded && (
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: 11, padding: "3px 8px" }}
-                      onClick={() => {
-                        setImportStatus("idle");
-                        setImportResult(null);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-                {hasJsonError && (
-                  <div
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 6,
-                      border: "1px solid color-mix(in oklch, var(--c-critical) 35%, transparent)",
-                      background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
-                      fontSize: 11,
-                      color: "var(--c-critical)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    <strong style={{ fontFamily: "var(--font-sans)" }}>JSON error: </strong>
-                    {importResult.json_error}
-                  </div>
-                )}
-                {showErrors && hasItemErrors && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        color: "var(--fg-3)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      Skipped items
-                    </div>
-                    {importResult.errors.map((err) => (
-                      <div
-                        key={err.index}
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: 6,
-                          border: "1px solid var(--border)",
-                          background: "var(--bg-2)",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 4,
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                            #{err.index + 1}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--c-major)", fontWeight: 500 }}>
-                            {err.reason}
-                          </span>
-                        </div>
-                        <pre
-                          style={{
-                            margin: 0,
-                            fontSize: 10,
-                            color: "var(--fg-3)",
-                            fontFamily: "var(--font-mono)",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-all",
-                            maxHeight: 80,
-                            overflowY: "auto",
-                          }}
-                        >
-                          {err.raw}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {succeeded && (
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ alignSelf: "flex-end", gap: 6 }}
-                    onClick={() => {
-                      setStage("polish");
-                    }}
-                  >
-                    Polish comments →
-                  </button>
-                )}
-              </div>
-            );
-          })()}
+        {importStatus === "done" && importResult && (
+          <ImportReport
+            result={importResult}
+            onEdit={() => {
+              setImportStatus("idle");
+              setImportResult(null);
+            }}
+            onContinue={() => {
+              setStage("polish");
+            }}
+          />
+        )}
       </div>
     </div>
   );
 };
 
 /* ── AutoDispatch ───────────────────────────────────────────── */
+const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+  temperature: null,
+  reasoningBudget: null,
+  reasoningEffort: null,
+  reasoningMode: "budget",
+};
+
+// The provider of the last run while it still exists, else the first one.
+const pickInitialProviderId = (providers: AIProvider[]): string => {
+  const saved = readStorageItem(LAST_PROVIDER_KEY);
+  if (saved && providers.some((p) => p.id === saved)) return saved;
+  return providers[0]?.id ?? "";
+};
+
+// The model of the last run when this provider offers it, else its first model.
+const pickModelFor = (provider: AIProvider | undefined): string => {
+  const saved = readStorageItem(LAST_MODEL_KEY);
+  if (saved && provider?.models.includes(saved)) return saved;
+  return provider?.models[0] ?? "";
+};
+
+const readSavedSettings = (): ModelSettings => {
+  const saved = readStorageItem(LAST_SETTINGS_KEY);
+  if (!saved) return DEFAULT_MODEL_SETTINGS;
+  try {
+    return JSON.parse(saved) as ModelSettings;
+  } catch {
+    return DEFAULT_MODEL_SETTINGS;
+  }
+};
+
+const ProvidersSkeleton = (): React.ReactElement => (
+  <div role="status" aria-label="Loading AI providers">
+    <Skeleton style={{ width: 72, height: 11, marginBottom: 12 }} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} style={{ height: 96, borderRadius: 10 }} />
+      ))}
+    </div>
+    <Skeleton style={{ height: 48, borderRadius: 10, marginTop: 24 }} />
+  </div>
+);
+
 type AutoDispatchProps = {
   activeReviewId: string;
   providers: AIProvider[];
   onDone: (count: number) => void;
+  /** Opens Copy & paste mode with `rawText` ready to fix and re-import. */
+  onEditInManual: (rawText: string) => void;
+  /** Told whether a generation is streaming, so the screen can keep it from being cut short. */
+  onRunningChange: (isRunning: boolean) => void;
   existingCommentsCount: number;
 };
 
@@ -875,52 +740,34 @@ const AutoDispatch = ({
   activeReviewId,
   providers,
   onDone,
+  onEditInManual,
+  onRunningChange,
   existingCommentsCount,
 }: AutoDispatchProps): React.ReactElement => {
   const setStage = useStageBarStore((s) => s.setStage);
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
-  const { refetch } = useReview(activeReviewId);
+  const qc = useQueryClient();
 
-  const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
-    const saved = localStorage.getItem(LAST_PROVIDER_KEY);
-    if (saved && providers.find((p) => p.id === saved)) return saved;
-    return providers[0]?.id ?? "";
-  });
+  // `providers` has loaded by the time this mounts, so the saved choice can be restored.
+  const [selectedProviderId, setSelectedProviderId] = useState<string>(() =>
+    pickInitialProviderId(providers)
+  );
+  const [selectedModel, setSelectedModel] = useState<string>(() =>
+    pickModelFor(providers.find((p) => p.id === selectedProviderId))
+  );
+  const [settings, setSettings] = useState<ModelSettings>(readSavedSettings);
 
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const savedPid = localStorage.getItem(LAST_PROVIDER_KEY);
-    const savedModel = localStorage.getItem(LAST_MODEL_KEY);
-    const provider = providers.find((p) => p.id === (savedPid ?? providers[0]?.id));
-    if (savedModel && provider?.models.includes(savedModel)) return savedModel;
-    return provider?.models[0] ?? "";
-  });
-
-  const [settings, setSettings] = useState<ModelSettings>(() => {
-    try {
-      const s = localStorage.getItem(LAST_SETTINGS_KEY);
-      if (s) return JSON.parse(s) as ModelSettings;
-    } catch {
-      /* ignore */
-    }
-    return {
-      temperature: null,
-      reasoningBudget: null,
-      reasoningEffort: null,
-      reasoningMode: "budget",
-    };
-  });
-
+  // Streamed output lives in this store, not in state: tokens must not re-render
+  // this component, only the panel parts subscribed to the store.
+  const [session] = useState(createDispatchSession);
   const [status, setStatus] = useState<DispatchStatus>("idle");
-  const [accumulated, setAccumulated] = useState("");
-  const [parsedComments, setParsedComments] = useState<ParsedComment[]>([]);
-  const [visibleCount, setVisibleCount] = useState(0);
+  const [run, setRun] = useState<DispatchRunInfo | null>(null);
+  const [result, setResult] = useState<DispatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [commentCount, setCommentCount] = useState(0);
   const [modelSearch, setModelSearch] = useState("");
   const [isModelDropOpen, setIsModelDropOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const accRef = useRef("");
+  const runIdRef = useRef(0);
   const modelInputRef = useRef<HTMLInputElement>(null);
   const modelDropRef = useRef<HTMLDivElement>(null);
 
@@ -929,14 +776,33 @@ const AutoDispatch = ({
   const isReasoningOn = settings.reasoningBudget !== null || settings.reasoningEffort !== null;
 
   useEffect(() => {
-    if (selectedProviderId) localStorage.setItem(LAST_PROVIDER_KEY, selectedProviderId);
+    if (selectedProviderId) writeStorageItem(LAST_PROVIDER_KEY, selectedProviderId);
   }, [selectedProviderId]);
   useEffect(() => {
-    if (selectedModel) localStorage.setItem(LAST_MODEL_KEY, selectedModel);
+    if (selectedModel) writeStorageItem(LAST_MODEL_KEY, selectedModel);
   }, [selectedModel]);
   useEffect(() => {
-    localStorage.setItem(LAST_SETTINGS_KEY, JSON.stringify(settings));
+    writeStorageItem(LAST_SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  // Leaving the screen ends the run: release the connection instead of streaming
+  // into a component that is gone.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    []
+  );
+
+  useEffect(() => {
+    onRunningChange(status === "streaming");
+  }, [status, onRunningChange]);
+  useEffect(
+    () => () => {
+      onRunningChange(false);
+    },
+    [onRunningChange]
+  );
 
   useEffect(() => {
     if (!isModelDropOpen) return;
@@ -957,29 +823,9 @@ const AutoDispatch = ({
     };
   }, [isModelDropOpen]);
 
-  useEffect(() => {
-    if (status !== "done" || parsedComments.length === 0) return;
-    let i = 0;
-    const tick = (): void => {
-      i++;
-      setVisibleCount(i);
-      if (i < parsedComments.length) setTimeout(tick, 60);
-    };
-    const t = setTimeout(() => {
-      setVisibleCount(0);
-      setTimeout(tick, 60);
-    }, 0);
-    return () => {
-      clearTimeout(t);
-    };
-  }, [status, parsedComments.length]);
-
   const handleProviderChange = (id: string): void => {
     setSelectedProviderId(id);
-    const p = providers.find((x) => x.id === id);
-    const savedModel = localStorage.getItem(LAST_MODEL_KEY);
-    if (savedModel && p?.models.includes(savedModel)) setSelectedModel(savedModel);
-    else setSelectedModel(p?.models[0] ?? "");
+    setSelectedModel(pickModelFor(providers.find((x) => x.id === id)));
   };
 
   const handleDispatch = useCallback(async (): Promise<void> => {
@@ -987,15 +833,23 @@ const AutoDispatch = ({
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setStatus("streaming");
-    setAccumulated("");
-    setParsedComments([]);
-    setVisibleCount(0);
-    setError(null);
-    accRef.current = "";
+    const runId = ++runIdRef.current;
+    const provider = providers.find((p) => p.id === selectedProviderId);
 
+    session.reset();
+    setRun({
+      providerName: provider?.name ?? "AI",
+      model: selectedModel,
+      accentColor: provider ? PROVIDER_COLOR[provider.type] : "var(--accent)",
+    });
+    setResult(null);
+    setError(null);
+    setStatus("streaming");
+
+    let outcome: DispatchResult | null = null;
+    let failure: string | null = null;
     try {
-      for await (const chunk of reviewApi.dispatchStream(
+      for await (const event of reviewApi.dispatchStream(
         activeReviewId,
         selectedProviderId,
         ctrl.signal,
@@ -1005,44 +859,74 @@ const AutoDispatch = ({
         settings.reasoningEffort,
         activeIterationId
       )) {
-        accRef.current += chunk;
-        const next = accRef.current;
-        setAccumulated(next);
-        setParsedComments(tryParsePartialComments(next));
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (event.type === "chunk") session.appendText(event.text);
+        else if (event.type === "comment") session.addComment(event.comment);
+        else if (event.type === "done") outcome = event.result;
+        else failure = event.message;
       }
-      // Poll until backend persists comments (background task after stream ends)
-      let updated = await refetch();
-      const POLL_INTERVAL_MS = 300;
-      const MAX_POLLS = 15;
-      for (let poll = 0; poll < MAX_POLLS; poll++) {
-        const comments = updated.data?.iterations.at(-1)?.comments ?? [];
-        if (comments.length > 0) break;
-        await new Promise<void>((res) => setTimeout(res, POLL_INTERVAL_MS));
-        updated = await refetch();
-      }
-      const count = updated.data?.iterations.at(-1)?.comments.length ?? 0;
-      setCommentCount(count);
-      setParsedComments(tryParsePartialComments(accRef.current));
-      onDone(count);
-      setStatus("done");
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        setStatus("idle");
-        return;
+      failure = err instanceof Error ? err.message : "Dispatch failed";
+    }
+    session.flush();
+
+    if (outcome) {
+      // `done` arrives after the iteration is written: one refetch shows what was saved.
+      await qc.invalidateQueries({ queryKey: reviewKeys.detail(activeReviewId) });
+      if (runId !== runIdRef.current) return;
+      if (!outcome.kept_previous) {
+        // The saved comments, not the previews: the final parse can drop a draft the
+        // stream already showed, or read a comment the preview could not.
+        const iterationId = outcome.iteration_id;
+        const saved = qc
+          .getQueryData<Review>(reviewKeys.detail(activeReviewId))
+          ?.iterations.find((it) => it.id === iterationId)?.comments;
+        if (saved) {
+          session.replaceComments(
+            saved.map(({ file, line, severity, body }, index) => ({
+              index,
+              file,
+              line,
+              severity,
+              body,
+            }))
+          );
+        }
       }
-      setError((err as Error).message);
+      setResult(outcome);
+      setStatus("done");
+      onDone(outcome.comments);
+      return;
+    }
+    if (runId !== runIdRef.current) return;
+    // Without `done` the server writes what it kept once it notices the stream ended, which
+    // can be after this point: wait for that write, so no screen shows the run as still going.
+    const saved = waitForSavedRun(qc, activeReviewId);
+    if (ctrl.signal.aborted) {
+      setStatus("stopped");
+    } else {
+      setError(failure ?? "Dispatch failed");
       setStatus("error");
     }
+    await saved;
   }, [
     activeReviewId,
     activeIterationId,
+    providers,
     selectedProviderId,
     selectedModel,
     settings,
-    refetch,
+    session,
+    qc,
     onDone,
   ]);
+
+  const handleStop = (): void => {
+    abortRef.current?.abort();
+  };
+
+  const handleContinue = useCallback((): void => {
+    setStage("polish");
+  }, [setStage]);
 
   if (providers.length === 0) {
     return (
@@ -1070,7 +954,7 @@ const AutoDispatch = ({
   }
 
   const isStreaming = status === "streaming";
-  const isDone = status === "done";
+  const isPristine = status === "idle";
   const providerColor = selectedProvider ? PROVIDER_COLOR[selectedProvider.type] : "var(--accent)";
 
   return (
@@ -1633,7 +1517,7 @@ const AutoDispatch = ({
       </div>
 
       {/* ── Section 4: Dispatch button ── */}
-      {existingCommentsCount > 0 && status === "idle" && (
+      {existingCommentsCount > 0 && !isStreaming && status !== "done" && (
         <div
           style={{
             display: "flex",
@@ -1650,7 +1534,8 @@ const AutoDispatch = ({
         >
           <span style={{ color: "var(--c-warn, #e6a817)", flexShrink: 0 }}>⚠</span>
           {existingCommentsCount} existing comment
-          {existingCommentsCount !== 1 ? "s" : ""} will be replaced on generation
+          {existingCommentsCount !== 1 ? "s" : ""} will be replaced once a complete answer is saved
+          — a failed or unreadable run keeps them
         </div>
       )}
       <div style={{ marginBottom: 20, display: "flex", gap: 8 }}>
@@ -1706,9 +1591,9 @@ const AutoDispatch = ({
                   <ProviderIcon type={selectedProvider.type} size={16} />
                 </span>
               )}
-              {isDone
-                ? `Run again with ${selectedProvider?.name ?? "AI"}`
-                : `Generate with ${selectedProvider?.name ?? "AI"}`}
+              {isPristine
+                ? `Generate with ${selectedProvider?.name ?? "AI"}`
+                : `Run again with ${selectedProvider?.name ?? "AI"}`}
               {selectedModel && (
                 <span
                   style={{
@@ -1728,10 +1613,7 @@ const AutoDispatch = ({
         {isStreaming && (
           <button
             type="button"
-            onClick={() => {
-              abortRef.current?.abort();
-              setStatus("idle");
-            }}
+            onClick={handleStop}
             style={{
               padding: "14px 16px",
               borderRadius: 10,
@@ -1764,273 +1646,28 @@ const AutoDispatch = ({
       </div>
 
       {/* ── Section 5: Stream output ── */}
-      {(isStreaming || isDone || status === "error") && accumulated && (
-        <div
-          style={{
-            borderRadius: 10,
-            border: "1px solid var(--border)",
-            overflow: "hidden",
-            marginBottom: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 14px",
-              background: "var(--bg-1)",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
-            {isStreaming ? (
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: providerColor,
-                  flexShrink: 0,
-                  animation: "pulse-ring 1.2s ease-out infinite",
-                }}
-              />
-            ) : (
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: "var(--c-add)",
-                  flexShrink: 0,
-                }}
-              />
-            )}
-            <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-2)", flex: 1 }}>
-              {isStreaming
-                ? `${selectedProvider?.name ?? "AI"} · generating…`
-                : `${selectedProvider?.name ?? "AI"} · done`}
-            </span>
-            {selectedModel && (
-              <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                {selectedModel}
-              </span>
-            )}
-            <span className="chip" style={{ fontSize: 10 }}>
-              {parsedComments.length > 0
-                ? `${String(parsedComments.length)} comment${parsedComments.length !== 1 ? "s" : ""}${isStreaming ? "…" : ""}`
-                : isStreaming
-                  ? "parsing…"
-                  : "0 comments"}
-            </span>
-          </div>
-
-          {isStreaming && (
-            <div ref={scrollRef} style={{ maxHeight: 260, overflowY: "auto" }}>
-              {parsedComments.length === 0 ? (
-                <div
-                  style={{
-                    padding: "12px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    color: "var(--fg-3)",
-                    fontSize: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: providerColor,
-                      flexShrink: 0,
-                      animation: "pulse-ring 1.2s ease-out infinite",
-                    }}
-                  />
-                  Analyzing…
-                  <span style={{ animation: "pulse 1s step-end infinite", color: providerColor }}>
-                    ▌
-                  </span>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {parsedComments.map((c, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "8px 14px",
-                        borderBottom: "1px solid var(--border)",
-                        background: i % 2 === 0 ? "var(--bg-0)" : "var(--bg-1)",
-                        animation: "fadeSlideIn 0.18s ease both",
-                      }}
-                    >
-                      <div
-                        style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: "1px 6px",
-                            borderRadius: 4,
-                            background: `color-mix(in oklch, ${SEV_COLOR[c.severity] ?? "var(--fg-3)"} 15%, transparent)`,
-                            color: SEV_COLOR[c.severity] ?? "var(--fg-3)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {c.severity}
-                        </span>
-                        {c.file ? (
-                          <span
-                            className="mono"
-                            style={{
-                              fontSize: 10.5,
-                              color: "var(--fg-3)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {c.file}
-                            {c.line != null ? `:${String(c.line)}` : ""}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>general</span>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--fg-1)",
-                          lineHeight: 1.5,
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {c.body}
-                      </div>
-                    </div>
-                  ))}
-                  <div
-                    style={{
-                      padding: "8px 14px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      color: "var(--fg-3)",
-                      fontSize: 11,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: "50%",
-                        background: providerColor,
-                        flexShrink: 0,
-                        animation: "pulse-ring 1.2s ease-out infinite",
-                      }}
-                    />
-                    <span style={{ animation: "pulse 1s step-end infinite", color: providerColor }}>
-                      ▌
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {isDone && (
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {parsedComments.length === 0 ? (
-                <div style={{ padding: "16px 14px", fontSize: 12.5, color: "var(--fg-3)" }}>
-                  {commentCount > 0
-                    ? `${String(commentCount)} comment${commentCount !== 1 ? "s" : ""} saved.`
-                    : "No comments parsed from response."}
-                </div>
-              ) : (
-                parsedComments.slice(0, visibleCount).map((c, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: "10px 14px",
-                      borderBottom:
-                        i < parsedComments.length - 1 ? "1px solid var(--border)" : "none",
-                      background: i % 2 === 0 ? "var(--bg-0)" : "var(--bg-1)",
-                      animation: "fadeSlideIn 0.18s ease both",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          padding: "1px 6px",
-                          borderRadius: 4,
-                          background: `color-mix(in oklch, ${SEV_COLOR[c.severity] ?? "var(--fg-3)"} 15%, transparent)`,
-                          color: SEV_COLOR[c.severity] ?? "var(--fg-3)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {c.severity}
-                      </span>
-                      {c.file ? (
-                        <span
-                          className="mono"
-                          style={{
-                            fontSize: 10.5,
-                            color: "var(--fg-3)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {c.file}
-                          {c.line != null ? `:${String(c.line)}` : ""}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 10.5, color: "var(--fg-3)" }}>general note</span>
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: "var(--fg-1)",
-                        lineHeight: 1.55,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {c.body}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+      {status !== "idle" && run && (
+        <DispatchStreamPanel
+          store={session.store}
+          status={status}
+          run={run}
+          isOutputUnsaved={status === "done" && result?.kept_previous === true}
+        />
       )}
 
-      {isDone && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "var(--fg-3)" }}>
-            {commentCount} comment{commentCount !== 1 ? "s" : ""} saved
-          </span>
-          <div style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              setStage("polish");
-            }}
-          >
-            Polish comments →
-          </button>
-        </div>
+      {status === "done" && result && (
+        <DispatchOutcome
+          reviewId={activeReviewId}
+          result={result}
+          store={session.store}
+          onEditInManual={onEditInManual}
+          onContinue={handleContinue}
+        />
       )}
 
       {error && (
         <div
+          role="alert"
           style={{
             padding: "10px 14px",
             borderRadius: 6,
@@ -2048,12 +1685,26 @@ const AutoDispatch = ({
 };
 
 /* ── DispatchStage ──────────────────────────────────────────── */
+const NO_PROVIDERS: AIProvider[] = [];
+
 export const DispatchStage = (): React.ReactElement => {
   const { activeReviewId } = useNav();
   const activeIterationId = useStageBarStore((s) => s.activeIterationId);
   const { data: review } = useReview(activeReviewId);
-  const { data: providers = [] } = useAIProviders();
+  const { data: providers = NO_PROVIDERS, isPending: isProvidersPending } = useAIProviders();
   const [mode, setMode] = useState<Mode>("auto");
+  const [manualDraft, setManualDraft] = useState<string | null>(null);
+  // Switching modes unmounts the generator and would cut a running generation short.
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleEditInManual = useCallback((rawText: string): void => {
+    setManualDraft(rawText);
+    setMode("manual");
+  }, []);
+
+  const handleDispatchDone = useCallback((): void => {
+    // The finished run is reported inside AutoDispatch; nothing else reacts to it.
+  }, []);
 
   const existingCommentsCount =
     review?.iterations.find((it) => it.id === activeIterationId)?.comments.length ?? 0;
@@ -2147,28 +1798,35 @@ export const DispatchStage = (): React.ReactElement => {
             gap: 2,
           }}
         >
-          {(["manual", "auto"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setMode(m);
-              }}
-              style={{
-                padding: "5px 16px",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: mode === m ? 600 : 400,
-                background: mode === m ? "var(--bg-0)" : "transparent",
-                color: mode === m ? "var(--fg-0)" : "var(--fg-2)",
-                border: mode === m ? "1px solid var(--border)" : "1px solid transparent",
-                cursor: "pointer",
-                transition: "all 0.1s",
-              }}
-            >
-              {m === "manual" ? "Copy & paste" : "Run in app"}
-            </button>
-          ))}
+          {(["manual", "auto"] as const).map((m) => {
+            const isLocked = isGenerating && mode !== m;
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={isLocked}
+                title={isLocked ? "Stop the generation to switch modes" : undefined}
+                onClick={() => {
+                  setMode(m);
+                  setManualDraft(null);
+                }}
+                style={{
+                  padding: "5px 16px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: mode === m ? 600 : 400,
+                  background: mode === m ? "var(--bg-0)" : "transparent",
+                  color: mode === m ? "var(--fg-0)" : "var(--fg-2)",
+                  border: mode === m ? "1px solid var(--border)" : "1px solid transparent",
+                  cursor: isLocked ? "not-allowed" : "pointer",
+                  opacity: isLocked ? 0.5 : 1,
+                  transition: "all 0.1s",
+                }}
+              >
+                {m === "manual" ? "Copy & paste" : "Run in app"}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -2183,7 +1841,7 @@ export const DispatchStage = (): React.ReactElement => {
           width: "100%",
         }}
       >
-        {mode === "manual" ? (
+        {mode === "manual" && (
           <ManualDispatch
             promptText={promptText}
             isLoading={isPromptLoading}
@@ -2191,14 +1849,19 @@ export const DispatchStage = (): React.ReactElement => {
             excludeDiff={excludeDiff}
             excludeContext={excludeContext}
             existingCommentsCount={existingCommentsCount}
+            initialResponseText={manualDraft}
           />
-        ) : (
+        )}
+        {/* AutoDispatch restores the saved provider and model when it mounts, so it
+            must not mount before the provider list is known. */}
+        {mode === "auto" && isProvidersPending && <ProvidersSkeleton />}
+        {mode === "auto" && !isProvidersPending && (
           <AutoDispatch
             activeReviewId={activeReviewId}
             providers={providers}
-            onDone={() => {
-              /* handled internally */
-            }}
+            onDone={handleDispatchDone}
+            onEditInManual={handleEditInManual}
+            onRunningChange={setIsGenerating}
             existingCommentsCount={existingCommentsCount}
           />
         )}

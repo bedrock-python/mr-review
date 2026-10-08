@@ -31,6 +31,13 @@ export {
   AppliedPatchSchema,
   PatchErrorCodeSchema,
   PatchErrorEnvelopeSchema,
+  DispatchChunkPayloadSchema,
+  DispatchCommentPreviewSchema,
+  DispatchResultSchema,
+  DispatchErrorPayloadSchema,
+  rawResponseQueryOptions,
+  useRawResponse,
+  useReparseIteration,
 } from "./model";
 export type {
   BriefPreset,
@@ -53,6 +60,9 @@ export type {
   AppliedPatch,
   PatchErrorCode,
   PatchErrorEnvelope,
+  DispatchCommentPreview,
+  DispatchResult,
+  DispatchStreamEvent,
 } from "./model";
 export { useReviewDiff, reviewDiffKey } from "./model";
 export type { NewCommentInput } from "./api";

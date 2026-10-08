@@ -1,11 +1,12 @@
+import json
 from collections.abc import AsyncIterator
-from typing import Any
 from uuid import UUID
 
 import structlog
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
+from sse_starlette import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
 
 from mr_review.api.schemas.reviews import (
@@ -15,6 +16,9 @@ from mr_review.api.schemas.reviews import (
     CreateCommentRequest,
     CreateIterationRequest,
     CreateReviewRequest,
+    DispatchCommentEvent,
+    DispatchDoneEvent,
+    DispatchErrorEvent,
     DispatchReviewRequest,
     GetPromptRequest,
     ImportResponseRequest,
@@ -26,13 +30,20 @@ from mr_review.api.schemas.reviews import (
     UpdateReviewRequest,
 )
 from mr_review.core.reviews.entities import Comment, Iteration, Review
+from mr_review.use_cases.reviews.ai_response_parser import ParseResult
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
 from mr_review.use_cases.reviews.create_comment import CreateCommentUseCase
 from mr_review.use_cases.reviews.create_iteration import CreateIterationUseCase
 from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
-from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.dispatch_review import (
+    DispatchChunk,
+    DispatchCommentPreview,
+    DispatchEvent,
+    DispatchReviewUseCase,
+)
+from mr_review.use_cases.reviews.get_iteration_raw_response import GetIterationRawResponseUseCase
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
@@ -41,9 +52,12 @@ from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
+from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 logger = structlog.get_logger(__name__)
+
+_PREVIEW_CHARS = 500
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"], route_class=DishkaRoute)
 
@@ -228,12 +242,39 @@ async def get_review_prompt(
     return Response(content=prompt, media_type="text/plain")
 
 
+def _dispatch_event_to_sse(event: DispatchEvent) -> ServerSentEvent:
+    # Every payload is single-line JSON, so splitting the SSE frame into lines can never cut it.
+    if isinstance(event, DispatchChunk):
+        return ServerSentEvent(event="chunk", data=json.dumps(event.text, ensure_ascii=False))
+    if isinstance(event, DispatchCommentPreview):
+        comment = DispatchCommentEvent(
+            index=event.index,
+            file=event.comment.file,
+            line=event.comment.line,
+            severity=event.comment.severity,
+            body=event.comment.body,
+        )
+        return ServerSentEvent(event="comment", data=comment.model_dump_json())
+    done = DispatchDoneEvent(
+        iteration_id=event.iteration_id,
+        comments=event.comments,
+        errors=event.errors,
+        json_error=event.json_error,
+        truncated=event.truncated,
+        kept_previous=event.kept_previous,
+    )
+    return ServerSentEvent(event="done", data=done.model_dump_json())
+
+
 @router.post("/{review_id}/dispatch", response_class=EventSourceResponse)
 async def dispatch_review(
     review_id: UUID,
     body: DispatchReviewRequest,
     use_case: FromDishka[DispatchReviewUseCase],
 ) -> Response:
+    """Stream the review as SSE: ``chunk`` events with the raw text, a ``comment`` event per
+    completed comment, then ``done`` once the iteration is stored — or ``error``, which ends
+    the stream without ``done``."""
     try:
         stream = await use_case.execute(
             review_id=review_id,
@@ -244,18 +285,45 @@ async def dispatch_review(
             reasoning_effort=body.reasoning_effort,
             iteration_id=body.iteration_id,
         )
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    async def event_generator() -> AsyncIterator[dict[str, Any]]:
+    async def event_generator() -> AsyncIterator[ServerSentEvent]:
         try:
-            async for chunk in stream:
-                yield {"data": chunk}
+            async for event in stream:
+                yield _dispatch_event_to_sse(event)
         except Exception as exc:
             logger.exception("Error during dispatch stream", review_id=str(review_id))
-            yield {"event": "error", "data": str(exc)}
+            error = DispatchErrorEvent(message=str(exc) or type(exc).__name__)
+            yield ServerSentEvent(event="error", data=error.model_dump_json())
 
     return EventSourceResponse(event_generator())
+
+
+def _preview(raw: object) -> str:
+    """The start of an item that could not be parsed, as text — however deeply it nests."""
+    try:
+        return str(raw)[:_PREVIEW_CHARS]
+    except RecursionError:
+        return f"<a {type(raw).__name__} nested too deeply to show>"
+
+
+def _parse_result_to_response(result: ParseResult, imported: int) -> ImportResponseResponse:
+    return ImportResponseResponse(
+        imported=imported,
+        errors=[
+            CommentParseErrorResponse(
+                index=e.index,
+                reason=e.reason,
+                raw=_preview(e.raw),
+            )
+            for e in result.errors
+        ],
+        json_error=result.json_error,
+        truncated=result.truncated,
+    )
 
 
 @router.post("/{review_id}/import-response", response_model=ImportResponseResponse)
@@ -273,18 +341,37 @@ async def import_response(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return ImportResponseResponse(
-        imported=len(result.comments),
-        errors=[
-            CommentParseErrorResponse(
-                index=e.index,
-                reason=e.reason,
-                raw=str(e.raw)[:500],
-            )
-            for e in result.errors
-        ],
-        json_error=result.json_error,
-    )
+    return _parse_result_to_response(result, imported=len(result.comments))
+
+
+@router.get("/{review_id}/iterations/{iteration_id}/raw-response", response_class=Response)
+async def get_iteration_raw_response(
+    review_id: UUID,
+    iteration_id: UUID,
+    use_case: FromDishka[GetIterationRawResponseUseCase],
+) -> Response:
+    """The model's answer stored on the iteration, exactly as it was received."""
+    try:
+        raw = await use_case.execute(review_id, iteration_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return Response(content=raw, media_type="text/plain")
+
+
+@router.post("/{review_id}/iterations/{iteration_id}/reparse", response_model=ImportResponseResponse)
+async def reparse_iteration(
+    review_id: UUID,
+    iteration_id: UUID,
+    use_case: FromDishka[ReparseIterationUseCase],
+) -> ImportResponseResponse:
+    """Parse the stored answer again and replace the iteration's comments with the result."""
+    try:
+        outcome = await use_case.execute(review_id, iteration_id)
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _parse_result_to_response(outcome.result, imported=outcome.stored)
 
 
 @router.post("/{review_id}/post", response_model=PostReviewResponse)

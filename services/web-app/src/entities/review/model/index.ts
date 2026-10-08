@@ -57,3 +57,16 @@ export type { DiffSizeLevel, DiffSizeInfo } from "./useDiffSize";
 export { useContextSize, formatContextSize, CONTEXT_LARGE_CHARS } from "./useContextSize";
 export type { ContextSizeLevel, ContextSizeInfo } from "./useContextSize";
 export { useReviewDiff, reviewDiffKey } from "./useReviewDiff";
+export {
+  DispatchChunkPayloadSchema,
+  DispatchCommentPreviewSchema,
+  DispatchResultSchema,
+  DispatchErrorPayloadSchema,
+} from "./dispatch.schema";
+export type {
+  DispatchCommentPreview,
+  DispatchResult,
+  DispatchStreamEvent,
+} from "./dispatch.schema";
+export { rawResponseQueryOptions, useRawResponse } from "./useRawResponse";
+export { useReparseIteration } from "./useReparseIteration";

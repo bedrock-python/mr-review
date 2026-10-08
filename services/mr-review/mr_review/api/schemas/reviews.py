@@ -114,6 +114,40 @@ class DispatchReviewRequest(BaseModel):
     iteration_id: UUID | None = None
 
 
+class DispatchCommentEvent(BaseModel):
+    """``event: comment`` — a comment that just completed in the stream (a preview, without an id)."""
+
+    index: int
+    file: str | None
+    line: int | None
+    severity: Literal["critical", "major", "minor", "suggestion"]
+    body: str
+
+
+class DispatchDoneEvent(BaseModel):
+    """``event: done`` — sent once, after the iteration has been written.
+
+    ``comments`` counts what the iteration holds now. ``kept_previous`` is true when the answer
+    was not used — unreadable, cut off or empty — and the iteration kept its comments and stage.
+    """
+
+    iteration_id: UUID
+    comments: int
+    errors: int
+    json_error: str | None
+    truncated: bool
+    kept_previous: bool
+
+
+class DispatchErrorEvent(BaseModel):
+    """``event: error`` — the stream ends after it, without ``done``.
+
+    The iteration keeps its comments; one that had none takes the complete comments that arrived.
+    """
+
+    message: str
+
+
 class GetPromptRequest(BaseModel):
     brief_config: BriefConfig | None = None
     iteration_id: UUID | None = None
@@ -144,6 +178,8 @@ class ImportResponseResponse(BaseModel):
     imported: int
     errors: list[CommentParseErrorResponse] = Field(default_factory=list)
     json_error: str | None = None
+    # The answer stops mid-JSON (the model most likely hit its token limit); complete comments were kept.
+    truncated: bool = False
 
 
 class CreateCommentRequest(BaseModel):

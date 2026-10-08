@@ -57,6 +57,9 @@ class Iteration(BaseModel):
     brief_config: BriefConfig = Field(default_factory=BriefConfig)
     created_at: datetime
     completed_at: datetime | None = None
+    # The model's answer exactly as received (dispatched or imported), kept so it can be shown
+    # and parsed again; API payloads leave it out to stay small.
+    raw_response: str | None = None
 
 
 class Review(BaseModel):

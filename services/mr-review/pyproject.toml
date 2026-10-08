@@ -16,6 +16,8 @@ dependencies = [
     "orjson>=3.10",
     "uvloop>=0.22.1; sys_platform != 'win32'",
     "cryptography>=44.0",
+    "json-repair>=0.63.5",
+    "anyio>=4.0",
 ]
 
 [tool.hatch.build.targets.wheel]

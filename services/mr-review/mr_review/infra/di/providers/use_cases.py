@@ -43,6 +43,7 @@ from mr_review.use_cases.reviews.create_review import CreateReviewUseCase
 from mr_review.use_cases.reviews.delete_comment import DeleteCommentUseCase
 from mr_review.use_cases.reviews.delete_review import DeleteReviewUseCase
 from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.use_cases.reviews.get_iteration_raw_response import GetIterationRawResponseUseCase
 from mr_review.use_cases.reviews.get_review import GetReviewUseCase
 from mr_review.use_cases.reviews.get_review_context import GetReviewContextUseCase
 from mr_review.use_cases.reviews.get_review_diff import GetReviewDiffUseCase
@@ -50,6 +51,7 @@ from mr_review.use_cases.reviews.get_review_prompt import GetReviewPromptUseCase
 from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
 from mr_review.use_cases.reviews.post_review import PostReviewUseCase
+from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 
@@ -299,6 +301,14 @@ class UseCaseProvider(Provider):
     @provide
     def get_import_response_use_case(self, review_repo: FileReviewRepository) -> ImportResponseUseCase:
         return ImportResponseUseCase(review_repo=review_repo)
+
+    @provide
+    def get_reparse_iteration_use_case(self, review_repo: FileReviewRepository) -> ReparseIterationUseCase:
+        return ReparseIterationUseCase(review_repo=review_repo)
+
+    @provide
+    def get_iteration_raw_response_use_case(self, review_repo: FileReviewRepository) -> GetIterationRawResponseUseCase:
+        return GetIterationRawResponseUseCase(review_repo=review_repo)
 
     @provide
     def get_post_review_use_case(

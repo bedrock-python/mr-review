@@ -24,9 +24,27 @@ Before dispatching to the AI, tune the review brief:
 
 ## DISPATCH — run the review
 
-Click **Run review**. The request streams back via SSE — comments appear as the AI generates them.
+Click **Run review**. The request streams back via SSE — each comment appears as soon as the AI
+finishes writing it, while the rest of the answer is still arriving.
 
-The AI produces structured comments, each anchored to a specific file and line range.
+The AI produces structured comments, each anchored to a specific file and line. Models do not
+always answer in exactly the requested format, so the answer is read leniently: reasoning
+blocks are skipped, JSON is found inside markdown fences or prose, wrapper objects and one
+comment per line are understood, common formatting slips are repaired, and alternative field
+names and severity words are mapped. Comments split over several code blocks are merged,
+and an example the model quotes in prose never outweighs its actual answer.
+
+Running a review again replaces the iteration's comments only with a complete, readable
+answer. If the new answer can't be read, is empty, or was cut off at the model's output
+limit — or the run fails, is stopped, or you close the page — your existing comments stay
+exactly as they were, and the screen says that nothing from the run was saved; its output is
+still there to view or fix in **Copy & paste** mode. On an iteration without comments, the
+comments the model completed are saved instead (marked as truncated when it ran out of
+tokens), and an answer that can't be read at all is kept as a single general comment.
+
+The raw answer the comments came from is stored with the iteration, so you can always look at
+exactly what the model said and have it parsed again. While a run is streaming, the
+Copy & paste / Run in app switch is locked so that it can't cut the run short.
 
 ## POLISH — edit comments
 

@@ -2,18 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import partial
 from uuid import UUID, uuid4
+
+import anyio
 
 from mr_review.core.ai.protocols import AIDispatcherFactory
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.ai_providers.repositories import AIProviderRepository
 from mr_review.core.hosts.repositories import HostRepository
-from mr_review.core.reviews.entities import BriefConfig, Comment, Iteration, IterationStage, Review
+from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage, Review
 from mr_review.core.reviews.repositories import ReviewRepository
 from mr_review.core.vcs.protocols import VCSProviderFactory
-from mr_review.use_cases.reviews.ai_response_parser import ParseResult, parse_ai_response
+from mr_review.use_cases.reviews._answer_settlement import DispatchBaseline, SettledAnswer, settle_dispatched_answer
+from mr_review.use_cases.reviews._review_change import apply_review_change
+from mr_review.use_cases.reviews.ai_response_parser import (
+    ParsedComment,
+    ParseResult,
+    StreamingCommentParser,
+    parse_ai_response,
+)
 from mr_review.use_cases.reviews.context_files import (
     CONCURRENCY,
     collect_commit_history,
@@ -22,10 +33,53 @@ from mr_review.use_cases.reviews.context_files import (
     collect_related_code,
     collect_test_files,
 )
+from mr_review.use_cases.reviews.iteration_comments import (
+    ensure_iteration_editable,
+    find_iteration_index,
+    replace_iteration,
+)
 from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
 from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 _log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchChunk:
+    """A piece of the model's answer, as it arrived."""
+
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchCommentPreview:
+    """A comment object that has just completed in the stream; ids are assigned when it is stored."""
+
+    index: int
+    comment: ParsedComment
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchCompleted:
+    """The whole answer has been parsed and the iteration written."""
+
+    iteration_id: UUID
+    # Comments now on the iteration: the new ones, or the previous ones when ``kept_previous``.
+    comments: int
+    errors: int
+    json_error: str | None
+    truncated: bool
+    # The answer was not used — unreadable, cut off or empty — and the iteration kept what it had.
+    kept_previous: bool
+
+
+DispatchEvent = DispatchChunk | DispatchCommentPreview | DispatchCompleted
+
+
+@dataclass(frozen=True, slots=True)
+class _Started:
+    iteration_id: UUID
+    baseline: DispatchBaseline
 
 
 async def _noop_dict() -> dict[str, str]:
@@ -34,6 +88,83 @@ async def _noop_dict() -> dict[str, str]:
 
 async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
     return {}
+
+
+async def _close_stream(stream: AsyncIterator[str]) -> None:
+    """Release the provider's connection and concurrency slot when the stream is abandoned early."""
+    if not isinstance(stream, AsyncGenerator):
+        return
+    try:
+        await stream.aclose()
+    except Exception:
+        _log.warning("Closing an abandoned AI response stream failed", exc_info=True)
+
+
+def _dispatch_target(review: Review, iteration_id: UUID | None) -> Iteration | None:
+    """The iteration a dispatch writes into, or ``None`` when it needs a new one.
+
+    Raises ``ValueError`` for an unknown iteration and ``IterationLockedError`` for a posted one.
+    """
+    if iteration_id is not None:
+        iteration = review.iterations[find_iteration_index(review, iteration_id)]
+        ensure_iteration_editable(iteration)
+        return iteration
+    # Reuse the last iteration while it has not been posted.
+    last = review.iterations[-1] if review.iterations else None
+    if last is not None and last.completed_at is None and last.stage != IterationStage.post:
+        return last
+    return None
+
+
+def _begin_dispatch(
+    review: Review,
+    *,
+    iteration_id: UUID | None,
+    ai_provider_id: UUID,
+    model: str | None,
+    started: list[_Started],
+) -> Review:
+    """Mark the target iteration as dispatching, creating it if needed, and record what it was.
+
+    Its comments stay until an answer replaces them. ``started`` receives the iteration id and
+    the baseline to return to if the answer is not used.
+    """
+    target = _dispatch_target(review, iteration_id)
+    if target is None:
+        dispatching = Iteration(
+            id=uuid4(),
+            number=max((it.number for it in review.iterations), default=0) + 1,
+            stage=IterationStage.dispatch,
+            comments=[],
+            ai_provider_id=ai_provider_id,
+            model=model,
+            brief_config=review.iterations[-1].brief_config if review.iterations else BriefConfig(),
+            created_at=datetime.now(timezone.utc),
+            completed_at=None,
+        )
+        updated = review.model_copy(update={"iterations": [*review.iterations, dispatching]})
+    else:
+        dispatching = target.model_copy(
+            update={"stage": IterationStage.dispatch, "ai_provider_id": ai_provider_id, "model": model}
+        )
+        updated = replace_iteration(review, find_iteration_index(review, target.id), dispatching)
+    started.append(_Started(iteration_id=dispatching.id, baseline=DispatchBaseline.of(target)))
+    return updated
+
+
+def _settle(
+    review: Review,
+    *,
+    started: _Started,
+    raw: str,
+    result: ParseResult,
+    finished: bool,
+    settled: list[SettledAnswer],
+) -> Review:
+    index = find_iteration_index(review, started.iteration_id)
+    outcome = settle_dispatched_answer(review.iterations[index], started.baseline, raw, result, finished=finished)
+    settled.append(outcome)
+    return replace_iteration(review, index, outcome.iteration)
 
 
 class DispatchReviewUseCase:
@@ -60,7 +191,12 @@ class DispatchReviewUseCase:
         reasoning_budget: int | None = None,
         reasoning_effort: str | None = None,
         iteration_id: UUID | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[DispatchEvent]:
+        """Build the prompt and return the event stream; the review is first written when it starts.
+
+        Raises ``ValueError`` for an unknown review, host, provider or iteration and
+        ``IterationLockedError`` for an iteration that was already posted.
+        """
         review = await self._review_repo.get_by_id(review_id)
         if review is None:
             raise ValueError(f"Review {review_id} not found")
@@ -73,13 +209,17 @@ class DispatchReviewUseCase:
         if ai_provider is None:
             raise ValueError(f"AI provider {ai_provider_id} not found")
 
-        # Resolve or create the iteration to dispatch into
-        iteration, review = await self._resolve_iteration(review, iteration_id, ai_provider_id, model)
+        # Checked now so a bad request fails before the slow context collection; the iteration
+        # itself is resolved again against a fresh read when the stream starts.
+        target = _dispatch_target(review, iteration_id)
+        if target is not None:
+            cfg = target.brief_config
+        else:
+            cfg = review.iterations[-1].brief_config if review.iterations else BriefConfig()
 
         provider = self._vcs_factory(host)
         resolved = await resolve_source(review, provider)
         diff_files = resolved.diff_files
-        cfg = iteration.brief_config
         ref = resolved.ref
 
         semaphore = asyncio.Semaphore(CONCURRENCY)
@@ -123,7 +263,7 @@ class DispatchReviewUseCase:
 
         return self._stream_and_save(
             review_id=review_id,
-            iteration_id=iteration.id,
+            iteration_id=target.id if target is not None else None,
             prompt=prompt,
             ai_provider=ai_provider,
             model=model,
@@ -132,156 +272,81 @@ class DispatchReviewUseCase:
             reasoning_effort=reasoning_effort,
         )
 
-    async def _resolve_iteration(
-        self,
-        review: Review,
-        iteration_id: UUID | None,
-        ai_provider_id: UUID,
-        model: str | None,
-    ) -> tuple[Iteration, Review]:
-        """Return the iteration to dispatch into, creating one if needed, and the updated review."""
-        if iteration_id is not None:
-            return await self._redispatch_by_id(review, iteration_id, ai_provider_id, model)
-
-        # Reuse the last incomplete iteration if it is not yet in post stage
-        last = review.iterations[-1] if review.iterations else None
-        if last is not None and last.completed_at is None and last.stage != IterationStage.post:
-            return await self._redispatch_last(review, last, ai_provider_id, model)
-
-        # Create a new iteration
-        return await self._create_iteration(review, ai_provider_id, model)
-
-    async def _redispatch_by_id(
-        self,
-        review: Review,
-        iteration_id: UUID,
-        ai_provider_id: UUID,
-        model: str | None,
-    ) -> tuple[Iteration, Review]:
-        idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
-        if idx is None:
-            raise ValueError(f"Iteration {iteration_id} not found on review {review.id}")
-        iteration = review.iterations[idx]
-        if iteration.completed_at is not None:
-            raise ValueError(f"Iteration {iteration_id} is already completed and cannot be re-dispatched")
-        if iteration.stage == IterationStage.post:
-            raise ValueError(f"Iteration {iteration_id} is in stage 'post' and cannot be re-dispatched")
-        if iteration.comments:
-            _log.warning(
-                "Re-dispatching iteration %s on review %s — clearing %d existing comments",
-                iteration_id,
-                review.id,
-                len(iteration.comments),
-            )
-        return await self._save_dispatching(review, idx, iteration, ai_provider_id, model)
-
-    async def _redispatch_last(
-        self,
-        review: Review,
-        last: Iteration,
-        ai_provider_id: UUID,
-        model: str | None,
-    ) -> tuple[Iteration, Review]:
-        idx = len(review.iterations) - 1
-        if last.comments:
-            _log.warning(
-                "Re-dispatching last iteration %s on review %s — clearing %d existing comments",
-                last.id,
-                review.id,
-                len(last.comments),
-            )
-        return await self._save_dispatching(review, idx, last, ai_provider_id, model)
-
-    async def _save_dispatching(
-        self,
-        review: Review,
-        idx: int,
-        iteration: Iteration,
-        ai_provider_id: UUID,
-        model: str | None,
-    ) -> tuple[Iteration, Review]:
-        dispatching = iteration.model_copy(
-            update={
-                "stage": IterationStage.dispatch,
-                "ai_provider_id": ai_provider_id,
-                "model": model,
-                "comments": [],
-            }
-        )
-        new_iterations = list(review.iterations)
-        new_iterations[idx] = dispatching
-        updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
-        return dispatching, updated_review
-
-    async def _create_iteration(
-        self,
-        review: Review,
-        ai_provider_id: UUID,
-        model: str | None,
-    ) -> tuple[Iteration, Review]:
-        number = max((it.number for it in review.iterations), default=0) + 1
-        iteration = Iteration(
-            id=uuid4(),
-            number=number,
-            stage=IterationStage.dispatch,
-            comments=[],
-            ai_provider_id=ai_provider_id,
-            model=model,
-            brief_config=review.iterations[-1].brief_config if review.iterations else BriefConfig(),
-            created_at=datetime.now(timezone.utc),
-            completed_at=None,
-        )
-        new_iterations = list(review.iterations) + [iteration]
-        updated_review = await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
-        return iteration, updated_review
-
     async def _stream_and_save(
         self,
         review_id: UUID,
-        iteration_id: UUID,
+        iteration_id: UUID | None,
         prompt: str,
         ai_provider: AIProvider,
         model: str | None = None,
         temperature: float | None = None,
         reasoning_budget: int | None = None,
         reasoning_effort: str | None = None,
-    ) -> AsyncIterator[str]:
-        stream = await self._ai_dispatcher_factory(
-            ai_provider, prompt, model, temperature, reasoning_budget, reasoning_effort
+    ) -> AsyncGenerator[DispatchEvent, None]:
+        """Relay the model's answer, preview comments as they complete, then store the result.
+
+        ``iteration_id`` names the iteration to dispatch into; ``None`` reuses the last one that
+        was not posted, or creates one. ``DispatchCompleted`` comes last and only after the
+        iteration has been written. If the provider fails or the client goes away, whatever
+        arrived is settled — shielded from the cancellation that a disconnect delivers — and the
+        exception propagates. Nothing is written before the stream is first iterated.
+        """
+        started: list[_Started] = []
+        begin = partial(
+            _begin_dispatch, iteration_id=iteration_id, ai_provider_id=ai_provider.id, model=model, started=started
         )
-        accumulated = ""
+        with anyio.CancelScope(shield=True):
+            await apply_review_change(self._review_repo, review_id, begin)
+        target = started[-1]
+
+        parts: list[str] = []
+        preview = StreamingCommentParser()
+        emitted = 0
+        stream: AsyncIterator[str] | None = None
         try:
-            async for chunk in stream:
-                accumulated += chunk
-                yield chunk
-        finally:
-            await self._persist_ai_response(review_id, iteration_id, accumulated)
-
-    async def _persist_ai_response(self, review_id: UUID, iteration_id: UUID, raw: str) -> None:
-        review = await self._review_repo.get_by_id(review_id)
-        if review is None:
-            _log.warning("Review %s not found during persistence — response lost", review_id)
-            return
-
-        idx = next((i for i, it in enumerate(review.iterations) if it.id == iteration_id), None)
-        if idx is None:
-            _log.warning(
-                "Iteration %s not found on review %s during persistence — response lost",
-                iteration_id,
-                review_id,
+            stream = await self._ai_dispatcher_factory(
+                ai_provider, prompt, model, temperature, reasoning_budget, reasoning_effort
             )
-            return
+            async for chunk in stream:
+                if not chunk:
+                    continue
+                parts.append(chunk)
+                yield DispatchChunk(text=chunk)
+                for comment in preview.feed(chunk):
+                    yield DispatchCommentPreview(index=emitted, comment=comment)
+                    emitted += 1
+        except BaseException:
+            with anyio.CancelScope(shield=True):
+                if stream is not None:
+                    await _close_stream(stream)
+                await self._settle_interrupted(review_id, target, "".join(parts))
+            raise
 
-        result: ParseResult = parse_ai_response(raw)
-        if result.json_error is not None:
-            fallback = Comment(id=uuid4(), file=None, line=None, severity="suggestion", body=raw.strip())
-            comments = [fallback]
-        else:
-            comments = result.comments
+        with anyio.CancelScope(shield=True):
+            completed = await self._settle_answer(review_id, target, "".join(parts), finished=True)
+        yield completed
 
-        updated_iteration = review.iterations[idx].model_copy(
-            update={"stage": IterationStage.polish, "comments": comments}
+    async def _settle_answer(self, review_id: UUID, target: _Started, raw: str, *, finished: bool) -> DispatchCompleted:
+        """Parse ``raw`` and write what it may change, against a fresh read of the review.
+
+        Raises ``ValueError`` when the review or the iteration was deleted meanwhile.
+        """
+        result = await asyncio.to_thread(parse_ai_response, raw)
+        settled: list[SettledAnswer] = []
+        change = partial(_settle, started=target, raw=raw, result=result, finished=finished, settled=settled)
+        await apply_review_change(self._review_repo, review_id, change)
+        outcome = settled[-1]
+        return DispatchCompleted(
+            iteration_id=target.iteration_id,
+            comments=len(outcome.iteration.comments),
+            errors=len(result.errors),
+            json_error=result.json_error,
+            truncated=result.truncated,
+            kept_previous=not outcome.applied,
         )
-        new_iterations = list(review.iterations)
-        new_iterations[idx] = updated_iteration
-        await self._review_repo.update(review.model_copy(update={"iterations": new_iterations}))
+
+    async def _settle_interrupted(self, review_id: UUID, target: _Started, raw: str) -> None:
+        try:
+            await self._settle_answer(review_id, target, raw, finished=False)
+        except Exception:
+            _log.exception("Failed to settle the interrupted dispatch of iteration %s", target.iteration_id)

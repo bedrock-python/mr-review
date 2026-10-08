@@ -9,6 +9,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import yaml
+from pydantic import ValidationError
 
 from mr_review.core.reviews.entities import (
     BriefConfig,
@@ -17,11 +18,13 @@ from mr_review.core.reviews.entities import (
     IterationStage,
     Review,
 )
+from mr_review.core.reviews.severity import DEFAULT_SEVERITY, normalize_severity
 from mr_review.core.reviews.sources import BranchDiffSource, MRSource, ReviewSource
 from mr_review.infra.utils import now_utc as _now_utc
 
 _log = logging.getLogger(__name__)
 _MAX_REVIEWS = 50
+_COMMENT_STATUSES = frozenset({"kept", "dismissed"})
 
 
 def _aware(dt: datetime) -> datetime:
@@ -30,19 +33,39 @@ def _aware(dt: datetime) -> datetime:
     return dt
 
 
-def _comment_from_dict(data: object) -> Comment:
-    return Comment.model_validate(data)
+def _comment_from_dict(data: object) -> Comment | None:
+    """A stored comment, or ``None`` (logged) when it cannot be read even leniently.
+
+    Files written by older versions or edited by hand may spell a severity any way, or hold a
+    status that no longer exists; one such comment must not make the whole review unreadable.
+    """
+    if not isinstance(data, dict):
+        _log.warning("Skipping a stored comment that is not a mapping: %r", data)
+        return None
+    fields = dict(data)
+    fields["severity"] = normalize_severity(fields.get("severity")) or DEFAULT_SEVERITY
+    if fields.get("status") not in _COMMENT_STATUSES:
+        fields.pop("status", None)
+    try:
+        return Comment.model_validate(fields)
+    except ValidationError:
+        _log.warning("Skipping an unreadable stored comment %r", fields.get("id"))
+        return None
 
 
 def _comment_to_dict(comment: Comment) -> dict[str, object]:
     return comment.model_dump(mode="json")
 
 
+def _comments_from_list(raw: object) -> list[Comment]:
+    if not isinstance(raw, list):
+        return []
+    return [comment for comment in (_comment_from_dict(item) for item in raw) if comment is not None]
+
+
 def _iteration_from_dict(data: dict[str, object]) -> Iteration:
-    comments_raw = data.get("comments") or []
-    if not isinstance(comments_raw, list):
-        comments_raw = []
-    comments = [_comment_from_dict(c) for c in comments_raw]
+    comments = _comments_from_list(data.get("comments"))
+    raw_response = data.get("raw_response")
 
     brief_raw = data.get("brief_config") or {}
     brief_config = BriefConfig.model_validate(brief_raw)
@@ -60,13 +83,14 @@ def _iteration_from_dict(data: dict[str, object]) -> Iteration:
     return Iteration(
         id=UUID(str(data["id"])),
         number=int(str(data["number"])),
-        stage=IterationStage(str(data["stage"])),
+        stage=IterationStage(str(data.get("stage") or IterationStage.brief.value)),
         comments=comments,
         ai_provider_id=ai_provider_id,
         model=model,
         brief_config=brief_config,
         created_at=_aware(datetime.fromisoformat(str(data["created_at"]))),
         completed_at=completed_at,
+        raw_response=raw_response if isinstance(raw_response, str) else None,
     )
 
 
@@ -81,6 +105,7 @@ def _iteration_to_dict(iteration: Iteration) -> dict[str, object]:
         "brief_config": iteration.brief_config.model_dump(mode="json"),
         "created_at": iteration.created_at.isoformat(),
         "completed_at": iteration.completed_at.isoformat() if iteration.completed_at else None,
+        "raw_response": iteration.raw_response,
     }
 
 

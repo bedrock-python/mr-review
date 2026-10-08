@@ -74,9 +74,11 @@ The pipeline is the iteration's `stage`, and it only moves forward:
   `security`, `style`, `performance`), the toggles below, and free-text
   `custom_instructions`. `POST /reviews/{id}/prompt` returns the exact prompt as text
   without calling anything.
-* **dispatch** — `POST /reviews/{id}/dispatch` streams the model's output back over SSE
-  and, when the stream closes, parses it and stores the comments. The provider's fence caps
-  how many dispatches to that provider can be in flight at once.
+* **dispatch** — `POST /reviews/{id}/dispatch` streams the model's output back over SSE,
+  announces each comment as soon as its JSON object is complete, and, when the stream
+  closes, parses the whole answer and stores its comments with the raw answer on the
+  iteration — unless the answer is unusable, see rule 14. The provider's fence caps how
+  many dispatches to that provider can be in flight at once.
 * **polish** — `PATCH /reviews/{id}` edits comment bodies, severities, `status`
   (`kept` / `dismissed`) and the anchor: `file` and `line` count only when present, and an
   explicit `"file": null` turns the comment into a general note. `POST` and `DELETE` on
@@ -86,9 +88,37 @@ The pipeline is the iteration's `stage`, and it only moves forward:
   five at a time, and marks the iteration completed.
 
 The model is asked for a bare JSON array of `{file, line, severity, body}` objects,
-severity being one of `critical`, `major`, `minor`, `suggestion`. If it answers with
-anything that is not JSON, the whole raw answer is kept as one `suggestion` comment rather
-than thrown away, and `import_response` reports the parse error.
+severity being one of `critical`, `major`, `minor`, `suggestion`. The parser does not rely
+on that: it drops `<think>` reasoning blocks, finds the JSON inside markdown fences or
+prose, accepts a wrapper object (`{"comments": [...]}`, also `review`, `issues`,
+`findings`, `items` — every such key is read), a single comment object or one object per
+line, merges comments split across several fences or arrays, repairs trailing commas,
+comments, smart or single quotes, bare keys and raw newlines, and keeps every complete
+comment of an answer that was cut off at the token limit. The answer proper — the fences,
+or the JSON the answer opens with — always wins over JSON quoted in prose, so an echoed
+format example never becomes a comment and a fenced `[]` means "no findings". Common key
+aliases (`path`, `line_number`, `message`, `level`, …) and severity synonyms (`blocker`,
+`high`, `warning`, `nit`, …) are mapped — a negated one such as `non-blocking` reads as
+`minor` — and a line reference such as `"L42"` or `"12-15"` becomes its first number.
+Parsing takes linear time whatever the answer holds. The raw answer the iteration's
+comments came from stays on it (up to 512 000 characters; a longer one keeps its head and
+tail): `GET .../iterations/{iteration_id}/raw-response` returns it as text and
+`POST .../iterations/{iteration_id}/reparse` parses it again into fresh comments.
+
+The dispatch stream sends these SSE events, every `data` line being single-line JSON:
+
+| Event | `data` |
+|---|---|
+| `chunk` | the next piece of model text, as a JSON string |
+| `comment` | `{index, file, line, severity, body}` — a comment that just completed; a preview without an id |
+| `done` | `{iteration_id, comments, errors, json_error, truncated, kept_previous}` — once, after the iteration is written |
+| `error` | `{message}` — the stream ends here and no `done` follows |
+
+`: ping` comment lines may appear in between. `comments` counts what the iteration holds
+now. `truncated` is `true` when the answer stops inside the JSON it consists of or inside a
+reasoning block — the model most likely hit its output limit. `kept_previous` is `true` when
+the answer was not used (rule 14): the comments counted are the ones the iteration already
+had, and the answer exists only in the streamed `chunk` text.
 
 ## Wiring
 
@@ -290,8 +320,10 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/reviews/{id}/iterations` | POST | Start another pass |
 | `/api/v1/reviews/{id}/diff`, `/api/v1/reviews/{id}/context` | GET | The diff and the collected context as text |
 | `/api/v1/reviews/{id}/prompt` | POST | The exact prompt, without calling the model |
-| `/api/v1/reviews/{id}/dispatch` | POST | Run the review, streamed as SSE |
+| `/api/v1/reviews/{id}/dispatch` | POST | Run the review, streamed as SSE (`chunk`, `comment`, `done` or `error`); 409 once posted |
 | `/api/v1/reviews/{id}/import-response` | POST | Paste a model's answer in by hand |
+| `/api/v1/reviews/{id}/iterations/{iteration_id}/raw-response` | GET | The stored model answer as text; 404 if none |
+| `/api/v1/reviews/{id}/iterations/{iteration_id}/reparse` | POST | Parse the stored answer again, replacing the comments; 409 once posted |
 | `/api/v1/reviews/{id}/post` | POST | Post `kept` comments to the merge request |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments` | POST | Add a comment (`file`, `line`, `severity`, `body`); the server assigns the id and answers 201 with the review |
 | `/api/v1/reviews/{id}/iterations/{iteration_id}/comments/{comment_id}` | DELETE | Remove one comment and return the review |
@@ -462,9 +494,15 @@ when the host does not report the commit.
     `owner/repo`; anything deeper is rejected before a request is made.
 13. **A branch-diff review cannot be posted.** `POST /reviews/{id}/post` answers 409 for a
     review whose source kind is `branch_diff` — there is no merge request to comment on.
-14. **Re-dispatching an iteration discards its comments.** Dispatch clears the iteration's
-    comments before streaming. An iteration that is completed, or already in `post`, refuses
-    to be re-dispatched at all — start a new iteration instead.
+14. **Only a complete, readable answer replaces comments.** Re-dispatching keeps the
+    iteration's comments until the new answer is stored, and replaces them only when the
+    stream finished and the answer parsed in full — `[]` included, as "no findings". An
+    answer that is unreadable, empty or cut off at the token limit, and a dispatch that
+    fails or whose client disconnects, leave the comments, stage, provider and raw answer as
+    they were (`done` says `kept_previous`). Only an iteration without comments takes such
+    an answer: its complete comments, or, for an unreadable answer, the text as one general
+    comment. An iteration that is completed, or already in `post`, refuses to be
+    re-dispatched or re-parsed at all — start a new iteration instead.
 15. **Only `kept` comments are posted**, and posting completes the iteration. An inline
     comment the host rejects is retried as a general note unless
     `fallback_to_general_note` is `false`. After that the iteration's comment list is
@@ -592,7 +630,7 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
 | 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
-| 409 | Posting a review whose source is a branch diff, or adding or deleting a comment on an iteration that was posted |
+| 409 | Posting a review whose source is a branch diff, or dispatching, re-parsing, adding or deleting comments on an iteration that was posted |
 | 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
 | 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
@@ -602,11 +640,15 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 Two failures do not surface as a status code:
 
 * **The dispatch stream fails mid-flight.** SSE has already answered 200, so the error
-  arrives as an `event: error` frame on the stream. Whatever text arrived before it is
-  still parsed and saved.
-* **The model did not answer with JSON.** The raw answer is stored as a single
-  `suggestion` comment with no file or line, and `import-response` returns it in
-  `json_error`. Nothing is lost, but nothing is anchored either.
+  arrives as an `event: error` frame on the stream, with no `done` after it. The iteration
+  keeps its comments; one that had none takes the complete comments that arrived. The same
+  happens when the client disconnects — the server writes this once it notices, so a client
+  that stopped the stream should re-read the review until no iteration is in `dispatch`.
+* **The model did not answer with JSON.** `done` reports it in `json_error`. An iteration
+  that already had comments keeps them (`kept_previous`); one without gets the answer as a
+  single `suggestion` comment with no file or line. Either way nothing is lost, and once
+  the cause is fixed, `reparse` reads the stored answer again. `import-response` stores
+  nothing in that case and reports the error.
 
 A review file that cannot be parsed is skipped with a warning and does not appear in the
 list — the rest of the store keeps working.
