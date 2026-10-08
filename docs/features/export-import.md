@@ -1,9 +1,9 @@
 # Export and import
 
-**Settings → Export / Import** moves hosts, AI providers, saved review presets and review
-history between mr-review instances, or into a backup, as one JSON file. Records keep their
-ids, so a review still points at its host and its preset after the move, and importing the
-same file twice never creates duplicates.
+**Settings → Export** and **Settings → Import** move hosts, AI providers, saved review presets
+and review history between mr-review instances, or into a backup, as one JSON file. Records
+keep their ids, so a review still points at its host and its preset after the move, and
+importing the same file twice never creates duplicates.
 
 ## Export
 
