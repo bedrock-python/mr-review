@@ -126,7 +126,7 @@ const DeleteConfirmation = ({
         className="btn"
         disabled={isDeleting}
         onClick={onConfirm}
-        style={{ color: "var(--c-critical)" }}
+        style={{ color: "var(--c-critical-fg)" }}
       >
         {isDeleting ? "Deleting…" : "Delete"}
       </button>
@@ -230,7 +230,7 @@ export const ReviewItem = ({
               whiteSpace: "nowrap",
               background: "var(--bg-2)",
               border: "1px solid var(--border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               padding: "0 4px",
             }}
           >

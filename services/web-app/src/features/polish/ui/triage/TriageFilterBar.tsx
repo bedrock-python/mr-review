@@ -32,7 +32,7 @@ const toggleSeverity = (
 
 const segmentClass = (isActive: boolean): string =>
   cn(
-    "rounded-[5px] px-2.5 py-1 font-mono text-[11px]",
+    "rounded-[var(--radius-2)] px-2.5 py-1 font-mono text-[11px]",
     isActive ? "bg-bg-0 text-fg-0" : "text-fg-2 hover:text-fg-0"
   );
 
@@ -99,7 +99,7 @@ export const TriageFilterBar = ({
       </div>
 
       <div
-        className="border-border bg-bg-2 inline-flex gap-0.5 rounded-[7px] border p-0.5"
+        className="border-border bg-bg-2 inline-flex gap-0.5 rounded-[var(--radius-2)] border p-0.5"
         role="group"
         aria-label="Filter by status"
       >

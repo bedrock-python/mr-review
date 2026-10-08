@@ -82,7 +82,7 @@ export const ImportReport = ({
           alignItems: "flex-start",
           gap: 10,
           padding: "10px 14px",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
           border: `1px solid color-mix(in oklch, ${color} 35%, transparent)`,
           background: `color-mix(in oklch, ${color} 8%, var(--bg-2))`,
         }}
@@ -111,7 +111,7 @@ export const ImportReport = ({
                 fontSize: 11,
                 color: "var(--fg-2)",
                 padding: "6px 8px",
-                borderRadius: 4,
+                borderRadius: "var(--radius-1)",
                 background: "var(--bg-1)",
                 wordBreak: "break-word",
               }}
@@ -155,7 +155,7 @@ export const ImportReport = ({
                 key={err.index}
                 style={{
                   padding: "8px 12px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   border: "1px solid var(--border)",
                   background: "var(--bg-2)",
                   display: "flex",
@@ -167,7 +167,7 @@ export const ImportReport = ({
                   <span className="mono" style={{ fontSize: 10, color: "var(--fg-2)" }}>
                     item #{err.index + 1}
                   </span>
-                  <span style={{ fontSize: 11, color: "var(--c-major)", fontWeight: 500 }}>
+                  <span style={{ fontSize: 11, color: "var(--c-major-fg)", fontWeight: 500 }}>
                     {err.reason}
                   </span>
                 </div>

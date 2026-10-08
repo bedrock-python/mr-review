@@ -69,12 +69,12 @@ export const AnchorFields = ({
         {isDiffLoading && <span className="text-fg-2 text-[11px]">Loading diff files…</span>}
       </div>
       {lineError !== null && (
-        <p role="alert" className="text-[11px] text-[var(--c-critical)]">
+        <p role="alert" className="text-[11px] text-[var(--c-critical-fg)]">
           {lineError}
         </p>
       )}
       {warning !== null && (
-        <p role="note" className="flex items-center gap-1.5 text-[11px] text-[var(--c-major)]">
+        <p role="note" className="flex items-center gap-1.5 text-[11px] text-[var(--c-major-fg)]">
           <TriangleAlert size={12} aria-hidden="true" />
           {warning}
         </p>

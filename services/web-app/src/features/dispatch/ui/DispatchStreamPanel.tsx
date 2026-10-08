@@ -139,7 +139,7 @@ const CommentPreviewRow = memo(
             fontSize: 10,
             fontWeight: 600,
             padding: "1px 6px",
-            borderRadius: 4,
+            borderRadius: "var(--radius-1)",
             background: `color-mix(in oklch, ${SEVERITY_COLOR[comment.severity]} 15%, transparent)`,
             color: SEVERITY_COLOR[comment.severity],
             textTransform: "uppercase",
@@ -319,7 +319,7 @@ export const DispatchStreamPanel = memo(
     <section
       aria-label="Generation output"
       style={{
-        borderRadius: 10,
+        borderRadius: "var(--radius-3)",
         border: "1px solid var(--border)",
         overflow: "hidden",
         marginBottom: 16,

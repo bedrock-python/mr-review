@@ -16,8 +16,20 @@ const ReposSkeleton = (): React.ReactElement => (
         key={i}
         style={{ padding: "7px 10px", display: "flex", flexDirection: "column", gap: 5 }}
       >
-        <Skeleton style={{ width: `${String(50 + (i % 4) * 15)}%`, height: 13, borderRadius: 4 }} />
-        <Skeleton style={{ width: `${String(35 + (i % 3) * 12)}%`, height: 10, borderRadius: 4 }} />
+        <Skeleton
+          style={{
+            width: `${String(50 + (i % 4) * 15)}%`,
+            height: 13,
+            borderRadius: "var(--radius-1)",
+          }}
+        />
+        <Skeleton
+          style={{
+            width: `${String(35 + (i % 3) * 12)}%`,
+            height: 10,
+            borderRadius: "var(--radius-1)",
+          }}
+        />
       </div>
     ))}
   </div>

@@ -37,7 +37,7 @@ const pillStyle = (isActive: boolean, color: string): React.CSSProperties => ({
   alignItems: "center",
   gap: 4,
   padding: "2px 8px",
-  borderRadius: 999,
+  borderRadius: "var(--radius-pill)",
   fontSize: 10,
   fontFamily: "var(--font-mono)",
   background: isActive ? `color-mix(in oklch, ${color} 15%, var(--bg-2))` : "var(--bg-2)",
@@ -61,7 +61,7 @@ const ReviewCount = (): React.ReactElement | null => {
         color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         padding: "1px 6px",
       }}
     >
@@ -88,12 +88,18 @@ const ListSkeleton = (): React.ReactElement => (
             height: 11,
             width: 100 + (i % 3) * 30,
             background: "var(--bg-2)",
-            borderRadius: 3,
+            borderRadius: "var(--radius-1)",
             opacity: 0.5,
           }}
         />
         <div
-          style={{ height: 9, width: 70, background: "var(--bg-2)", borderRadius: 3, opacity: 0.3 }}
+          style={{
+            height: 9,
+            width: 70,
+            background: "var(--bg-2)",
+            borderRadius: "var(--radius-1)",
+            opacity: 0.3,
+          }}
         />
       </div>
     ))}
@@ -155,7 +161,7 @@ const HistoryBody = ({ searchRef, onOpened }: HistoryBodyProps): React.ReactElem
             gap: 6,
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             padding: "5px 8px",
           }}
         >

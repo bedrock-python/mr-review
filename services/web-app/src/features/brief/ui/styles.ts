@@ -25,7 +25,7 @@ export const CHECKBOX_STYLE: React.CSSProperties = {
 
 export const noticeStyle = (color: string): React.CSSProperties => ({
   padding: "6px 10px",
-  borderRadius: 5,
+  borderRadius: "var(--radius-2)",
   border: `1px solid color-mix(in oklch, ${color} 35%, transparent)`,
   background: `color-mix(in oklch, ${color} 8%, var(--bg-2))`,
   fontSize: 11,
@@ -37,7 +37,7 @@ export const noticeStyle = (color: string): React.CSSProperties => ({
 export const toggleChipStyle = (isPressed: boolean): React.CSSProperties => ({
   fontSize: 11,
   padding: "3px 9px",
-  borderRadius: 999,
+  borderRadius: "var(--radius-pill)",
   border: `1px solid ${isPressed ? "var(--accent)" : "var(--border)"}`,
   background: isPressed ? "color-mix(in oklch, var(--accent) 12%, var(--bg-2))" : "var(--bg-2)",
   color: isPressed ? "var(--accent)" : "var(--fg-2)",

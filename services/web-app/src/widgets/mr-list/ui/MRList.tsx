@@ -31,13 +31,17 @@ const MRListSkeleton = (): React.ReactElement => (
         style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <Skeleton style={{ width: 36, height: 14, borderRadius: 999 }} />
+          <Skeleton style={{ width: 36, height: 14, borderRadius: "var(--radius-pill)" }} />
           <Skeleton
-            style={{ width: `${String(60 + (i % 3) * 20)}px`, height: 14, borderRadius: 4 }}
+            style={{
+              width: `${String(60 + (i % 3) * 20)}px`,
+              height: 14,
+              borderRadius: "var(--radius-1)",
+            }}
           />
         </div>
-        <Skeleton style={{ width: "85%", height: 13, borderRadius: 4 }} />
-        <Skeleton style={{ width: "50%", height: 11, borderRadius: 4 }} />
+        <Skeleton style={{ width: "85%", height: 13, borderRadius: "var(--radius-1)" }} />
+        <Skeleton style={{ width: "50%", height: 11, borderRadius: "var(--radius-1)" }} />
       </div>
     ))}
   </div>

@@ -38,7 +38,7 @@ export const MRItemButton = ({
       borderBottom: "1px solid var(--border)",
       padding: "10px 12px 10px 11px",
       background: isSelected ? "var(--bg-2)" : "transparent",
-      borderLeft: isSelected ? "3px solid var(--accent)" : "3px solid transparent",
+      borderLeft: isSelected ? "3px solid var(--accent-fg)" : "3px solid transparent",
       cursor: "pointer",
       transition: "background 0.08s",
       display: "block",
@@ -68,7 +68,7 @@ export const MRItemTopLine = ({ mr }: { mr: MR }): React.ReactElement => (
           letterSpacing: "0.08em",
           textTransform: "uppercase",
           border: "1px solid var(--border)",
-          borderRadius: 3,
+          borderRadius: "var(--radius-1)",
           padding: "1px 4px",
           color: "var(--fg-2)",
         }}

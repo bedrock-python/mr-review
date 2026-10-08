@@ -74,7 +74,7 @@ export const PolishToolbar = ({
           padding: 2,
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
-          borderRadius: 7,
+          borderRadius: "var(--radius-2)",
         }}
         role="group"
         aria-label="View mode"
@@ -88,7 +88,7 @@ export const PolishToolbar = ({
             }}
             style={{
               padding: "4px 10px",
-              borderRadius: 5,
+              borderRadius: "var(--radius-2)",
               color: viewMode === v.id ? "var(--fg-0)" : "var(--fg-2)",
               background: viewMode === v.id ? "var(--bg-0)" : "transparent",
               fontSize: 11,

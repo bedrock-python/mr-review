@@ -122,7 +122,7 @@ const RepoRowComponent = ({
         border: "none",
         cursor: "pointer",
         padding: "2px 4px",
-        color: isFavourite ? "var(--c-warn)" : "var(--fg-3)",
+        color: isFavourite ? "var(--c-warn-fg)" : "var(--fg-3)",
         flexShrink: 0,
         display: "flex",
         alignItems: "center",

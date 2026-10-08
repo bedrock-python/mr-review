@@ -159,7 +159,7 @@ export const IntentSection = ({ config, onChange }: IntentSectionProps): React.R
           style={{
             margin: "8px 0 0",
             padding: "8px 10px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             border: "1px solid var(--border)",
             background: "var(--bg-1)",
             fontSize: 11,

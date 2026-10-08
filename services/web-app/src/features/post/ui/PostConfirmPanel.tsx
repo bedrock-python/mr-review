@@ -41,7 +41,7 @@ export const PostConfirmPanel = ({
           padding: 14,
           background: "var(--bg-1)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
+          borderRadius: "var(--radius-3)",
         }}
       >
         <SummaryRow label="Target">{targetLabel}</SummaryRow>
@@ -72,9 +72,9 @@ export const PostConfirmPanel = ({
             padding: "10px 14px",
             background: "color-mix(in oklch, var(--c-minor) 10%, var(--bg-1))",
             border: "1px solid color-mix(in oklch, var(--c-minor) 40%, transparent)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-3)",
             fontSize: 12.5,
-            color: "var(--c-minor)",
+            color: "var(--c-minor-fg)",
           }}
         >
           No comments to post. Go back to Polish and keep at least one comment.

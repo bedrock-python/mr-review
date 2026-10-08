@@ -41,7 +41,7 @@ const CommentCard = ({
       padding: "10px 12px",
       background: "var(--bg-0)",
       border: "1px solid var(--border)",
-      borderRadius: 8,
+      borderRadius: "var(--radius-3)",
       fontSize: 12,
     }}
   >

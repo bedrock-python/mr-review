@@ -63,7 +63,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
                     fontSize: 11,
                     background: "var(--bg-3)",
                     border: "1px solid var(--border)",
-                    borderRadius: 3,
+                    borderRadius: "var(--radius-1)",
                     padding: "1px 5px",
                     color: "var(--fg-0)",
                   }}
@@ -90,7 +90,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
               style={{
                 background: "var(--bg-3)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "10px 12px",
                 overflowX: "auto",
                 margin: "0 0 8px",
@@ -120,7 +120,7 @@ export const MarkdownContent = ({ children, className }: MarkdownProps): React.R
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "var(--accent)", textDecoration: "underline", fontSize: 12 }}
+              style={{ color: "var(--accent-fg)", textDecoration: "underline", fontSize: 12 }}
             >
               {c}
             </a>

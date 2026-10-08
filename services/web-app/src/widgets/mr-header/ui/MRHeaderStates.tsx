@@ -54,7 +54,7 @@ export const MRBreadcrumbs = ({
           padding: "2px 4px",
           background: "transparent",
           border: "1px solid var(--border)",
-          borderRadius: 4,
+          borderRadius: "var(--radius-1)",
           cursor: "pointer",
           color: "var(--fg-2)",
           display: "inline-flex",
@@ -80,11 +80,13 @@ export const MRHeaderSkeleton = ({
 }): React.ReactElement => (
   <div style={headerContainerStyle} role="status" aria-label="Loading merge request">
     {breadcrumbs}
-    <Skeleton style={{ width: "55%", height: 24, borderRadius: 5, marginBottom: 12 }} />
+    <Skeleton
+      style={{ width: "55%", height: 24, borderRadius: "var(--radius-2)", marginBottom: 12 }}
+    />
     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
       <Skeleton style={{ width: 20, height: 20, borderRadius: "50%" }} />
-      <Skeleton style={{ width: 120, height: 12, borderRadius: 4 }} />
-      <Skeleton style={{ width: 160, height: 16, borderRadius: 999 }} />
+      <Skeleton style={{ width: 120, height: 12, borderRadius: "var(--radius-1)" }} />
+      <Skeleton style={{ width: 160, height: 16, borderRadius: "var(--radius-pill)" }} />
     </div>
   </div>
 );

@@ -37,8 +37,8 @@ export const DiffViewer = ({ file }: DiffViewerProps): React.ReactElement => {
           {displayPath}
         </span>
         <div className="ml-4 flex shrink-0 items-center gap-3 font-mono text-xs">
-          <span className="text-[var(--c-add)]">+{file.additions}</span>
-          <span className="text-[var(--c-del)]">-{file.deletions}</span>
+          <span className="text-[var(--c-add-fg)]">+{file.additions}</span>
+          <span className="text-[var(--c-del-fg)]">-{file.deletions}</span>
         </div>
       </div>
       {file.hunks.length === 0 ? (

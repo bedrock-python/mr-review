@@ -41,7 +41,7 @@ export const VersionBadge = (): React.ReactElement => {
           border: "none",
           cursor: "pointer",
           padding: "2px 4px",
-          borderRadius: 3,
+          borderRadius: "var(--radius-1)",
           transition: "color 0.15s",
         }}
         onMouseEnter={(e) => {
@@ -76,7 +76,7 @@ export const VersionBadge = (): React.ReactElement => {
             width: 220,
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-3)",
             padding: "12px 14px",
             boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
             zIndex: 100,
@@ -90,7 +90,7 @@ export const VersionBadge = (): React.ReactElement => {
               <span
                 className="mono"
                 style={{
-                  color: updateInfo?.backend.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                  color: updateInfo?.backend.isUpdateAvailable ? "var(--accent-fg)" : "var(--fg-0)",
                 }}
               >
                 v{updateInfo?.backend.current ?? __APP_VERSION__}
@@ -102,7 +102,9 @@ export const VersionBadge = (): React.ReactElement => {
               <span
                 className="mono"
                 style={{
-                  color: updateInfo?.frontend?.isUpdateAvailable ? "var(--accent)" : "var(--fg-0)",
+                  color: updateInfo?.frontend?.isUpdateAvailable
+                    ? "var(--accent-fg)"
+                    : "var(--fg-0)",
                 }}
               >
                 v{updateInfo?.frontend?.current ?? __APP_VERSION__}
@@ -132,7 +134,7 @@ export const VersionBadge = (): React.ReactElement => {
               width: "100%",
               background: "var(--bg-3)",
               border: "1px solid var(--border)",
-              borderRadius: 5,
+              borderRadius: "var(--radius-2)",
               cursor: isFetching ? "default" : "pointer",
               color: isFetching ? "var(--fg-3)" : "var(--fg-0)",
               fontSize: 11,

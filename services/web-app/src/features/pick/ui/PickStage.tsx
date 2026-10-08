@@ -85,10 +85,10 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
                 alignItems: "center",
                 gap: 5,
                 padding: "2px 8px",
-                borderRadius: 3,
+                borderRadius: "var(--radius-1)",
                 border: "1px solid color-mix(in oklch, var(--accent) 40%, transparent)",
                 background: "color-mix(in oklch, var(--accent) 12%, transparent)",
-                color: "var(--accent)",
+                color: "var(--accent-fg)",
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
                 textTransform: "uppercase",
@@ -199,7 +199,7 @@ const Sidebar = ({ mr, diffStats, onCompose, isCreating }: SidebarProps): React.
             className="kbd"
             style={{
               background: "var(--accent-ink)",
-              color: "var(--accent)",
+              color: "var(--accent-fg)",
               borderColor: "transparent",
             }}
           >

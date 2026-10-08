@@ -18,7 +18,7 @@ const pluralize = (count: number, noun: string): string =>
 
 const NOTICE_STYLE: React.CSSProperties = {
   padding: "12px 14px",
-  borderRadius: 8,
+  borderRadius: "var(--radius-3)",
   border: "1px solid color-mix(in oklch, var(--c-major) 40%, transparent)",
   background: "color-mix(in oklch, var(--c-major) 8%, var(--bg-2))",
   display: "flex",
@@ -29,7 +29,7 @@ const NOTICE_STYLE: React.CSSProperties = {
 const NOTICE_TITLE_STYLE: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "var(--c-major)",
+  color: "var(--c-major-fg)",
 };
 
 const NOTICE_BUTTON_STYLE: React.CSSProperties = { fontSize: 11, padding: "4px 10px" };
@@ -38,7 +38,7 @@ const RAW_VIEW_STYLE: React.CSSProperties = {
   margin: 0,
   background: "var(--bg-0)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-2)",
   padding: "10px 12px",
   fontFamily: "var(--font-mono)",
   fontSize: 11,
@@ -70,7 +70,7 @@ const RawResponseViewer = ({
   }
   if (rawResponse.isError) {
     return (
-      <div style={{ fontSize: 12, color: "var(--c-critical)", padding: "8px 0" }}>
+      <div style={{ fontSize: 12, color: "var(--c-critical-fg)", padding: "8px 0" }}>
         Couldn't load the raw output: {rawResponse.error.message}
       </div>
     );
@@ -131,7 +131,7 @@ const UnusedRunOutcome = ({
               fontSize: 11,
               color: "var(--fg-2)",
               padding: "6px 8px",
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               background: "var(--bg-1)",
               wordBreak: "break-word",
             }}
@@ -281,7 +281,7 @@ const SavedRunOutcome = ({
               fontSize: 11,
               color: "var(--fg-2)",
               padding: "6px 8px",
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               background: "var(--bg-1)",
               wordBreak: "break-word",
             }}
@@ -313,7 +313,7 @@ const SavedRunOutcome = ({
             </button>
           </div>
           {reparse.isError && (
-            <div style={{ fontSize: 12, color: "var(--c-critical)" }}>
+            <div style={{ fontSize: 12, color: "var(--c-critical-fg)" }}>
               Re-parse failed: {reparse.error.message}
             </div>
           )}
@@ -335,7 +335,7 @@ const SavedRunOutcome = ({
           {pluralize(savedCount, "comment")} saved
         </span>
         {skippedCount > 0 && (
-          <span style={{ fontSize: 12, color: "var(--c-major)" }}>
+          <span style={{ fontSize: 12, color: "var(--c-major-fg)" }}>
             · {pluralize(skippedCount, "item")} couldn't be parsed
           </span>
         )}

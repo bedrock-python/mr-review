@@ -78,7 +78,7 @@ export const PolishThread = ({
                   flex: 1,
                   background: "var(--bg-1)",
                   border: "1px solid var(--border)",
-                  borderRadius: 10,
+                  borderRadius: "var(--radius-3)",
                   padding: 12,
                 }}
               >
@@ -96,7 +96,7 @@ export const PolishThread = ({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 4,
-                      color: "var(--accent)",
+                      color: "var(--accent-fg)",
                       fontSize: 11,
                       fontWeight: 600,
                       fontFamily: "var(--font-display)",

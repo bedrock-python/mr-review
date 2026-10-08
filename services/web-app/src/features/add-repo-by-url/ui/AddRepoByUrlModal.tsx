@@ -113,7 +113,7 @@ export const AddRepoByUrlModal = ({
                 style={{
                   background: "var(--bg-2)",
                   border: `1px solid ${urlError ? "var(--c-critical)" : "var(--border)"}`,
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   padding: "7px 10px",
                   fontSize: 13,
                   color: "var(--fg-0)",
@@ -126,7 +126,7 @@ export const AddRepoByUrlModal = ({
                 <p
                   id="add-repo-url-error"
                   role="alert"
-                  style={{ fontSize: 11, color: "var(--c-critical)", margin: 0 }}
+                  style={{ fontSize: 11, color: "var(--c-critical-fg)", margin: 0 }}
                 >
                   {urlError.message}
                 </p>

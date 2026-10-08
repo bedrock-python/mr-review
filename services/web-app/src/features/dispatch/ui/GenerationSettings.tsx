@@ -30,7 +30,7 @@ export type GenerationSettingsProps = {
 const chipCss = (isActive: boolean, color: string): React.CSSProperties => ({
   fontSize: 11,
   padding: "4px 10px",
-  borderRadius: 6,
+  borderRadius: "var(--radius-2)",
   border: `1px solid ${isActive ? color : "var(--border)"}`,
   background: isActive ? `color-mix(in oklch, ${color} 10%, var(--bg-0))` : "var(--bg-2)",
   color: isActive ? color : "var(--fg-2)",
@@ -77,7 +77,7 @@ const ReasoningControls = ({
             onClick={() => {
               onChange({ isReasoningOn: !settings.isReasoningOn });
             }}
-            style={{ ...chipCss(isOn, REASONING_COLOR), borderRadius: 999 }}
+            style={{ ...chipCss(isOn, REASONING_COLOR), borderRadius: "var(--radius-pill)" }}
           >
             {isOn ? "On" : "Off"}
           </button>
@@ -317,7 +317,7 @@ const AdvancedSettings = ({
               style={{
                 fontSize: 12,
                 padding: "6px 8px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-0)",
                 color: "var(--fg-0)",
@@ -382,7 +382,7 @@ const AdvancedSettings = ({
               style={{
                 fontSize: 12,
                 padding: "6px 8px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-0)",
                 color: "var(--fg-0)",
@@ -410,7 +410,7 @@ export const GenerationSettings = ({
 }: GenerationSettingsProps): React.ReactElement => (
   <div
     style={{
-      borderRadius: 10,
+      borderRadius: "var(--radius-3)",
       border: "1px solid var(--border)",
       background: "var(--bg-1)",
       padding: 16,

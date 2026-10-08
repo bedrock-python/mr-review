@@ -24,7 +24,7 @@ export const ColorPicker = ({ value, onChange }: ColorPickerProps): React.ReactE
             style={{
               width: 20,
               height: 20,
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               border: isSelected ? "2px solid var(--fg-0)" : "2px solid transparent",
               outline: isSelected ? "2px solid var(--bg-1)" : "none",
               outlineOffset: -3,

@@ -49,7 +49,7 @@ export const MRHeaderActions = ({
             color: "var(--fg-2)",
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             padding: "0 5px",
             lineHeight: "1.6",
           }}

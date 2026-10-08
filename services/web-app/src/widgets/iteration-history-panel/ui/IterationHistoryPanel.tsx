@@ -13,12 +13,12 @@ const STAGE_META: Record<IterationStage, { label: string; color: string; bg: str
   },
   dispatch: {
     label: "Dispatching",
-    color: "var(--c-major)",
+    color: "var(--c-major-fg)",
     bg: "color-mix(in oklch, var(--c-major) 10%, var(--bg-2))",
   },
   polish: {
     label: "Polishing",
-    color: "var(--accent)",
+    color: "var(--accent-fg)",
     bg: "color-mix(in oklch, var(--accent) 10%, var(--bg-2))",
   },
   post: {
@@ -145,7 +145,7 @@ const IterationCard = ({
               color: meta.color,
               background: meta.bg,
               padding: "1px 6px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
             }}
           >
             {meta.label}
@@ -156,7 +156,7 @@ const IterationCard = ({
               style={{
                 fontSize: 10,
                 fontFamily: "var(--font-mono)",
-                color: "var(--accent)",
+                color: "var(--accent-fg)",
                 display: "flex",
                 alignItems: "center",
                 gap: 3,
@@ -367,7 +367,7 @@ const IterationCount = (): React.ReactElement | null => {
         color: "var(--fg-2)",
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         padding: "1px 6px",
       }}
     >

@@ -309,7 +309,7 @@ const ManualDispatch = ({
                 style={{
                   marginBottom: 12,
                   padding: "8px 12px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   border: `1px solid color-mix(in oklch, ${warnColor} 35%, transparent)`,
                   background: `color-mix(in oklch, ${warnColor} 8%, var(--bg-2))`,
                   display: "flex",
@@ -357,7 +357,7 @@ const ManualDispatch = ({
                 style={{
                   marginBottom: 12,
                   padding: "8px 12px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   border: `1px solid color-mix(in oklch, ${warnColor} 35%, transparent)`,
                   background: `color-mix(in oklch, ${warnColor} 8%, var(--bg-2))`,
                   display: "flex",
@@ -422,11 +422,11 @@ const ManualDispatch = ({
             role="alert"
             style={{
               padding: "10px 12px",
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               border: "1px solid color-mix(in oklch, var(--c-critical) 35%, transparent)",
               background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
               fontSize: 12,
-              color: "var(--c-critical)",
+              color: "var(--c-critical-fg)",
               lineHeight: 1.5,
             }}
           >
@@ -438,7 +438,7 @@ const ManualDispatch = ({
               margin: 0,
               background: "var(--bg-0)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               padding: "12px 14px",
               fontFamily: "var(--font-mono)",
               fontSize: 11,
@@ -520,8 +520,8 @@ const ManualDispatch = ({
             }}
             onDrop={handleDrop}
             style={{
-              border: `2px dashed ${dropState === "over" ? "var(--accent)" : "var(--border)"}`,
-              borderRadius: 8,
+              border: `2px dashed ${dropState === "over" ? "var(--accent-fg)" : "var(--border)"}`,
+              borderRadius: "var(--radius-3)",
               padding: "24px 16px",
               textAlign: "center",
               background:
@@ -541,7 +541,7 @@ const ManualDispatch = ({
               <label
                 style={{
                   fontSize: 11,
-                  color: "var(--accent)",
+                  color: "var(--accent-fg)",
                   cursor: "pointer",
                   textDecoration: "underline",
                 }}
@@ -559,7 +559,7 @@ const ManualDispatch = ({
                 type="button"
                 style={{
                   fontSize: 11,
-                  color: "var(--accent)",
+                  color: "var(--accent-fg)",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
@@ -591,7 +591,7 @@ const ManualDispatch = ({
                 width: "100%",
                 background: "var(--bg-0)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "10px 12px",
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
@@ -608,14 +608,14 @@ const ManualDispatch = ({
                   alignItems: "center",
                   gap: 8,
                   padding: "7px 10px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   background: "color-mix(in oklch, var(--c-warn) 12%, var(--bg-1))",
                   border: "1px solid color-mix(in oklch, var(--c-warn) 35%, transparent)",
                   fontSize: 11,
                   color: "var(--fg-1)",
                 }}
               >
-                <span style={{ color: "var(--c-warn)", flexShrink: 0 }}>⚠</span>
+                <span style={{ color: "var(--c-warn-fg)", flexShrink: 0 }}>⚠</span>
                 {existingCommentsCount} existing comment
                 {existingCommentsCount !== 1 ? "s" : ""} will be replaced on import
               </div>
@@ -666,10 +666,10 @@ const ManualDispatch = ({
           <div
             style={{
               padding: "10px 12px",
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               border: "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)",
               background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
-              color: "var(--c-critical)",
+              color: "var(--c-critical-fg)",
               fontSize: 12,
             }}
           >
@@ -700,10 +700,10 @@ const ProvidersSkeleton = (): React.ReactElement => (
     <Skeleton style={{ width: 72, height: 11, marginBottom: 12 }} />
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} style={{ height: 96, borderRadius: 10 }} />
+        <Skeleton key={i} style={{ height: 96, borderRadius: "var(--radius-3)" }} />
       ))}
     </div>
-    <Skeleton style={{ height: 48, borderRadius: 10, marginTop: 24 }} />
+    <Skeleton style={{ height: 48, borderRadius: "var(--radius-3)", marginTop: 24 }} />
   </div>
 );
 
@@ -890,7 +890,7 @@ const AutoDispatch = ({
       <div
         style={{
           padding: "32px 20px",
-          borderRadius: 10,
+          borderRadius: "var(--radius-3)",
           border: "1px solid var(--border)",
           background: "var(--bg-2)",
           textAlign: "center",
@@ -901,7 +901,7 @@ const AutoDispatch = ({
         </p>
         <p style={{ margin: 0, fontSize: 12, color: "var(--fg-2)" }}>
           Add a provider in{" "}
-          <Link to="/settings" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+          <Link to="/settings" style={{ color: "var(--accent-fg)", textDecoration: "underline" }}>
             Settings → AI Providers
           </Link>{" "}
           to get started.
@@ -954,7 +954,7 @@ const AutoDispatch = ({
                   alignItems: "flex-start",
                   gap: 8,
                   padding: "12px 14px",
-                  borderRadius: 10,
+                  borderRadius: "var(--radius-3)",
                   border: `1.5px solid ${isSelected ? color : "var(--border)"}`,
                   background: isSelected
                     ? `color-mix(in oklch, ${color} 8%, var(--bg-1))`
@@ -1084,7 +1084,7 @@ const AutoDispatch = ({
             alignItems: "center",
             gap: 8,
             padding: "7px 10px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             marginBottom: 8,
             background: "color-mix(in oklch, var(--c-warn) 12%, var(--bg-1))",
             border: "1px solid color-mix(in oklch, var(--c-warn) 35%, transparent)",
@@ -1092,7 +1092,7 @@ const AutoDispatch = ({
             color: "var(--fg-1)",
           }}
         >
-          <span style={{ color: "var(--c-warn)", flexShrink: 0 }}>⚠</span>
+          <span style={{ color: "var(--c-warn-fg)", flexShrink: 0 }}>⚠</span>
           {existingCommentsCount} existing comment
           {existingCommentsCount !== 1 ? "s" : ""} will be replaced once a complete answer is saved
           — a failed or unreadable run keeps them
@@ -1108,7 +1108,7 @@ const AutoDispatch = ({
           style={{
             flex: 1,
             padding: "14px 20px",
-            borderRadius: 10,
+            borderRadius: "var(--radius-3)",
             border: `1.5px solid ${!isStreaming && selectedProviderId ? providerColor : "var(--border)"}`,
             background:
               !isStreaming && selectedProviderId
@@ -1176,10 +1176,10 @@ const AutoDispatch = ({
             onClick={handleStop}
             style={{
               padding: "14px 16px",
-              borderRadius: 10,
+              borderRadius: "var(--radius-3)",
               border: "1.5px solid color-mix(in oklch, var(--c-critical) 50%, transparent)",
               background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-1))",
-              color: "var(--c-critical)",
+              color: "var(--c-critical-fg)",
               fontSize: 13,
               fontWeight: 500,
               cursor: "pointer",
@@ -1230,10 +1230,10 @@ const AutoDispatch = ({
           role="alert"
           style={{
             padding: "10px 14px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             border: "1px solid color-mix(in oklch, var(--c-critical) 40%, transparent)",
             background: "color-mix(in oklch, var(--c-critical) 8%, var(--bg-2))",
-            color: "var(--c-critical)",
+            color: "var(--c-critical-fg)",
             fontSize: 12,
           }}
         >
@@ -1357,7 +1357,7 @@ export const DispatchStage = (): React.ReactElement => {
             display: "flex",
             background: "var(--bg-2)",
             border: "1px solid var(--border)",
-            borderRadius: 999,
+            borderRadius: "var(--radius-pill)",
             padding: 3,
             gap: 2,
           }}
@@ -1376,7 +1376,7 @@ export const DispatchStage = (): React.ReactElement => {
                 }}
                 style={{
                   padding: "5px 16px",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   fontSize: 12,
                   fontWeight: mode === m ? 600 : 400,
                   background: mode === m ? "var(--bg-0)" : "transparent",

@@ -32,7 +32,7 @@ export const PolishDialog = ({
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-[200] bg-black/55" />
       <Dialog.Content
-        className="border-border bg-bg-1 fixed top-1/2 left-1/2 z-[201] flex max-h-[80vh] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[10px] border"
+        className="border-border bg-bg-1 fixed top-1/2 left-1/2 z-[201] flex max-h-[80vh] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--radius-3)] border"
         style={{ width }}
         onCloseAutoFocus={(event) => {
           if (!shouldRestoreFocus) event.preventDefault();

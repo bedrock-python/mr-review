@@ -117,7 +117,7 @@ const Tooltip = ({ label, children }: TooltipProps): React.ReactElement => {
             transform: "translateY(-50%)",
             background: "var(--bg-3)",
             border: "1px solid var(--border-strong)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-2)",
             padding: "4px 8px",
             fontSize: 12,
             fontWeight: 500,
@@ -163,7 +163,7 @@ const HostAvatar = ({ host, isSelected, onClick }: HostAvatarProps): React.React
           style={{
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: "var(--radius-3)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -299,7 +299,7 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
                 style={{
                   background: "var(--bg-2)",
                   border: `1px solid ${form.formState.errors[field] ? "var(--c-critical)" : "var(--border)"}`,
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-2)",
                   padding: "7px 10px",
                   fontSize: 13,
                   color: "var(--fg-0)",
@@ -309,7 +309,7 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
                 }}
               />
               {form.formState.errors[field] && (
-                <p role="alert" style={{ fontSize: 11, color: "var(--c-critical)" }}>
+                <p role="alert" style={{ fontSize: 11, color: "var(--c-critical-fg)" }}>
                   {String(form.formState.errors[field].message)}
                 </p>
               )}
@@ -334,7 +334,7 @@ const AddHostModal = ({ isOpen, onClose }: AddHostModalProps): React.ReactElemen
               style={{
                 background: "var(--bg-2)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "7px 10px",
                 fontSize: 13,
                 color: "var(--fg-0)",
@@ -439,7 +439,7 @@ export const HostsRail = (): React.ReactElement => {
             style={{
               width: 28,
               height: 28,
-              borderRadius: 6,
+              borderRadius: "var(--radius-2)",
               background: "var(--accent)",
               display: "flex",
               alignItems: "center",
@@ -484,7 +484,7 @@ export const HostsRail = (): React.ReactElement => {
           style={{
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: "var(--radius-3)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -518,7 +518,7 @@ export const HostsRail = (): React.ReactElement => {
             style={{
               background: historyOpen ? "var(--bg-3)" : undefined,
               color: historyOpen ? "var(--fg-0)" : undefined,
-              borderRadius: 8,
+              borderRadius: "var(--radius-3)",
             }}
           >
             <HistoryIcon />

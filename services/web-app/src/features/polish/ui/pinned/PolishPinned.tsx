@@ -149,7 +149,7 @@ export const PolishPinned = ({
                         alignItems: "flex-start",
                         gap: 8,
                         padding: "8px 10px",
-                        borderRadius: 7,
+                        borderRadius: "var(--radius-2)",
                         border: "1px solid var(--border)",
                         background: "var(--bg-2)",
                         cursor: "pointer",
@@ -228,7 +228,7 @@ export const PolishPinned = ({
                     padding: 12,
                     background: "var(--bg-1)",
                     border: "1px solid var(--border)",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-3)",
                     marginBottom: 8,
                     opacity: c.status === "dismissed" ? 0.45 : 1,
                   }}

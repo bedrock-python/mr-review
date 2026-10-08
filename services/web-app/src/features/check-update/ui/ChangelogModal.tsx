@@ -78,7 +78,7 @@ export const ChangelogModal = ({
             maxHeight: "80vh",
             background: "var(--bg-1)",
             border: "1px solid var(--border)",
-            borderRadius: 10,
+            borderRadius: "var(--radius-3)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -114,7 +114,7 @@ export const ChangelogModal = ({
                     cursor: "pointer",
                     color: "var(--fg-2)",
                     padding: 4,
-                    borderRadius: 4,
+                    borderRadius: "var(--radius-1)",
                     lineHeight: 1,
                   }}
                   aria-label="Close"
@@ -156,7 +156,7 @@ export const ChangelogModal = ({
                 gap: 8,
                 background: "var(--bg-3)",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-2)",
                 padding: "8px 12px",
               }}
             >
@@ -174,9 +174,9 @@ export const ChangelogModal = ({
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  color: isCopied ? "var(--accent)" : "var(--fg-2)",
+                  color: isCopied ? "var(--accent-fg)" : "var(--fg-2)",
                   padding: 4,
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-1)",
                   display: "flex",
                   alignItems: "center",
                   flexShrink: 0,

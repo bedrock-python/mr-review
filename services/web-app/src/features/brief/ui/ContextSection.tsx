@@ -40,7 +40,7 @@ const CONTEXT_TOGGLES: { key: ToggleKey; label: string; hint?: string }[] = [
 
 const BADGE_STYLE: React.CSSProperties = {
   fontSize: 10,
-  borderRadius: 4,
+  borderRadius: "var(--radius-1)",
   padding: "1px 5px",
 };
 

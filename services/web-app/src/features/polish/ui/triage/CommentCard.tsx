@@ -61,7 +61,7 @@ const CommentCardBase = ({
         if (!isFocused) handlers.onFocus(id);
       }}
       className={cn(
-        "bg-bg-1 rounded-[10px] border px-3.5 py-3 transition-colors outline-none",
+        "bg-bg-1 rounded-[var(--radius-3)] border px-3.5 py-3 transition-colors outline-none",
         isFocused
           ? "border-accent shadow-[inset_3px_0_0_var(--accent)]"
           : "border-border hover:border-border-strong"
@@ -78,7 +78,7 @@ const CommentCardBase = ({
           <span className="text-fg-1 font-mono text-[11px] break-all">{locationOf(comment)}</span>
         )}
         {anchorProblem !== null && (
-          <span className="chip text-[var(--c-major)]" title={anchorProblem}>
+          <span className="chip text-[var(--c-major-fg)]" title={anchorProblem}>
             <TriangleAlert size={11} aria-hidden="true" />
             not in diff
           </span>

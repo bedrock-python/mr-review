@@ -173,7 +173,7 @@ export const CommentEditor = ({
         )}
       </div>
       {bodyError !== null && (
-        <p role="alert" className="text-[11px] text-[var(--c-critical)]">
+        <p role="alert" className="text-[11px] text-[var(--c-critical-fg)]">
           {bodyError}
         </p>
       )}

@@ -155,7 +155,7 @@ export const PinnedCommentEditor = ({
           padding: 12,
           background: "var(--bg-0)",
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-3)",
           color: "var(--fg-0)",
           fontFamily: "var(--font-sans)",
           fontSize: 12.5,
@@ -185,7 +185,9 @@ export const PinnedCommentEditor = ({
             onClick={() => {
               onToggleStatus(comment.id);
             }}
-            style={{ color: comment.status === "dismissed" ? "var(--fg-0)" : "var(--c-critical)" }}
+            style={{
+              color: comment.status === "dismissed" ? "var(--fg-0)" : "var(--c-critical-fg)",
+            }}
           >
             {comment.status === "dismissed" ? (
               <>

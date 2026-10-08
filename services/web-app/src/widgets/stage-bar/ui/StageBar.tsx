@@ -30,7 +30,7 @@ const nodeColors = (isActive: boolean, isReached: boolean): NodeColors => {
   if (isReached) {
     return {
       background: "color-mix(in oklch, var(--accent) 20%, var(--bg-2))",
-      color: "var(--accent)",
+      color: "var(--accent-fg)",
       border: "none",
     };
   }
@@ -104,7 +104,7 @@ export const StageBar = (): React.ReactElement => {
                 style={{
                   width: 28,
                   height: 1,
-                  background: isReached ? "var(--accent)" : "var(--border)",
+                  background: isReached ? "var(--accent-fg)" : "var(--border)",
                   opacity: isReached ? 0.5 : 1,
                 }}
               />

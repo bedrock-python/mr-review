@@ -30,7 +30,7 @@ const InboxMRListItemComponent = ({
           color: "var(--fg-2)",
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
-          borderRadius: 3,
+          borderRadius: "var(--radius-1)",
           padding: "1px 5px",
         }}
       >

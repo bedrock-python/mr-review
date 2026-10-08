@@ -103,7 +103,7 @@ export const PromptPreviewPanel = ({
             <span
               role="status"
               className="chip mono"
-              style={{ fontSize: 10, color: "var(--c-major)" }}
+              style={{ fontSize: 10, color: "var(--c-major-fg)" }}
             >
               Out of date
             </span>

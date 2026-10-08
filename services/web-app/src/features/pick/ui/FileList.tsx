@@ -137,7 +137,7 @@ const FileNode = ({
           background: isActive
             ? "color-mix(in oklch, var(--accent) 14%, transparent)"
             : "transparent",
-          borderLeft: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+          borderLeft: isActive ? "2px solid var(--accent-fg)" : "2px solid transparent",
           transition: "background 0.08s, color 0.08s",
           flexShrink: 0,
         }}
@@ -215,7 +215,7 @@ const highlightMatch = (text: string, query: string): React.ReactElement => {
         style={{
           background: "color-mix(in oklch, var(--accent) 35%, transparent)",
           color: "inherit",
-          borderRadius: 2,
+          borderRadius: "var(--radius-1)",
         }}
       >
         {text.slice(idx, idx + query.length)}
@@ -326,9 +326,9 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
                 justifyContent: "center",
                 width: 22,
                 height: 22,
-                borderRadius: 3,
+                borderRadius: "var(--radius-1)",
                 cursor: "pointer",
-                color: viewMode === mode ? "var(--accent)" : "var(--fg-2)",
+                color: viewMode === mode ? "var(--accent-fg)" : "var(--fg-2)",
                 background:
                   viewMode === mode
                     ? "color-mix(in oklch, var(--accent) 14%, transparent)"
@@ -377,7 +377,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
               height: 26,
               background: "var(--bg-2)",
               border: "1px solid var(--border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-1)",
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               color: "var(--fg-1)",
@@ -473,7 +473,7 @@ export const FileList = ({ files, selectedPath, onSelect }: FileListProps): Reac
                     background: isActive
                       ? "color-mix(in oklch, var(--accent) 14%, transparent)"
                       : "transparent",
-                    borderLeft: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+                    borderLeft: isActive ? "2px solid var(--accent-fg)" : "2px solid transparent",
                     transition: "background 0.08s, color 0.08s",
                     flexShrink: 0,
                   }}

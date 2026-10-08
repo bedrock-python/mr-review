@@ -93,7 +93,7 @@ const SavedPresetRow = ({ preset }: { preset: ReviewPreset }): React.ReactElemen
         style={{
           padding: "3px 8px",
           fontSize: 11,
-          color: isConfirming ? "var(--c-critical)" : undefined,
+          color: isConfirming ? "var(--c-critical-fg)" : undefined,
         }}
         aria-label={
           isConfirming ? `Confirm deleting preset ${preset.name}` : `Delete preset ${preset.name}`

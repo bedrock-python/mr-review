@@ -44,7 +44,7 @@ export const SearchField = ({
         gap: 6,
         background: "var(--bg-2)",
         border: "1px solid var(--border)",
-        borderRadius: 6,
+        borderRadius: "var(--radius-2)",
         padding: "5px 8px",
         minWidth: 0,
         opacity: isDisabled ? 0.5 : 1,

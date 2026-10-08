@@ -63,7 +63,7 @@ export const ReposPaneHeader = ({
           justifyContent: "center",
           background: "var(--bg-2)",
           border: "1px solid var(--border)",
-          borderRadius: 6,
+          borderRadius: "var(--radius-2)",
           cursor: canAddRepo ? "pointer" : "not-allowed",
           color: canAddRepo ? "var(--fg-0)" : "var(--fg-3)",
           opacity: canAddRepo ? 1 : 0.5,
