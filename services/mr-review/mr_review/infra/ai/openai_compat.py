@@ -21,7 +21,7 @@ from openai.types.shared_params import ResponseFormatJSONSchema
 from mr_review.core.ai.entities import AIStreamEnd, AIStreamItem, GenerationPlan
 from mr_review.core.ai.errors import AIProviderRefusalError
 from mr_review.core.ai.review_format import REVIEW_COMMENTS_SCHEMA, REVIEW_COMMENTS_SCHEMA_NAME
-from mr_review.infra.ai._sdk_errors import SdkErrorTypes, to_provider_error
+from mr_review.infra.ai._sdk_errors import SdkErrorTypes, capitalized, to_provider_error
 
 _ERRORS: Final = SdkErrorTypes(
     timeout=openai.APITimeoutError,
@@ -69,7 +69,7 @@ class OpenAICompatProvider:
     ) -> None:
         self._api_key = api_key
         self._is_openai = provider_type == "openai"
-        self._label = "OpenAI" if self._is_openai else "The OpenAI-compatible endpoint"
+        self._label = "OpenAI" if self._is_openai else "the OpenAI-compatible endpoint"
         self._base_url = base_url or None
         self._ssl_verify = ssl_verify
         self._timeout = timeout
@@ -131,6 +131,6 @@ class OpenAICompatProvider:
                 ) from exc
         if finish_reason == "content_filter":
             raise AIProviderRefusalError(
-                f"{self._label} stopped the answer with its content filter. What arrived before was kept."
+                f"{capitalized(self._label)} stopped the answer with its content filter. What arrived before was kept."
             )
         yield AIStreamEnd(truncated=finish_reason == "length")

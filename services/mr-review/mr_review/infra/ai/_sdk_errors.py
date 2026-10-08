@@ -37,21 +37,28 @@ def _connection_detail(exc: Exception) -> str:
     return f"{type(cause).__name__}: {cause}" if cause is not None else str(exc)
 
 
+def capitalized(provider: str) -> str:
+    """``provider`` at the start of a sentence: "the OpenAI-compatible endpoint" → "The …"."""
+    return provider[:1].upper() + provider[1:]
+
+
 def _status_error(exc: Exception, types: SdkErrorTypes, *, provider: str, structured_output: bool) -> AIProviderError:
     status = getattr(exc, "status_code", None)
     detail = _detail(exc)
     if isinstance(exc, types.auth):
-        return AIProviderAuthError(f"{provider} rejected the API key ({status}): {detail}")
+        return AIProviderAuthError(f"{capitalized(provider)} rejected the API key ({status}): {detail}")
     if isinstance(exc, types.bad_request) and structured_output:
         return AIProviderError(
-            f"{provider} rejected the request: {detail} — structured output was on; if this model or "
+            f"{capitalized(provider)} rejected the request: {detail} — structured output was on; if this model or "
             "endpoint does not support it, turn Structured output off and retry"
         )
     if isinstance(exc, types.not_found):
-        return AIProviderError(f"{provider} answered 404: {detail} — check the model name and the base URL")
+        return AIProviderError(
+            f"{capitalized(provider)} answered 404: {detail} — check the model name and the base URL"
+        )
     if status is not None:
-        return AIProviderError(f"{provider} answered {status}: {detail}")
-    return AIProviderError(f"{provider} request failed: {detail}")
+        return AIProviderError(f"{capitalized(provider)} answered {status}: {detail}")
+    return AIProviderError(f"The request to {provider} failed: {detail}")
 
 
 def to_provider_error(
@@ -59,7 +66,9 @@ def to_provider_error(
 ) -> AIProviderError:
     """An ``AIProviderError`` whose message says what went wrong and, where it can, what to change."""
     if isinstance(exc, types.timeout):
-        return AIProviderTimeoutError(f"{provider} did not answer in time — retry, or raise the provider's timeout")
+        return AIProviderTimeoutError(
+            f"{capitalized(provider)} did not answer in time — retry, or raise the provider's timeout"
+        )
     if isinstance(exc, types.connection):
         return AIProviderError(f"Could not reach {provider} ({_connection_detail(exc)}) — check the base URL")
     return _status_error(exc, types, provider=provider, structured_output=structured_output)
