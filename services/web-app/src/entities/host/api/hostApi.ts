@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { httpClient } from "@shared/api";
+import { httpClient, parseListOrWarn } from "@shared/api";
 import { HostSchema, AddRepoByUrlResponseSchema } from "../model/host.schema";
 import type { CreateHost, UpdateHost, Host, AddRepoByUrlResponse } from "../model/host.schema";
 
@@ -11,7 +10,7 @@ export type TestConnectionResult = {
 export const hostApi = {
   list: async (): Promise<Host[]> => {
     const res = await httpClient.get<unknown>("/api/v1/hosts");
-    return z.array(HostSchema).parse(res.data);
+    return parseListOrWarn(HostSchema, res.data, "hosts");
   },
 
   create: async (data: CreateHost): Promise<Host> => {

@@ -168,6 +168,32 @@ async def test__comments__posted_iteration__return_409(
     assert delete.status_code == 409
 
 
+async def test__update_review__brief_on_posted_iteration__returns_409_until_a_new_iteration_starts(
+    client: AsyncClient, open_iteration: tuple[str, str], http_settings: Settings
+) -> None:
+    """A brief PATCH against a posted iteration answers 409; a new iteration then takes the brief."""
+    review_id, _ = open_iteration
+    repo = FileReviewRepository(http_settings.data_dir)
+    review = await repo.get_by_id(UUID(review_id))
+    assert review is not None
+    posted = review.iterations[-1].model_copy(
+        update={"stage": IterationStage.post, "completed_at": datetime.now(timezone.utc)}
+    )
+    await repo.update(review.model_copy(update={"iterations": [*review.iterations[:-1], posted]}))
+
+    refused = await client.patch(f"/api/v1/reviews/{review_id}", json={"brief_config": {"preset": "security"}})
+    stored = await client.get(f"/api/v1/reviews/{review_id}")
+    new_round = await client.post(f"/api/v1/reviews/{review_id}/iterations", json={})
+    accepted = await client.patch(f"/api/v1/reviews/{review_id}", json={"brief_config": {"preset": "security"}})
+
+    assert refused.status_code == 409
+    assert stored.json()["iterations"][-1]["brief_config"]["preset"] != "security"
+    assert len(new_round.json()["iterations"]) == 2
+    assert accepted.status_code == 200
+    assert accepted.json()["iterations"][-1]["brief_config"]["preset"] == "security"
+    assert accepted.json()["iterations"][0]["brief_config"]["preset"] != "security"
+
+
 async def test__update_review__anchor_fields__move_and_clear_anchor(
     client: AsyncClient, open_iteration: tuple[str, str]
 ) -> None:

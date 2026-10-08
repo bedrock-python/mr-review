@@ -265,6 +265,7 @@ insensitive, unknown keys ignored. They belong in the compose file's `environmen
 | `MR_REVIEW__SERVER__FORWARDED_ALLOW_IPS` | `*` | Which proxies are trusted to set them |
 | `MR_REVIEW__SERVER__TIMEOUT_KEEP_ALIVE` | `5` | Seconds |
 | `MR_REVIEW__SERVER__TIMEOUT_GRACEFUL_SHUTDOWN` | `10` | Seconds |
+| `MR_REVIEW__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1,api` | Host names (no port) the server answers; any other `Host` header gets a 400 naming it — the guard against DNS rebinding. Comma-separated or a JSON array, `*.example.com` for subdomains, `*` to switch the check off. Setting it replaces the list, but `localhost`, `127.0.0.1` and `::1` are always accepted. Reaching mr-review by a LAN address, a domain or through a proxy needs that name added — see rule 21 |
 | `MR_REVIEW__CORS__ALLOW_ORIGINS` | `["http://localhost:5173","http://localhost:3000"]` | JSON array. The dev defaults. Both shipped deployments are same-origin and never need it; only an `API_BASE_URL` on another origin does |
 | `MR_REVIEW__CORS__ALLOW_CREDENTIALS` | `true` | |
 | `MR_REVIEW__CORS__ALLOW_METHODS` | `["*"]` | JSON array |
@@ -677,6 +678,18 @@ when the host does not report the commit.
     `NGINX_RESOLVER` and applies no `resolv.conf` search domains: a compose service name
     works, a Kubernetes short name does not — use
     `http://<service>.<namespace>.svc.cluster.local:8000` there.
+21. **Any host name but loopback has to be allowed.** The server answers 400 ("Invalid host
+    header: '<name>' is not an allowed host name") to a `Host` it does not know, so a web
+    page cannot rebind its own domain to 127.0.0.1 and read the API. Reaching mr-review
+    from another machine therefore takes two settings: `MR_REVIEW_BIND=0.0.0.0` (or the
+    LAN address) so the port is published beyond loopback — see
+    [Opening it from another machine](getting-started/installation.md#opening-it-from-another-machine)
+    — **and** that machine's address or name in `MR_REVIEW__ALLOWED_HOSTS` on the API
+    (all-in-one: the only) container, e.g. `MR_REVIEW__ALLOWED_HOSTS: "localhost,192.168.1.10"`.
+    Behind a reverse proxy add the domain it serves when it forwards the browser's `Host`
+    (`proxy_set_header Host $host`); one that does not sends its upstream's name instead —
+    `proxy_pass http://mr-review:8000` arrives as `mr-review` — and that name is what has
+    to be allowed. The standard deployment's web container forwards the browser's `Host`.
 
 ## Upgrading from earlier images
 
@@ -689,6 +702,7 @@ the setting that brings the old behaviour back:
 | web-app `API_BASE_URL` defaults to `""` and nginx proxies `/api/` to `http://api:8000` | A web-app container run alone next to an API on host port 8000 answers `/api/` with 502 | `API_BASE_URL=http://localhost:8000` (the API's CORS must list the UI's origin), or `API_UPSTREAM` set to an address the container can reach |
 | API images start as root, `chown` the data directory, drop to `1000:1000` | `cap_drop: [ALL]` → exits at start; `user:` with files it cannot read → exits at start | `cap_add: [CHOWN, SETUID, SETGID]`, or `user:` with `chown -R` on the host directory |
 | HSTS is opt-in | No `Strict-Transport-Security` from the web container | `HSTS_MAX_AGE=31536000`, plus `HSTS_INCLUDE_SUBDOMAINS=true` for the old `includeSubDomains` |
+| The API answers only the host names in `MR_REVIEW__ALLOWED_HOSTS` (loopback and `api` by default) | `400 Invalid host header: '<name>' …` when opened by a LAN address, a domain or through a proxy that rewrites `Host` | Add that name to `MR_REVIEW__ALLOWED_HOSTS` (rule 21); `*` switches the check off |
 
 The data written by older images (uid 100) is taken over automatically on the first
 start as root.

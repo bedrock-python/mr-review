@@ -6,7 +6,7 @@ Enterprise-grade frontend application built with React, TypeScript, and Feature-
 
 - **Feature-Sliced Design**: Scalable and maintainable architecture.
 - **Strict Type Safety**: TypeScript 5.8+ with strict rules.
-- **Modern State Management**: TanStack Query, Zustand, and nuqs.
+- **Modern State Management**: TanStack Query, Zustand, and URL search params.
 - **Accessible UI**: Radix UI primitives.
 - **Internationalization**: Full support for English and Russian.
 - **Production Ready**: Optimized Docker builds, security headers, and health checks.

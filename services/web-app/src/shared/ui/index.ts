@@ -1,12 +1,13 @@
 export { Badge } from "./Badge";
 export type { BadgeProps, Severity } from "./Badge";
-export { DiffViewer, parseDiff, attachFileInfo } from "./DiffViewer";
+export { DiffViewer, DiffTable, parseDiff, attachFileInfo } from "./DiffViewer";
 export type {
   DiffLine,
   DiffLineType,
   DiffLineWithFile,
   DiffViewerMode,
   DiffViewerProps,
+  DiffTableProps,
   HunkDiffProps,
   LineDecorationRenderer,
 } from "./DiffViewer";
@@ -21,3 +22,5 @@ export { ListMessage, ListStatusBar, LoadMoreRow } from "./ListStates";
 export type { ListMessageProps, ListStatusBarProps, LoadMoreRowProps } from "./ListStates";
 export { InfiniteVirtualList } from "./InfiniteVirtualList";
 export type { InfiniteVirtualListProps, ListPagination } from "./InfiniteVirtualList";
+export { SideSheet } from "./SideSheet";
+export type { SideSheetProps } from "./SideSheet";

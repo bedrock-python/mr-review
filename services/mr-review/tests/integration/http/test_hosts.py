@@ -59,6 +59,28 @@ async def test__create_host__trailing_slash_in_base_url__is_stripped(client: Asy
     assert response.json()["base_url"] == "https://api.github.com"
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("base_url", "gitlab.example.com"), ("timeout", 0)],
+    ids=["base-url-without-scheme", "zero-timeout"],
+)
+async def test__create_host__invalid_field__returns_422_and_stores_nothing(
+    client: AsyncClient, field: str, value: object
+) -> None:
+    """POST /api/v1/hosts refuses a record the UI could not read back."""
+    # Arrange
+    payload = {"name": f"Invalid {field}", "type": "gitlab", "base_url": "https://gl.ok.com", "token": _TOKEN}
+    payload[field] = value
+
+    # Act
+    response = await client.post("/api/v1/hosts", json=payload)
+    listed = await client.get("/api/v1/hosts")
+
+    # Assert
+    assert response.status_code == 422
+    assert f"Invalid {field}" not in [h["name"] for h in listed.json()]
+
+
 async def test__list_hosts__after_create__returns_created_host(client: AsyncClient) -> None:
     """GET /api/v1/hosts lists the host that was just created."""
     # Arrange

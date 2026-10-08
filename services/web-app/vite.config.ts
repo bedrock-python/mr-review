@@ -7,6 +7,26 @@ const { version } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8")
 ) as { version: string };
 
+const REACT_PACKAGES = new Set([
+  "react",
+  "react-dom",
+  "scheduler",
+  "react-router",
+  "react-router-dom",
+  "cookie",
+  "set-cookie-parser",
+]);
+
+/** The npm package a module id belongs to (`@scope/name` or `name`), or null for app code. */
+const vendorPackageOf = (id: string): string | null => {
+  const marker = "/node_modules/";
+  const at = id.lastIndexOf(marker);
+  if (at === -1) return null;
+  const [first, second] = id.slice(at + marker.length).split("/");
+  if (!first) return null;
+  return first.startsWith("@") && second ? `${first}/${second}` : first;
+};
+
 const emitVersionJson = (): Plugin => ({
   name: "emit-version-json",
   writeBundle(options) {
@@ -75,20 +95,15 @@ export default defineConfig(({ mode }) => {
       sourcemap: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ["react", "react-dom", "react-router-dom"],
-            "query-vendor": ["@tanstack/react-query"],
-            "table-vendor": ["@tanstack/react-table", "@tanstack/react-virtual"],
-            "radix-vendor": [
-              "@radix-ui/react-dialog",
-              "@radix-ui/react-dropdown-menu",
-              "@radix-ui/react-select",
-              "@radix-ui/react-tabs",
-              "@radix-ui/react-tooltip",
-            ],
-            "chart-vendor": ["recharts"],
-            "icons-vendor": ["lucide-react"],
-            "command-palette": ["cmdk"],
+          // Only the libraries every page runs at start-up get a chunk of their own, so
+          // they stay cached across releases. Everything else follows the lazy imports:
+          // the stages, the Markdown renderer and the dialogs load when first shown.
+          manualChunks: (id) => {
+            const pkg = vendorPackageOf(id);
+            if (pkg === null) return undefined;
+            if (REACT_PACKAGES.has(pkg)) return "react-vendor";
+            if (pkg.startsWith("@tanstack/") && pkg.includes("query")) return "query-vendor";
+            return undefined;
           },
         },
       },

@@ -1,1 +1,0 @@
-export { HistoryPage } from "./HistoryPage";

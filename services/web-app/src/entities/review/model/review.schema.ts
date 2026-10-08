@@ -98,11 +98,31 @@ export const IterationSchema = z.object({
   completed_at: z.string().datetime({ offset: true }).nullable(),
 });
 
+export const MRReviewSourceSchema = z.object({
+  kind: z.literal("mr"),
+  mr_iid: z.number(),
+});
+
+/** A review of the diff between two refs; it has no merge request (`mr_iid` is 0). */
+export const BranchDiffReviewSourceSchema = z.object({
+  kind: z.literal("branch_diff"),
+  base_ref: z.string(),
+  head_ref: z.string(),
+  title: z.string().default(""),
+});
+
+export const ReviewSourceSchema = z.discriminatedUnion("kind", [
+  MRReviewSourceSchema,
+  BranchDiffReviewSourceSchema,
+]);
+
 export const ReviewSchema = z.object({
   id: z.string().uuid(),
   host_id: z.string().uuid(),
   repo_path: z.string(),
   mr_iid: z.number(),
+  // Older servers did not send it: those reviews are all merge request reviews.
+  source: ReviewSourceSchema.optional(),
   iterations: z.array(IterationSchema),
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
@@ -118,6 +138,7 @@ export type CommentPost = z.infer<typeof CommentPostSchema>;
 export type Comment = z.infer<typeof CommentSchema>;
 export type IterationStage = z.infer<typeof IterationStageSchema>;
 export type Iteration = z.infer<typeof IterationSchema>;
+export type ReviewSource = z.infer<typeof ReviewSourceSchema>;
 export type Review = z.infer<typeof ReviewSchema>;
 
 // Virtual stage that includes "pick" (no iteration yet) + all iteration stages
@@ -154,3 +175,21 @@ export const getReviewBriefConfig = (review: Review): BriefConfig => {
   const parsed = BriefConfigSchema.safeParse(last.brief_config);
   return parsed.success ? parsed.data : { ...DEFAULT_BRIEF_CONFIG, ...last.brief_config };
 };
+
+export const getReviewSource = (review: Review): ReviewSource =>
+  review.source ?? { kind: "mr", mr_iid: review.mr_iid };
+
+/** The merge request a review belongs to; null for a branch diff review. */
+export const getReviewMRIid = (review: Review): number | null => {
+  const source = getReviewSource(review);
+  return source.kind === "mr" ? source.mr_iid : null;
+};
+
+/**
+ * An iteration that reached Post: all of its comments are on the merge request
+ * (`completed_at` is set), or some are (`stage` is "post"). Either way it stays as it was
+ * posted — the server refuses a new brief for it — so the next round is a new iteration.
+ * The server's `reached_post`.
+ */
+export const isIterationPosted = (iteration: Iteration): boolean =>
+  iteration.completed_at !== null || iteration.stage === "post";

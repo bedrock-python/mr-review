@@ -10,12 +10,16 @@ export {
   IterationStageSchema,
   IterationSchema,
   ReviewSchema,
+  ReviewSourceSchema,
   DEFAULT_BRIEF_CONFIG,
   DEFAULT_PROMPT_BUDGET_CHARS,
   MIN_PROMPT_BUDGET_CHARS,
   MAX_PROMPT_BUDGET_CHARS,
   MAX_COMMENTS_LIMIT,
   getReviewBriefConfig,
+  getReviewSource,
+  getReviewMRIid,
+  isIterationPosted,
 } from "./review.schema";
 export {
   ExcludedFileSchema,
@@ -36,6 +40,7 @@ export type {
   IterationStage,
   Iteration,
   ReviewStage,
+  ReviewSource,
   Review,
 } from "./review.schema";
 export {
@@ -65,11 +70,14 @@ export {
   useReviews,
   useReview,
   useCreateReview,
+  useCreateIteration,
   useUpdateReview,
   useDeleteReview,
+  isReviewNotFound,
+  fetchLatestReview,
   reviewKeys,
 } from "./useReviews";
-export type { UpdateReviewInput } from "./useReviews";
+export type { UpdateReviewInput, CreateIterationInput, UseReviewsOptions } from "./useReviews";
 export {
   useDiffSize,
   formatDiffSize,

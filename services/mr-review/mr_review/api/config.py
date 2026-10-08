@@ -1,12 +1,16 @@
 """API configuration."""
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from mr_review import __version__ as project_version
+
+# Loopback names plus the compose service name the web container proxies to.
+DEFAULT_ALLOWED_HOSTS: tuple[str, ...] = ("localhost", "127.0.0.1", "::1", "api")
 
 
 class HttpServerConfig(BaseModel):
@@ -80,6 +84,27 @@ class Settings(BaseSettings):
     static_dir: Path | None = Field(
         default=None, description="Serve built frontend from this directory (all-in-one mode)"
     )
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: list(DEFAULT_ALLOWED_HOSTS),
+        description="Host header values the server answers (DNS-rebinding guard); "
+        "a JSON array or a comma-separated list, '*.example.com' for subdomains, '*' for any",
+    )
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def parse_allowed_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            text = value.strip()
+            value = json.loads(text) if text.startswith("[") else text.split(",")
+        if isinstance(value, list):
+            hosts = [str(item).strip() for item in value if str(item).strip()]
+            if not hosts:
+                raise ValueError("allowed_hosts must name at least one host, or '*' to allow any")
+            for host in hosts:
+                if "*" in host[1:] or (host.startswith("*") and host != "*" and not host.startswith("*.")):
+                    raise ValueError(f"allowed_hosts entry {host!r}: use '*' or '*.example.com'")
+            return hosts
+        return value
 
     @staticmethod
     def get_app_version() -> str:

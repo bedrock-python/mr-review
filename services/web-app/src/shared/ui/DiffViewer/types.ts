@@ -30,3 +30,8 @@ export type DiffViewerProps<T = unknown> = {
 };
 
 export type HunkDiffProps<T = unknown> = Omit<DiffViewerProps<T>, "mode">;
+
+/** `DiffViewer` for lines that are already parsed (a structured diff, one file of it). */
+export type DiffTableProps<T = unknown> = Omit<DiffViewerProps<T>, "diff"> & {
+  lines: DiffLineWithFile[];
+};

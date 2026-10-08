@@ -1,9 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { UseQueryResult, UseMutationResult } from "@tanstack/react-query";
+import type { QueryClient, UseQueryResult, UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ApiError } from "@shared/api";
 import { reviewApi } from "../api/reviewApi";
 import type { UpdateCommentInput } from "../api/reviewApi";
 import type { Review, BriefConfig, IterationStage } from "./review.schema";
+
+const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
+const REVIEW_STALE_MS = 30_000;
+// The full list is large (every review with every comment): keep it only while shown.
+const REVIEW_LIST_GC_MS = 60_000;
 
 export const reviewKeys = {
   all: ["reviews"] as const,
@@ -12,11 +19,48 @@ export const reviewKeys = {
   detail: (id: string) => [...reviewKeys.details(), id] as const,
 };
 
-export const useReviews = (): UseQueryResult<Review[]> =>
+/**
+ * Stores the server's copy of a changed review and marks the history list stale. A fetch of
+ * the review still in flight was answered before this change: it is cancelled first, or it
+ * would land after this and put the old copy back.
+ */
+export const storeReview = async (qc: QueryClient, review: Review): Promise<void> => {
+  await qc.cancelQueries({ queryKey: reviewKeys.detail(review.id) });
+  qc.setQueryData(reviewKeys.detail(review.id), review);
+  void qc.invalidateQueries({ queryKey: reviewKeys.lists() });
+};
+
+/**
+ * The review as the server has it now, for a decision the cache may be too old for (whether
+ * the last iteration was posted). Replaces the cached copy.
+ */
+export const fetchLatestReview = async (qc: QueryClient, reviewId: string): Promise<Review> => {
+  await qc.cancelQueries({ queryKey: reviewKeys.detail(reviewId) });
+  return qc.fetchQuery({
+    queryKey: reviewKeys.detail(reviewId),
+    queryFn: () => reviewApi.get(reviewId),
+    staleTime: 0,
+  });
+};
+
+export type UseReviewsOptions = {
+  /** Fetch only while something shows the list. */
+  isEnabled?: boolean;
+};
+
+export const useReviews = ({ isEnabled = true }: UseReviewsOptions = {}): UseQueryResult<
+  Review[]
+> =>
   useQuery({
     queryKey: reviewKeys.lists(),
     queryFn: reviewApi.list,
-    staleTime: 30_000,
+    enabled: isEnabled,
+    staleTime: REVIEW_STALE_MS,
+    gcTime: REVIEW_LIST_GC_MS,
+    // Posting from the Post stage changes a review without going through these hooks.
+    refetchOnMount: "always",
+    // The history panel shows its own error state.
+    meta: { silent: true },
   });
 
 export const useReview = (reviewId: string | null): UseQueryResult<Review> =>
@@ -27,8 +71,13 @@ export const useReview = (reviewId: string | null): UseQueryResult<Review> =>
       return reviewApi.get(reviewId);
     },
     enabled: reviewId !== null,
-    staleTime: 30_000,
+    staleTime: REVIEW_STALE_MS,
+    // A review that no longer exists is taken out of the URL by the stage bar.
+    meta: { silentStatuses: [HTTP_NOT_FOUND] },
   });
+
+export const isReviewNotFound = (error: unknown): boolean =>
+  error instanceof ApiError && error.status === HTTP_NOT_FOUND;
 
 export const useCreateReview = (): UseMutationResult<
   Review,
@@ -38,11 +87,28 @@ export const useCreateReview = (): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: reviewApi.create,
-    onSuccess: (review) => {
-      qc.setQueryData(reviewKeys.detail(review.id), review);
-    },
+    onSuccess: (review) => storeReview(qc, review),
     onError: (err) => {
       toast.error("Failed to create review", { description: err.message });
+    },
+  });
+};
+
+export type CreateIterationInput = {
+  reviewId: string;
+  /** Brief of the new iteration; omitted uses the review's default. */
+  briefConfig?: BriefConfig;
+};
+
+/** Starts a new round on a review, or returns its last iteration while that is still open. */
+export const useCreateIteration = (): UseMutationResult<Review, Error, CreateIterationInput> => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewId, briefConfig }: CreateIterationInput) =>
+      reviewApi.createIteration(reviewId, briefConfig),
+    onSuccess: (review) => storeReview(qc, review),
+    onError: (err) => {
+      toast.error("Failed to start a new iteration", { description: err.message });
     },
   });
 };
@@ -74,10 +140,17 @@ export const useUpdateReview = (
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateReviewInput) => reviewApi.update(reviewId, data),
-    onSuccess: (updated) => {
-      qc.setQueryData(reviewKeys.detail(reviewId), updated);
-    },
+    onSuccess: (updated) => storeReview(qc, updated),
     onError: (err) => {
+      if (err instanceof ApiError && err.status === HTTP_CONFLICT) {
+        // The iteration was posted meanwhile (another tab, a late save): show what the
+        // server has, and how to go on, instead of a bare "update failed".
+        void qc.invalidateQueries({ queryKey: reviewKeys.detail(reviewId) });
+        toast.error("This iteration was already posted", {
+          description: "Its brief can no longer change. Open Brief again to start a new round.",
+        });
+        return;
+      }
       toast.error("Failed to update review", { description: err.message });
     },
   });

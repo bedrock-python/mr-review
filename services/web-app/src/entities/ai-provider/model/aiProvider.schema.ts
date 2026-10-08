@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const AIProviderTypeSchema = z.enum(["claude", "openai", "openai_compat"]);
 
+// What the server stores; a provider saved before the server checked its timeout is still
+// listed, so it can be fixed. Input is validated by the create/update schemas below.
 export const AIProviderSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -9,7 +11,7 @@ export const AIProviderSchema = z.object({
   base_url: z.string(),
   models: z.array(z.string()),
   ssl_verify: z.boolean(),
-  timeout: z.number().int().positive(),
+  timeout: z.number().int(),
   created_at: z.string().datetime({ offset: true }),
 });
 

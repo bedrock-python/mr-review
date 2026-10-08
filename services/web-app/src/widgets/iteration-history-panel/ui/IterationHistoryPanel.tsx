@@ -1,16 +1,8 @@
-import { useEffect } from "react";
 import { useAppStore } from "@app/store";
 import { useNav } from "@app/navigation";
-import { useReview } from "@entities/review";
+import { isIterationPosted, useReview } from "@entities/review";
+import { ListMessage, SideSheet } from "@shared/ui";
 import type { Iteration, IterationStage } from "@entities/review";
-
-/* ── Icons ─────────────────────────────────────────────────────────────── */
-const CloseIcon = (): React.ReactElement => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
 const STAGE_META: Record<IterationStage, { label: string; color: string; bg: string }> = {
@@ -61,17 +53,20 @@ const formatRelative = (iso: string): string => {
 type IterationCardProps = {
   iteration: Iteration;
   isActive: boolean;
+  /** Only the latest iteration can still be in progress; older open ones were left. */
+  isLatest: boolean;
   onClick: () => void;
 };
 
 const IterationCard = ({
   iteration,
   isActive,
+  isLatest,
   onClick,
 }: IterationCardProps): React.ReactElement => {
   const meta = STAGE_META[iteration.stage];
   const completedAt = iteration.completed_at;
-  const isCompleted = completedAt !== null;
+  const isPosted = isIterationPosted(iteration);
   const keptComments = iteration.comments.filter((c) => c.status === "kept");
   const sevCounts: Record<string, number> = {};
   for (const c of keptComments) {
@@ -82,6 +77,7 @@ const IterationCard = ({
     <button
       type="button"
       onClick={onClick}
+      aria-current={isActive ? "true" : undefined}
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -155,7 +151,7 @@ const IterationCard = ({
             {meta.label}
           </span>
 
-          {!isCompleted && (
+          {!isPosted && isLatest && (
             <span
               style={{
                 fontSize: 10,
@@ -167,6 +163,7 @@ const IterationCard = ({
               }}
             >
               <span
+                aria-hidden="true"
                 style={{
                   width: 5,
                   height: 5,
@@ -181,7 +178,13 @@ const IterationCard = ({
             </span>
           )}
 
-          {isCompleted && completedAt && (
+          {!isPosted && !isLatest && (
+            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--fg-3)" }}>
+              not posted
+            </span>
+          )}
+
+          {completedAt && (
             <span
               style={{
                 fontSize: 10,
@@ -272,160 +275,133 @@ export type IterationHistoryPanelProps = {
   onIterationSelect: (iterationId: string, stage: IterationStage) => void;
 };
 
+const EmptyIcon = (): React.ReactElement => (
+  <svg
+    width="28"
+    height="28"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.2"
+    opacity={0.35}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+/** Mounted only while the panel is open. */
+const IterationList = ({
+  activeIterationId,
+  onIterationSelect,
+}: IterationHistoryPanelProps): React.ReactElement => {
+  const { activeReviewId } = useNav();
+  const reviewQuery = useReview(activeReviewId);
+  const iterations = reviewQuery.data?.iterations ?? [];
+  const latestId = iterations.at(-1)?.id ?? null;
+
+  if (activeReviewId !== null && reviewQuery.isPending) {
+    return <ListMessage>Loading iterations…</ListMessage>;
+  }
+  if (reviewQuery.isError) {
+    return (
+      <ListMessage
+        isError
+        actionLabel="Retry"
+        onAction={() => {
+          void reviewQuery.refetch();
+        }}
+      >
+        Could not load the iterations: {reviewQuery.error.message}
+      </ListMessage>
+    );
+  }
+  if (iterations.length === 0) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          flex: 1,
+          gap: 8,
+          color: "var(--fg-3)",
+        }}
+      >
+        <EmptyIcon />
+        <p style={{ margin: 0, fontSize: 12, color: "var(--fg-2)" }}>No iterations yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: "auto" }}>
+      {[...iterations].reverse().map((iteration) => (
+        <IterationCard
+          key={iteration.id}
+          iteration={iteration}
+          isActive={iteration.id === activeIterationId}
+          isLatest={iteration.id === latestId}
+          onClick={() => {
+            onIterationSelect(iteration.id, iteration.stage);
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const IterationCount = (): React.ReactElement | null => {
+  const { activeReviewId } = useNav();
+  const { data: review } = useReview(activeReviewId);
+  const count = review?.iterations.length ?? 0;
+  if (count === 0) return null;
+  return (
+    <span
+      className="mono"
+      aria-label={`${String(count)} iterations`}
+      style={{
+        fontSize: 10,
+        color: "var(--fg-3)",
+        background: "var(--bg-2)",
+        border: "1px solid var(--border)",
+        borderRadius: 999,
+        padding: "1px 6px",
+      }}
+    >
+      {count}
+    </span>
+  );
+};
+
 export const IterationHistoryPanel = ({
   activeIterationId,
   onIterationSelect,
 }: IterationHistoryPanelProps): React.ReactElement => {
-  const { iterationHistoryOpen, setIterationHistoryOpen } = useAppStore();
-  const { activeReviewId } = useNav();
-  const { data: review } = useReview(activeReviewId);
+  const isOpen = useAppStore((s) => s.iterationHistoryOpen);
+  const setIterationHistoryOpen = useAppStore((s) => s.setIterationHistoryOpen);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape" && iterationHistoryOpen) {
-        setIterationHistoryOpen(false);
-      }
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [iterationHistoryOpen, setIterationHistoryOpen]);
-
-  const handleIterationClick = (iteration: Iteration): void => {
-    onIterationSelect(iteration.id, iteration.stage);
+  const handleClose = (): void => {
     setIterationHistoryOpen(false);
   };
 
-  const iterations = review?.iterations ?? [];
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        onClick={() => {
-          setIterationHistoryOpen(false);
-        }}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 40,
-          background: "rgba(0,0,0,0.35)",
-          opacity: iterationHistoryOpen ? 1 : 0,
-          pointerEvents: iterationHistoryOpen ? "auto" : "none",
-          transition: "opacity 0.2s",
+    <SideSheet
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Iterations"
+      headerExtra={<IterationCount />}
+      width={320}
+    >
+      <IterationList
+        activeIterationId={activeIterationId}
+        onIterationSelect={(id, stage) => {
+          onIterationSelect(id, stage);
+          handleClose();
         }}
       />
-
-      {/* Panel */}
-      <div
-        role="dialog"
-        aria-label="Iteration history"
-        aria-modal="true"
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          width: 320,
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--bg-1)",
-          borderLeft: "1px solid var(--border)",
-          transform: iterationHistoryOpen ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
-          boxShadow: iterationHistoryOpen ? "-8px 0 32px rgba(0,0,0,0.3)" : "none",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "0 14px",
-            height: 48,
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-0)", flex: 1 }}>
-            Iterations
-          </span>
-
-          {iterations.length > 0 && (
-            <span
-              style={{
-                fontSize: 10,
-                fontFamily: "var(--font-mono)",
-                color: "var(--fg-3)",
-                background: "var(--bg-2)",
-                border: "1px solid var(--border)",
-                borderRadius: 999,
-                padding: "1px 6px",
-              }}
-            >
-              {iterations.length}
-            </span>
-          )}
-
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => {
-              setIterationHistoryOpen(false);
-            }}
-            title="Close (Esc)"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {/* Empty state */}
-        {iterations.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              flex: 1,
-              gap: 8,
-              color: "var(--fg-3)",
-            }}
-          >
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              opacity={0.35}
-            >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--fg-2)" }}>No iterations yet</p>
-          </div>
-        )}
-
-        {/* Iteration list (newest first) */}
-        <div style={{ flex: 1, overflow: "auto" }}>
-          {[...iterations].reverse().map((iteration) => (
-            <IterationCard
-              key={iteration.id}
-              iteration={iteration}
-              isActive={iteration.id === activeIterationId}
-              onClick={() => {
-                handleIterationClick(iteration);
-              }}
-            />
-          ))}
-        </div>
-      </div>
-    </>
+    </SideSheet>
   );
 };

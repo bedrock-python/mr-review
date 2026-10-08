@@ -2,14 +2,17 @@ import { z } from "zod";
 
 export const HostTypeSchema = z.enum(["gitlab", "github", "gitea", "forgejo", "bitbucket"]);
 
+// What the server stores, as it stores it. The form schemas below validate input; a host
+// saved before the server checked its fields (a base URL without a scheme, a zero timeout)
+// still has to be listed, so it can be seen and fixed.
 export const HostSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   type: HostTypeSchema,
-  base_url: z.string().url(),
+  base_url: z.string(),
   color: z.string().nullable().optional(),
   favourite_repos: z.array(z.string()).default([]),
-  timeout: z.number().int().positive().default(30),
+  timeout: z.number().int().default(30),
   created_at: z.string().datetime({ offset: true }),
 });
 
