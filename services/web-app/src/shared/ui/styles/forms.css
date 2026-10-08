@@ -171,6 +171,79 @@
     pointer-events: none;
   }
 
+  /* ── Combobox ──────────────────────────────────────────────── */
+  .ui-combobox {
+    position: relative;
+  }
+  .ui-combobox__chevron {
+    flex-shrink: 0;
+    color: var(--fg-2);
+  }
+  .ui-combobox__list {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    right: 0;
+    z-index: var(--z-popover);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-1);
+    overflow-y: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-pop);
+  }
+  .ui-combobox__list[hidden] {
+    display: none;
+  }
+  .ui-combobox__option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    min-height: var(--control-md);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    color: var(--fg-1);
+    font-size: var(--fs-control);
+    cursor: pointer;
+  }
+  .ui-combobox__option--mono {
+    font-family: var(--font-mono);
+  }
+  .ui-combobox__option:hover {
+    background: var(--bg-hover);
+  }
+  .ui-combobox__option[aria-selected="true"] {
+    color: var(--fg-0);
+    font-weight: var(--fw-medium);
+  }
+  /* Highlighted from the keyboard: Enter takes it */
+  .ui-combobox__option[data-active] {
+    background: var(--bg-3);
+    color: var(--fg-0);
+    box-shadow: inset var(--indicator-width) 0 0 var(--accent-fg);
+  }
+  .ui-combobox__check {
+    display: inline-flex;
+    width: var(--icon-inline);
+    flex-shrink: 0;
+    color: var(--accent-fg);
+  }
+  .ui-combobox__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-combobox__empty {
+    margin: 0;
+    padding: var(--space-3);
+    color: var(--fg-2);
+    font-size: var(--fs-control);
+    text-align: center;
+  }
+
   /* ── Checkbox / Radio / Switch ─────────────────────────────── */
   .ui-choice {
     display: inline-flex;

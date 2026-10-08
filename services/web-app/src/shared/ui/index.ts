@@ -43,6 +43,8 @@ export { SegmentedControl } from "./segmented-control";
 export type { SegmentedControlProps, SegmentedOption } from "./segmented-control";
 export { StageFooter } from "./stage-footer";
 export type { StageFooterProps } from "./stage-footer";
+export { Combobox } from "./combobox";
+export type { ComboboxProps } from "./combobox";
 export { Disclosure } from "./disclosure";
 export type { DisclosureProps } from "./disclosure";
 export { Menu, MenuGroup, MenuItem, MenuSeparator, Popover } from "./overlay";
