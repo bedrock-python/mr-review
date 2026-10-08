@@ -74,5 +74,3 @@ export { ListMessage, ListStatusBar, LoadMoreRow } from "./ListStates";
 export type { ListMessageProps, ListStatusBarProps, LoadMoreRowProps } from "./ListStates";
 export { InfiniteVirtualList } from "./InfiniteVirtualList";
 export type { InfiniteVirtualListProps, ListPagination } from "./InfiniteVirtualList";
-export { SideSheet } from "./SideSheet";
-export type { SideSheetProps } from "./SideSheet";
