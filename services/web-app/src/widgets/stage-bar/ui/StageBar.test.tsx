@@ -403,7 +403,42 @@ describe(
       await user.keyboard("{ArrowRight}");
 
       expect(tab("Polish")).toHaveFocus();
-      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Brief first");
+      // The open stage is the one to finish, not the server's last one behind it.
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish Dispatch first");
+    });
+
+    it("marks nothing done on a merge request that has no review yet", () => {
+      renderAt(MR_PATH);
+
+      expect(tab("Pick")).toHaveAttribute("aria-selected", "true");
+      // Brief can be opened (it starts the review) but nothing was briefed.
+      expect(tab("Brief")).toHaveAccessibleName("Brief");
+      expect(tab("Brief")).toHaveAttribute("aria-disabled", "false");
+      expect(tab("Dispatch")).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("marks the stages the iteration really got past as done", async () => {
+      vi.spyOn(reviewApi, "get").mockResolvedValue(review([iteration({ stage: "polish" })]));
+      renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=pick&it=${IT_1}`);
+
+      await waitFor(() => {
+        expect(tab("Dispatch")).toHaveAccessibleName("Dispatch, done");
+      });
+      expect(tab("Brief")).toHaveAccessibleName("Brief, done");
+      // Reached, but nothing was posted yet.
+      expect(tab("Polish")).toHaveAccessibleName("Polish");
+      expect(tab("Post")).toHaveAccessibleName("Post");
+    });
+
+    it("does not call Brief done while its iteration has not been dispatched", async () => {
+      vi.spyOn(reviewApi, "get").mockResolvedValue(review([iteration({ stage: "brief" })]));
+      renderAt(`${MR_PATH}?review=${REVIEW_ID}&stage=dispatch&it=${IT_1}`);
+
+      await waitFor(() => {
+        expect(tab("Pick")).toHaveAccessibleName("Pick, done");
+      });
+      expect(tab("Dispatch")).toHaveAttribute("aria-selected", "true");
+      expect(tab("Brief")).toHaveAccessibleName("Brief");
     });
 
     it("moves focus between stages with the arrow keys", async () => {

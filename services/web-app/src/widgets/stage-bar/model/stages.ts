@@ -42,6 +42,20 @@ export const resolveIteration = (
 ): Iteration | null =>
   review?.iterations.find((it) => it.id === iterationId) ?? review?.iterations.at(-1) ?? null;
 
+/**
+ * How far an iteration really got, as a stage index: every stage before it is done.
+ *
+ * An iteration exists once its brief was started, so Pick is done; the server moves it to
+ * Dispatch when a run starts, to Polish once a run produced comments, and to Post once
+ * comments were posted. Post itself is done only when everything was posted. Opening a
+ * stage, or reaching it through the stage bar, finishes nothing.
+ */
+export const progressIndexOf = (iteration: Iteration | null): number => {
+  if (iteration === null) return 0;
+  if (iteration.completed_at !== null) return STAGES.length;
+  return STAGE_ORDER[iteration.stage];
+};
+
 export type StageTarget = { stage: ReviewStage; iterationId: string | null };
 
 /**
