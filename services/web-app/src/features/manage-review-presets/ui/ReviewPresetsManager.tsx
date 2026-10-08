@@ -185,7 +185,7 @@ export const ReviewPresetsManager = (): React.ReactElement => {
         )}
       </Card>
       {builtins && (
-        <Disclosure variant="inline" headingLevel="none" title="Built-in presets">
+        <Disclosure variant="inline" headingLevel="none" title="Built-in presets" shouldKeepMounted>
           <Card as="div" padding="none">
             <ul className="m-0 list-none p-0">
               {builtins.map((preset) => (

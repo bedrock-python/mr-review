@@ -1,6 +1,6 @@
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { cn } from "@shared/lib";
+import { cn, useStableCallback } from "@shared/lib";
 import { ICON_SIZE } from "../ICON_SIZE";
 
 export type DisclosureProps = {
@@ -22,8 +22,15 @@ export type DisclosureProps = {
   variant?: "section" | "inline";
   /** The heading level around the button; "none" when the title is not a heading. */
   headingLevel?: "h2" | "h3" | "h4" | "none";
+  /**
+   * Keep the content in the page while closed (hidden), so the browser's find-in-page reaches
+   * it and opens the section on a match (`hidden="until-found"` where supported). For light
+   * content people search for: the built-in presets, a list of repository names. Heavy or
+   * stateful content stays unmounted while closed.
+   */
+  shouldKeepMounted?: boolean;
   className?: string;
-  /** Mounted only while open. */
+  /** Mounted only while open, unless `shouldKeepMounted`. */
   children: React.ReactNode;
 };
 
@@ -40,18 +47,39 @@ export const Disclosure = ({
   defaultIsOpen = false,
   variant = "section",
   headingLevel = "h3",
+  shouldKeepMounted = false,
   className,
   children,
 }: DisclosureProps): React.ReactElement => {
   const id = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [ownIsOpen, setOwnIsOpen] = useState(defaultIsOpen);
   const isOpen = controlledIsOpen ?? ownIsOpen;
   const hasSummary = summary !== undefined && summary !== null && summary !== false;
 
-  const handleToggle = (): void => {
-    if (controlledIsOpen === undefined) setOwnIsOpen(!isOpen);
-    onOpenChange?.(!isOpen);
+  const setOpen = (next: boolean): void => {
+    if (controlledIsOpen === undefined) setOwnIsOpen(next);
+    onOpenChange?.(next);
   };
+  const handleToggle = (): void => {
+    setOpen(!isOpen);
+  };
+  const handleBeforeMatch = useStableCallback((): void => {
+    setOpen(true);
+  });
+
+  // React has no `hidden="until-found"` yet: set it by hand, and open when the browser's
+  // find-in-page matches inside (the `beforematch` event).
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!shouldKeepMounted || panel === null) return undefined;
+    if (isOpen) panel.removeAttribute("hidden");
+    else panel.setAttribute("hidden", "until-found");
+    panel.addEventListener("beforematch", handleBeforeMatch);
+    return () => {
+      panel.removeEventListener("beforematch", handleBeforeMatch);
+    };
+  }, [isOpen, shouldKeepMounted, handleBeforeMatch]);
 
   const button = (
     <button
@@ -78,9 +106,15 @@ export const Disclosure = ({
       className={cn("ui-disclosure", `ui-disclosure--${variant}`, className)}
     >
       {Heading === null ? button : <Heading className="ui-disclosure__heading">{button}</Heading>}
-      {/* Always in the DOM, so aria-controls points at something; its content only while open. */}
-      <div id={`${id}-panel`} className="ui-disclosure__panel" hidden={!isOpen}>
-        {isOpen && children}
+      {/* Always in the DOM, so aria-controls points at something; its content while open, or
+          always (hidden while closed) with shouldKeepMounted. */}
+      <div
+        ref={panelRef}
+        id={`${id}-panel`}
+        className="ui-disclosure__panel"
+        {...(shouldKeepMounted ? {} : { hidden: !isOpen })}
+      >
+        {(isOpen || shouldKeepMounted) && children}
       </div>
     </Root>
   );

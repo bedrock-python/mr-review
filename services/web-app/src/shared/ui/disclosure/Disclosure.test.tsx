@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Disclosure } from "./Disclosure";
@@ -64,6 +64,30 @@ describe("Disclosure", () => {
     await user.click(screen.getByRole("button", { name: "Advanced" }));
     expect(handleOpenChange).toHaveBeenCalledWith(true);
     expect(screen.getByText("Inside")).toBeInTheDocument();
+  });
+
+  it("can keep its content in the page, hidden until found, and open on a match", async () => {
+    const user = userEvent.setup();
+    render(
+      <Disclosure title="Built-in presets" variant="inline" shouldKeepMounted>
+        <p>Thorough</p>
+      </Disclosure>
+    );
+    const button = screen.getByRole("button", { name: "Built-in presets" });
+    const panel = document.getElementById(button.getAttribute("aria-controls") ?? "");
+
+    expect(screen.getByText("Thorough")).toBeInTheDocument();
+    expect(panel).toHaveAttribute("hidden", "until-found");
+    expect(screen.queryByText("Thorough")).not.toBeVisible();
+
+    act(() => {
+      panel?.dispatchEvent(new Event("beforematch"));
+    });
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(panel).not.toHaveAttribute("hidden");
+
+    await user.click(button);
+    expect(panel).toHaveAttribute("hidden", "until-found");
   });
 
   it("inline: no landmark and no heading when asked", () => {

@@ -22,6 +22,7 @@ export const TruncatedReposNote = ({
   <Disclosure
     variant="inline"
     headingLevel="none"
+    shouldKeepMounted
     title={<span className="text-(length:--fs-meta)">{describe(repoPaths.length)}</span>}
     className="border-border shrink-0 border-b px-(--space-3) py-(--space-1)"
   >
