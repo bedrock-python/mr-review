@@ -35,4 +35,4 @@ export type {
 export { useAutosizeTextarea } from "./useAutosizeTextarea";
 export { parseLineNumber } from "./parseLineNumber";
 export { isIterationLocked } from "./isIterationLocked";
-export { useElementWidth } from "./useElementWidth";
+export { useFittingLayout } from "./useFittingLayout";

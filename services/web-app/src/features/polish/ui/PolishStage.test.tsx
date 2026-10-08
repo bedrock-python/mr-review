@@ -1354,9 +1354,10 @@ describe("PolishStage list — toolbar", { timeout: INTEGRATION_TEST_TIMEOUT_MS 
 
   it("moves status, file and grouping into Filters when the row is narrow", async () => {
     const user = userEvent.setup();
-    // The width the toolbar is measured at; jsdom lays nothing out.
+    // jsdom lays nothing out: report every box at two lines of controls, so the row wraps in
+    // each layout and the toolbar settles on its tightest one.
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(
-      new DOMRect(0, 0, 900, 40)
+      new DOMRect(0, 0, 900, 72)
     );
     renderStage(
       makeReview([

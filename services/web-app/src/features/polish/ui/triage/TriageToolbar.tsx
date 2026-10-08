@@ -10,7 +10,8 @@ import {
   ToolbarSpacer,
   Tooltip,
 } from "@shared/ui";
-import { EMPTY_FILTERS, isFiltering, useElementWidth } from "../../lib";
+import { cn } from "@shared/lib";
+import { EMPTY_FILTERS, isFiltering, useFittingLayout } from "../../lib";
 import { BulkMenu } from "./BulkMenu";
 import { FileFilter, FiltersPopover, GroupToggle, StatusFilter } from "./ListFilters";
 import { SeverityChips } from "./SeverityChips";
@@ -18,19 +19,12 @@ import type { FileFilterOption } from "./ListFilters";
 import type { CommentFilters, SeverityCounts } from "../../lib";
 import type { CommentSeverity } from "@entities/review";
 
-// Measured widths of the row with every filter set (the widest it gets), so typing a search
-// never reshuffles the controls. Below the narrowest layout's width the row wraps.
-/** Below this toolbar width the file filter and grouping move into "Filters". */
-export const TOOLBAR_WIDE_MIN_PX = 1300;
-/** Below this width the status filter joins them and "New comment" keeps only its icon. */
-export const TOOLBAR_MEDIUM_MIN_PX = 1180;
-
-type ToolbarLayout = "wide" | "medium" | "narrow";
-
-const layoutFor = (width: number | null): ToolbarLayout => {
-  if (width === null || width >= TOOLBAR_WIDE_MIN_PX) return "wide";
-  return width >= TOOLBAR_MEDIUM_MIN_PX ? "medium" : "narrow";
-};
+/**
+ * wide: everything in the row. medium: the file filter and grouping move into "Filters".
+ * narrow: the status filter joins them and "New comment" keeps only its icon. The row takes
+ * the roomiest one that fits on one line, whatever the theme's fonts.
+ */
+const TOOLBAR_LAYOUTS = ["wide", "medium", "narrow"] as const;
 
 type TriageToolbarProps = {
   filters: CommentFilters;
@@ -73,7 +67,8 @@ export const TriageToolbar = ({
   onShowShortcuts,
 }: TriageToolbarProps): React.ReactElement => {
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const layout = layoutFor(useElementWidth(toolbarRef));
+  const layout = useFittingLayout(toolbarRef, TOOLBAR_LAYOUTS);
+  const isFiltered = isFiltering(filters);
   const update = (patch: Partial<CommentFilters>): void => {
     onFiltersChange({ ...filters, ...patch });
   };
@@ -95,13 +90,18 @@ export const TriageToolbar = ({
 
   return (
     // Wraps only where even the narrow layout does not fit (the merge request list open beside).
-    <Toolbar ref={toolbarRef} size="sm" className="flex-wrap gap-y-(--space-2) py-(--space-1)">
+    <Toolbar
+      ref={toolbarRef}
+      size="sm"
+      className="flex-wrap gap-y-(--space-2) py-(--space-1)"
+      data-layout={layout}
+    >
       <Input
         ref={searchRef}
         size="sm"
         type="search"
         aria-label="Search comments"
-        placeholder="Search text or file"
+        placeholder="Search"
         value={filters.search}
         leadingIcon={<Search size={ICON_SIZE.inline} />}
         trailing={
@@ -111,7 +111,7 @@ export const TriageToolbar = ({
             </span>
           ) : undefined
         }
-        className="max-w-[320px] min-w-[144px] flex-1"
+        className="max-w-[320px] min-w-[120px] flex-[4_1_0%]"
         onChange={(event) => {
           update({ search: event.target.value });
         }}
@@ -141,23 +141,25 @@ export const TriageToolbar = ({
 
       <ToolbarSpacer />
 
+      {/* Room for "99 of 99 shown ×" is kept while nothing is filtered: the row's layout is
+          chosen with it, so the first filter never reshuffles the controls. */}
       <span className="flex shrink-0 items-center gap-(--space-1)">
         <span
-          className="text-fg-2 font-mono text-(length:--fs-meta) whitespace-nowrap"
+          className="text-fg-2 min-w-[14ch] text-right font-mono text-(length:--fs-meta) whitespace-nowrap"
           aria-live="polite"
         >
           {isPartial ? `${String(shownCount)} of ${String(totalCount)} shown` : ""}
         </span>
-        {isFiltering(filters) && (
-          <IconButton
-            size="sm"
-            label="Clear filters"
-            icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
-            onClick={() => {
-              onFiltersChange(EMPTY_FILTERS);
-            }}
-          />
-        )}
+        <IconButton
+          size="sm"
+          label="Clear filters"
+          className={cn(!isFiltered && "invisible")}
+          disabled={!isFiltered}
+          icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
+          onClick={() => {
+            onFiltersChange(EMPTY_FILTERS);
+          }}
+        />
       </span>
       <BulkMenu
         scope={isPartial ? "shown" : "all"}
