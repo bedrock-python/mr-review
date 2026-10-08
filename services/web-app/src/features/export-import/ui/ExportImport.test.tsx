@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@shared/api";
 import type * as ExportImportApi from "@shared/api/export-import.api";
 import type { ImportPreview, ImportResult } from "@shared/api/export-import.api";
-import { ExportImportSection } from "./ExportImportSection";
+import { ExportPanel } from "./ExportPanel";
+import { ImportPanel } from "./ImportPanel";
 
 const api = vi.hoisted(() => ({
   exportData: vi.fn(),
@@ -71,7 +72,8 @@ const renderSection = (): ReturnType<typeof userEvent.setup> => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <ExportImportSection />
+      <ExportPanel />
+      <ImportPanel />
     </QueryClientProvider>
   );
   return userEvent.setup();

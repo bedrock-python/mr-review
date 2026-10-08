@@ -1,4 +1,7 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { Plus, RefreshCw, X } from "lucide-react";
+
+import { Badge, Button, Callout, ICON_SIZE, IconButton, Input, SearchField } from "@shared/ui";
 
 type FetchState =
   | { status: "idle" | "loading" }
@@ -8,6 +11,9 @@ type FetchState =
 // Past this many fetched models a filter field helps pick the right ones.
 const FILTER_THRESHOLD = 8;
 
+// The offered list scrolls instead of pushing the form's Save button far down.
+const OFFERED_LIST_MAX_HEIGHT_PX = 200;
+
 export type ModelListEditorProps = {
   models: string[];
   onChange: (models: string[]) => void;
@@ -15,37 +21,53 @@ export type ModelListEditorProps = {
   onFetchModels: () => Promise<string[]>;
   /** Why the endpoint cannot be asked yet, e.g. no API key entered; fetching is off while set. */
   fetchBlockedReason?: string | null;
-  inputStyle: React.CSSProperties;
 };
 
-const smallButtonCss: React.CSSProperties = {
-  background: "none",
+const columnStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--space-2)",
+};
+
+const boxStyle: React.CSSProperties = {
+  margin: 0,
+  padding: 0,
+  listStyle: "none",
   border: "1px solid var(--border)",
-  borderRadius: "var(--radius-1)",
-  padding: "1px 6px",
-  fontSize: 10,
-  color: "var(--fg-2)",
-  cursor: "pointer",
-  flexShrink: 0,
+  borderRadius: "var(--radius-control)",
+  background: "var(--bg-1)",
 };
 
-const rowCss: React.CSSProperties = {
+const rowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  padding: "5px 10px",
-  borderRadius: "var(--radius-2)",
-  border: "1px solid var(--border)",
-  background: "var(--bg-0)",
+  gap: "var(--space-2)",
+  minHeight: "var(--control-md)",
+  padding: "var(--space-1) var(--space-1) var(--space-1) var(--space-3)",
 };
 
-const modelNameCss: React.CSSProperties = {
+const modelNameStyle: React.CSSProperties = {
   flex: 1,
-  fontSize: 12,
-  color: "var(--fg-1)",
+  minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  fontSize: "var(--fs-control)",
+  color: "var(--fg-0)",
+};
+
+const metaStyle: React.CSSProperties = { fontSize: "var(--fs-meta)", color: "var(--fg-2)" };
+
+const emptyStyle: React.CSSProperties = {
+  ...metaStyle,
+  padding: "var(--space-2) var(--space-3)",
+  textAlign: "center",
+};
+
+const inlineRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--space-2)",
 };
 
 /**
@@ -58,12 +80,12 @@ export const ModelListEditor = ({
   onChange,
   onFetchModels,
   fetchBlockedReason = null,
-  inputStyle,
 }: ModelListEditorProps): React.ReactElement => {
   const [newModel, setNewModel] = useState("");
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
   const [filter, setFilter] = useState("");
   const newModelRef = useRef<HTMLInputElement>(null);
+  const blockedReasonId = useId();
 
   const addModels = (toAdd: string[]): void => {
     const merged = [...models];
@@ -96,74 +118,54 @@ export const ModelListEditor = ({
   const shown = notAdded.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <ul
-        aria-label="Configured models"
-        style={{
-          listStyle: "none",
-          margin: 0,
-          padding: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
+    <div style={columnStyle}>
+      <ul aria-label="Configured models" className="divide-border divide-y" style={boxStyle}>
         {models.length === 0 && (
-          <li
-            style={{
-              padding: "8px 10px",
-              borderRadius: "var(--radius-2)",
-              border: "1px dashed var(--border)",
-              fontSize: 11,
-              color: "var(--fg-2)",
-              fontStyle: "italic",
-              textAlign: "center",
-            }}
-          >
+          <li style={emptyStyle}>
             No models yet — add one; the first is used when a dispatch names none
           </li>
         )}
         {models.map((m, index) => (
-          <li key={m} style={rowCss}>
-            <span className="mono" style={modelNameCss} title={m}>
+          <li key={m} style={rowStyle}>
+            <span className="mono" style={modelNameStyle} title={m}>
               {m}
             </span>
             {index === 0 ? (
-              <span className="chip" style={{ fontSize: 10 }}>
-                default
-              </span>
+              <Badge tone="accent">Default</Badge>
             ) : (
-              <button
-                type="button"
-                style={smallButtonCss}
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Make ${m} the default`}
                 onClick={() => {
                   onChange([m, ...models.filter((x) => x !== m)]);
                 }}
-                aria-label={`Make ${m} the default`}
               >
                 Make default
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <IconButton
+              size="sm"
+              variant="danger"
+              label={`Remove ${m}`}
+              tooltip="Remove"
+              icon={<X size={ICON_SIZE.inline} aria-hidden="true" />}
               onClick={() => {
                 onChange(models.filter((x) => x !== m));
               }}
-              aria-label={`Remove ${m}`}
-              style={{ ...smallButtonCss, border: "none", fontSize: 14, padding: "0 2px" }}
-            >
-              ×
-            </button>
+            />
           </li>
         ))}
       </ul>
 
-      <div style={{ display: "flex", gap: 6 }}>
-        <input
+      <div style={inlineRowStyle}>
+        <Input
           ref={newModelRef}
           type="text"
+          isMono
           value={newModel}
           aria-label="New model ID"
+          placeholder="e.g. claude-opus-5-5, gpt-5"
           onChange={(e) => {
             setNewModel(e.target.value);
           }}
@@ -173,115 +175,105 @@ export const ModelListEditor = ({
               handleAdd();
             }
           }}
-          placeholder="Model ID (e.g. claude-opus-5-5, gpt-5)"
-          style={{ ...inputStyle, flex: 1 }}
+          style={{ flex: 1 }}
         />
-        <button
-          type="button"
-          className="btn ghost"
-          style={{ padding: "5px 10px", fontSize: 11, flexShrink: 0 }}
+        <Button
+          icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
           onClick={handleAdd}
           disabled={!newModel.trim()}
         >
           Add
-        </button>
+        </Button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="btn ghost"
-          style={{ padding: "5px 12px", fontSize: 11 }}
+      <div style={{ ...inlineRowStyle, flexWrap: "wrap" }}>
+        <Button
+          size="sm"
+          icon={<RefreshCw size={ICON_SIZE.inline} aria-hidden="true" />}
+          isLoading={fetchState.status === "loading"}
+          disabled={fetchBlockedReason !== null}
+          aria-describedby={fetchBlockedReason ? blockedReasonId : undefined}
           onClick={() => {
             void handleFetch();
           }}
-          disabled={fetchState.status === "loading" || fetchBlockedReason !== null}
         >
-          {fetchState.status === "loading" ? "Fetching…" : "Fetch models from API"}
-        </button>
+          Fetch models from API
+        </Button>
         {fetchBlockedReason && (
-          <span style={{ fontSize: 11, color: "var(--fg-2)" }}>{fetchBlockedReason}</span>
-        )}
-        {fetchState.status === "error" && (
-          <span role="alert" style={{ fontSize: 11, color: "var(--c-critical-fg)" }}>
-            {fetchState.message}
+          <span id={blockedReasonId} style={metaStyle}>
+            {fetchBlockedReason}
           </span>
         )}
       </div>
+
+      {fetchState.status === "error" && (
+        <Callout tone="danger" size="sm">
+          {fetchState.message}
+        </Callout>
+      )}
 
       {fetchState.status === "done" && (
         <div
           role="region"
           aria-label="Models offered by the API"
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-2)",
-            padding: 8,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
+          style={{ ...boxStyle, ...columnStyle, padding: "var(--space-2)" }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ flex: 1, fontSize: 11, color: "var(--fg-2)" }}>
+          <div style={inlineRowStyle}>
+            <span style={{ ...metaStyle, flex: 1 }}>
               {notAdded.length === 0
                 ? `All ${String(fetched.length)} models the API offers are in the list`
                 : `${String(notAdded.length)} more offered by the API`}
             </span>
             {shown.length > 0 && (
-              <button
-                type="button"
-                style={smallButtonCss}
+              <Button
+                size="sm"
+                icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
                 onClick={() => {
                   addModels(shown);
                 }}
               >
                 Add {shown.length === notAdded.length ? "all" : "shown"} ({shown.length})
-              </button>
+              </Button>
             )}
           </div>
           {notAdded.length > FILTER_THRESHOLD && (
-            <input
-              type="search"
+            <SearchField
               value={filter}
-              aria-label="Filter offered models"
+              onValueChange={setFilter}
               placeholder="Filter…"
-              onChange={(e) => {
-                setFilter(e.target.value);
-              }}
-              style={inputStyle}
+              ariaLabel="Filter offered models"
             />
           )}
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              maxHeight: 200,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            {shown.map((m) => (
-              <li key={m} style={{ ...rowCss, border: "none", padding: "3px 6px" }}>
-                <span className="mono" style={modelNameCss} title={m}>
-                  {m}
-                </span>
-                <button
-                  type="button"
-                  style={smallButtonCss}
-                  onClick={() => {
-                    addModels([m]);
-                  }}
-                  aria-label={`Add ${m}`}
-                >
-                  + Add
-                </button>
-              </li>
-            ))}
-          </ul>
+          {shown.length > 0 && (
+            <ul
+              style={{
+                margin: 0,
+                padding: 0,
+                listStyle: "none",
+                maxHeight: OFFERED_LIST_MAX_HEIGHT_PX,
+                overflowY: "auto",
+              }}
+            >
+              {shown.map((m) => (
+                <li key={m} style={{ ...rowStyle, minHeight: "var(--control-sm)" }}>
+                  <span className="mono" style={modelNameStyle} title={m}>
+                    {m}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Plus size={ICON_SIZE.inline} aria-hidden="true" />}
+                    aria-label={`Add ${m}`}
+                    onClick={() => {
+                      addModels([m]);
+                    }}
+                  >
+                    Add
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>

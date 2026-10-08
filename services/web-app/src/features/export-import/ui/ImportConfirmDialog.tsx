@@ -1,8 +1,8 @@
 import { useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+
+import { Button, Callout, Checkbox, Dialog } from "@shared/ui";
 
 import { STRATEGY_LABELS, existingRecordCount, plural } from "../lib/importSummary";
-import { buttonRowStyle, choiceStyle, hintStyle, warningStyle } from "./styles";
 import type { ImportPreview, MergeStrategy } from "@shared/api/export-import.api";
 
 /** Rendered only while open, so the overwrite acknowledgement starts unchecked every time. */
@@ -13,21 +13,6 @@ type ImportConfirmDialogProps = {
   strategy: MergeStrategy;
   onConfirm: () => void;
   onCancel: () => void;
-};
-
-const contentStyle: React.CSSProperties = {
-  position: "fixed",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  zIndex: 201,
-  width: 440,
-  maxWidth: "calc(100vw - 32px)",
-  padding: "18px 20px",
-  background: "var(--bg-1)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-3)",
-  boxShadow: "var(--shadow-dialog)",
 };
 
 const effectOf = (strategy: MergeStrategy, existing: number): string => {
@@ -54,62 +39,47 @@ export const ImportConfirmDialog = ({
     preview.ai_providers.total +
     preview.review_presets.total +
     preview.reviews.total;
-  const confirmLabel = isOverwriting ? "Replace and import" : "Import";
+  const handleClose = (): void => {
+    if (!isPending) onCancel();
+  };
 
   return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !isPending) onCancel();
-      }}
+    <Dialog
+      isOpen
+      onClose={handleClose}
+      title={isOverwriting ? "Replace existing data?" : "Import this file?"}
+      description={
+        <>
+          {plural(total, "record", "records")} from {fileName}, strategy “
+          {STRATEGY_LABELS[strategy]}”. {effectOf(strategy, existing)} Records that exist only here
+          are never removed.
+        </>
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={handleClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant={isOverwriting ? "danger" : "primary"}
+            onClick={onConfirm}
+            isLoading={isPending}
+            disabled={isOverwriting && !isOverwriteAccepted}
+          >
+            {isOverwriting ? "Replace and import" : "Import"}
+          </Button>
+        </>
+      }
     >
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 200 }}
-        />
-        <Dialog.Content style={contentStyle}>
-          <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-0)", margin: 0 }}>
-            {isOverwriting ? "Replace existing data?" : "Import this file?"}
-          </Dialog.Title>
-          <Dialog.Description style={{ ...hintStyle, margin: "6px 0 12px", fontSize: 12 }}>
-            {plural(total, "record", "records")} from {fileName}, strategy “
-            {STRATEGY_LABELS[strategy]}”. {effectOf(strategy, existing)} Records that exist only
-            here are never removed.
-          </Dialog.Description>
-
-          {isOverwriting && (
-            <div style={{ ...warningStyle, marginBottom: 12 }}>
-              <label style={choiceStyle}>
-                <input
-                  type="checkbox"
-                  checked={isOverwriteAccepted}
-                  onChange={(e) => {
-                    setIsOverwriteAccepted(e.target.checked);
-                  }}
-                />
-                I understand that local changes to {plural(existing, "record", "records")} will be
-                lost.
-              </label>
-            </div>
-          )}
-
-          <div style={{ ...buttonRowStyle, justifyContent: "flex-end" }}>
-            <Dialog.Close asChild>
-              <button type="button" className="btn ghost" disabled={isPending}>
-                Cancel
-              </button>
-            </Dialog.Close>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={onConfirm}
-              disabled={isPending || (isOverwriting && !isOverwriteAccepted)}
-            >
-              {isPending ? "Importing…" : confirmLabel}
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      {isOverwriting ? (
+        <Callout tone="warn" size="sm" icon={null} role="none">
+          <Checkbox
+            label={`I understand that local changes to ${plural(existing, "record", "records")} will be lost.`}
+            checked={isOverwriteAccepted}
+            onCheckedChange={setIsOverwriteAccepted}
+          />
+        </Callout>
+      ) : undefined}
+    </Dialog>
   );
 };

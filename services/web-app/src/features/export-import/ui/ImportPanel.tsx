@@ -1,5 +1,8 @@
 import { useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
+
+import { Button, Callout, Card, Field, ICON_SIZE, Input } from "@shared/ui";
 
 import { formatImportError } from "../lib/formatImportError";
 import { summarizeImportResult } from "../lib/importSummary";
@@ -8,14 +11,7 @@ import { useImportData, useImportPreview } from "../model/useImportData";
 import { ImportConfirmDialog } from "./ImportConfirmDialog";
 import { ImportPreviewCard } from "./ImportPreviewCard";
 import { ImportStrategyPicker } from "./ImportStrategyPicker";
-import {
-  buttonRowStyle,
-  errorStyle,
-  headingStyle,
-  inputStyle,
-  labelStyle,
-  panelStyle,
-} from "./styles";
+import { buttonRowStyle, panelStyle } from "./styles";
 import type {
   ExportFile,
   ImportPreview,
@@ -43,7 +39,6 @@ export const ImportPanel = (): React.ReactElement => {
 
   const isBusy = previewMutation.isPending || importMutation.isPending;
   const needsPassphrase = loaded?.preview.encrypted === true;
-  const chooseLabel = loaded ? "Choose another file" : "Choose file…";
 
   const reset = (): void => {
     setLoaded(null);
@@ -94,10 +89,20 @@ export const ImportPanel = (): React.ReactElement => {
     });
   };
 
-  return (
-    <section style={panelStyle}>
-      <h3 style={headingStyle}>Import data</h3>
+  const chooseButton = (
+    <Button
+      variant={loaded ? "secondary" : "primary"}
+      icon={<Upload size={ICON_SIZE.inline} aria-hidden="true" />}
+      isLoading={previewMutation.isPending}
+      disabled={importMutation.isPending}
+      onClick={() => fileInputRef.current?.click()}
+    >
+      {loaded ? "Choose another file" : "Choose file…"}
+    </Button>
+  );
 
+  return (
+    <Card style={panelStyle}>
       {loaded && <ImportPreviewCard fileName={loaded.name} preview={loaded.preview} />}
 
       {loaded && (
@@ -105,18 +110,16 @@ export const ImportPanel = (): React.ReactElement => {
       )}
 
       {needsPassphrase && (
-        <label style={{ ...labelStyle, marginBottom: 12 }}>
-          Passphrase of this file
-          <input
+        <Field label="Passphrase of this file">
+          <Input
             type="password"
             autoComplete="current-password"
             value={passphrase}
             onChange={(e) => {
               setPassphrase(e.target.value);
             }}
-            style={{ ...inputStyle, marginTop: 6 }}
           />
-        </label>
+        </Field>
       )}
 
       <input
@@ -127,48 +130,31 @@ export const ImportPanel = (): React.ReactElement => {
         onChange={(event) => void handleFileChange(event)}
         style={{ display: "none" }}
       />
+
+      {error && <Callout tone="danger">{error}</Callout>}
+
       <div style={buttonRowStyle}>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isBusy}
-          className={loaded ? "btn ghost" : "btn primary"}
-          style={{ fontSize: 12 }}
-        >
-          {previewMutation.isPending ? "Reading file…" : chooseLabel}
-        </button>
-        {loaded && (
+        {loaded ? (
           <>
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => {
                 setError(null);
                 setIsConfirming(true);
               }}
               disabled={isBusy || (needsPassphrase && passphrase === "")}
-              className="btn primary"
-              style={{ fontSize: 12 }}
             >
               Import…
-            </button>
-            <button
-              type="button"
-              onClick={reset}
-              disabled={isBusy}
-              className="btn ghost"
-              style={{ fontSize: 12 }}
-            >
+            </Button>
+            {chooseButton}
+            <Button variant="ghost" onClick={reset} disabled={isBusy}>
               Cancel
-            </button>
+            </Button>
           </>
+        ) : (
+          chooseButton
         )}
       </div>
-
-      {error && (
-        <p role="alert" style={errorStyle}>
-          {error}
-        </p>
-      )}
 
       {loaded && isConfirming && (
         <ImportConfirmDialog
@@ -182,6 +168,6 @@ export const ImportPanel = (): React.ReactElement => {
           }}
         />
       )}
-    </section>
+    </Card>
   );
 };

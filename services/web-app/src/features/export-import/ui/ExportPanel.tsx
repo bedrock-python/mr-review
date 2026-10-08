@@ -1,16 +1,27 @@
 import { useState } from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  Button,
+  Callout,
+  Card,
+  Checkbox,
+  Field,
+  ICON_SIZE,
+  Input,
+  Radio,
+  RadioGroup,
+} from "@shared/ui";
 
 import { useExportData } from "../model/useExportData";
 import {
   buttonRowStyle,
-  choiceStyle,
-  headingStyle,
-  hintStyle,
-  inputStyle,
-  labelStyle,
+  fieldsetStyle,
+  inlineRowStyle,
+  legendStyle,
   panelStyle,
-  warningStyle,
+  twoColumnsStyle,
 } from "./styles";
 import type { ExportRequest } from "@shared/api/export-import.api";
 
@@ -42,6 +53,9 @@ const DATA_CHOICES = [
 ] as const;
 
 type DataChoice = (typeof DATA_CHOICES)[number][0];
+
+const isSecretsChoice = (value: string): value is SecretsChoice =>
+  SECRETS_CHOICES.some((choice) => choice.value === value);
 
 export const ExportPanel = (): React.ReactElement => {
   const [included, setIncluded] = useState<Record<DataChoice, boolean>>({
@@ -85,103 +99,95 @@ export const ExportPanel = (): React.ReactElement => {
   };
 
   return (
-    <section style={{ ...panelStyle, borderBottom: "1px solid var(--border)" }}>
-      <h3 style={headingStyle}>Export data</h3>
-
-      <fieldset style={{ border: "none", padding: 0, margin: "0 0 12px" }}>
-        <legend style={labelStyle}>Include</legend>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+    <Card style={panelStyle}>
+      <fieldset style={fieldsetStyle}>
+        <legend className="ui-eyebrow" style={legendStyle}>
+          Include
+        </legend>
+        <div style={inlineRowStyle}>
           {DATA_CHOICES.map(([key, label]) => (
-            <label key={key} style={{ ...choiceStyle, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={included[key]}
-                onChange={(e) => {
-                  setIncluded((prev) => ({ ...prev, [key]: e.target.checked }));
-                }}
-              />
-              {label}
-            </label>
+            <Checkbox
+              key={key}
+              label={label}
+              checked={included[key]}
+              onCheckedChange={(checked) => {
+                setIncluded((prev) => ({ ...prev, [key]: checked }));
+              }}
+            />
           ))}
         </div>
       </fieldset>
 
       {carriesSecrets && (
-        <fieldset style={{ border: "none", padding: 0, margin: "0 0 12px" }}>
-          <legend style={labelStyle}>Tokens and API keys</legend>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {SECRETS_CHOICES.map((choice) => (
-              <label key={choice.value} style={choiceStyle}>
-                <input
-                  type="radio"
-                  name="export-secrets"
-                  checked={secrets === choice.value}
-                  onChange={() => {
-                    setSecrets(choice.value);
-                  }}
-                />
-                <span>
-                  {choice.label}
-                  <span style={{ ...hintStyle, display: "block" }}>{choice.hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          {secrets === "plain" && (
-            <p role="note" style={warningStyle}>
-              The file will contain every host token and AI provider API key in plain text. Keep it
-              somewhere only you can read, and delete it when you no longer need it.
-            </p>
-          )}
-        </fieldset>
+        <RadioGroup
+          legend="Tokens and API keys"
+          name="export-secrets"
+          value={secrets}
+          onValueChange={(value) => {
+            if (isSecretsChoice(value)) setSecrets(value);
+          }}
+        >
+          {SECRETS_CHOICES.map((choice) => (
+            <Radio
+              key={choice.value}
+              value={choice.value}
+              label={choice.label}
+              description={choice.hint}
+            />
+          ))}
+        </RadioGroup>
+      )}
+
+      {carriesSecrets && secrets === "plain" && (
+        <Callout tone="warn" size="sm">
+          The file will contain every host token and AI provider API key in plain text. Keep it
+          somewhere only you can read, and delete it when you no longer need it.
+        </Callout>
       )}
 
       {needsPassphrase && (
-        <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-          <label style={labelStyle}>
-            Passphrase
-            <input
+        <div style={twoColumnsStyle}>
+          <Field label="Passphrase">
+            <Input
               type="password"
               autoComplete="new-password"
               value={passphrase}
               onChange={(e) => {
                 setPassphrase(e.target.value);
               }}
-              style={{ ...inputStyle, marginTop: 6 }}
             />
-          </label>
-          <label style={labelStyle}>
-            Repeat passphrase
-            <input
+          </Field>
+          <Field
+            label="Repeat passphrase"
+            error={
+              passphraseMismatch ? (
+                <span role="alert">The passphrases do not match.</span>
+              ) : undefined
+            }
+          >
+            <Input
               type="password"
               autoComplete="new-password"
               value={confirmation}
               onChange={(e) => {
                 setConfirmation(e.target.value);
               }}
-              aria-invalid={passphraseMismatch}
-              style={{ ...inputStyle, marginTop: 6 }}
             />
-          </label>
-          {passphraseMismatch && (
-            <p role="alert" style={{ ...hintStyle, color: "var(--c-critical-fg)" }}>
-              The passphrases do not match.
-            </p>
-          )}
+          </Field>
         </div>
       )}
 
       <div style={buttonRowStyle}>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          icon={<Download size={ICON_SIZE.inline} aria-hidden="true" />}
           onClick={handleExport}
-          disabled={!isReady || exportMutation.isPending}
-          className="btn primary"
-          style={{ fontSize: 12 }}
+          disabled={!isReady}
+          isLoading={exportMutation.isPending}
         >
-          {exportMutation.isPending ? "Exporting…" : "Export data"}
-        </button>
+          Export data
+        </Button>
       </div>
-    </section>
+    </Card>
   );
 };

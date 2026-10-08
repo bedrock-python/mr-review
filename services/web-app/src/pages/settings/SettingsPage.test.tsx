@@ -20,8 +20,11 @@ const providerHooks = vi.hoisted(() => ({
   providers: [] as AIProvider[],
   create: vi.fn(),
   update: vi.fn(),
+  remove: vi.fn(),
   previewModels: vi.fn(),
 }));
+
+const theme = vi.hoisted(() => ({ setTheme: vi.fn() }));
 
 vi.mock("@entities/ai-provider", async (importOriginal) => {
   const actual = await importOriginal<typeof AIProviderEntity>();
@@ -31,7 +34,7 @@ vi.mock("@entities/ai-provider", async (importOriginal) => {
     useAIProviders: () => ({ data: providerHooks.providers, isLoading: false }),
     useCreateAIProvider: () => ({ mutate: providerHooks.create, isPending: false }),
     useUpdateAIProvider: () => ({ mutate: providerHooks.update, isPending: false }),
-    useDeleteAIProvider: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteAIProvider: () => ({ mutate: providerHooks.remove, isPending: false }),
   };
 });
 
@@ -50,9 +53,14 @@ vi.mock("@entities/host", async (importOriginal) => {
   };
 });
 
-vi.mock("@features/export-import", () => ({ ExportImportSection: () => null }));
+vi.mock("@features/export-import", () => ({ ExportPanel: () => null, ImportPanel: () => null }));
 
-vi.mock("next-themes", () => ({ useTheme: () => ({ theme: "system", setTheme: vi.fn() }) }));
+// The presets list has its own tests; here it would only add network calls and states.
+vi.mock("@features/manage-review-presets", () => ({ ReviewPresetsManager: () => null }));
+
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ theme: "system", setTheme: theme.setTheme }),
+}));
 
 vi.mock("@shared/api", async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApi>();
@@ -176,10 +184,10 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
     const fetchButton = screen.getByRole("button", { name: "Fetch models from API" });
     expect(fetchButton).toBeDisabled();
-    await fill(user, screen.getByPlaceholderText("My Claude"), "Gateway Claude");
+    await fill(user, screen.getByPlaceholderText("e.g. My Claude"), "Gateway Claude");
     await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
     await fill(
       user,
@@ -190,7 +198,7 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     await user.click(await screen.findByRole("button", { name: "Add claude-opus-5-5" }));
     await fill(user, screen.getByRole("textbox", { name: "New model ID" }), "claude-haiku-4-5");
     await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
 
     expect(providerHooks.previewModels).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -254,7 +262,7 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
     const typeSelect = screen.getByDisplayValue("Claude");
     await user.selectOptions(typeSelect, "openai_compat");
     await fill(
@@ -263,9 +271,9 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
       "http://localhost:11434/v1"
     );
     await user.selectOptions(typeSelect, "claude");
-    await fill(user, screen.getByPlaceholderText("My Claude"), "Claude");
+    await fill(user, screen.getByPlaceholderText("e.g. My Claude"), "Claude");
     await fill(user, screen.getByPlaceholderText("sk-ant-api03-…"), "sk-ant-key");
-    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
 
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     await waitFor(() => {
@@ -274,5 +282,40 @@ describe("SettingsPage — AI provider models", { timeout: INTEGRATION_TEST_TIME
         expect.anything()
       );
     });
+  });
+});
+
+describe("SettingsPage — rows and appearance", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    providerHooks.providers = [PROVIDER];
+  });
+
+  it("removes a provider only once the confirmation dialog says so", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Remove Team Claude" }));
+    const dialog = screen.getByRole("dialog", { name: "Remove Team Claude?" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(providerHooks.remove).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Remove Team Claude" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Remove provider" })
+    );
+    expect(providerHooks.remove).toHaveBeenCalledWith(PROVIDER.id);
+  });
+
+  it("offers the themes as one choice and switches on selection", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const themes = screen.getByRole("radiogroup", { name: "Appearance" });
+    expect(within(themes).getAllByRole("radio")).toHaveLength(3);
+    await user.click(within(themes).getByRole("radio", { name: /Paper/ }));
+
+    expect(theme.setTheme).toHaveBeenCalledWith("paper");
   });
 });
