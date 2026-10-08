@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostResult
 
 if TYPE_CHECKING:
     from mr_review.core.hosts.entities import Host
@@ -55,17 +56,23 @@ class VCSProvider(Protocol):
 
     async def get_diff_refs(self, repo_path: str, mr_iid: int) -> dict[str, str]: ...
 
-    async def post_inline_comment(
+    def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None: ...
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """Post inline comments, yielding one result per comment, in order, as soon as it is known.
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None: ...
+        A host with a review API posts them as one review. A host error is a ``PostFailure`` for the
+        comments it concerns, never an exception, so the caller can record each outcome as it comes.
+        """
+        ...
+
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
+        """Post an MR-level note; a host error is returned as a ``PostFailure``."""
+        ...
 
 
 class VCSCacheInvalidator(Protocol):

@@ -152,6 +152,20 @@ async def test__create_iteration__last_incomplete__returns_review_without_creati
     assert result is review
 
 
+async def test__create_iteration__last_partly_posted__starts_a_new_iteration() -> None:
+    """An iteration with some comments on the MR (post stage, not completed) is not reused for a new review."""
+    repo = AsyncMock()
+    partly_posted = make_iteration(number=1, completed_at=None, stage=IterationStage.post)
+    review = make_review(iterations=[partly_posted])
+    repo.get_by_id.return_value = review
+    repo.update.side_effect = lambda updated: updated
+    use_case = CreateIterationUseCase(repo)
+
+    result = await use_case.execute(review_id=review.id)
+
+    assert [(it.number, it.stage) for it in result.iterations] == [(1, IterationStage.post), (2, IterationStage.brief)]
+
+
 async def test__create_iteration__last_incomplete__new_config__updates_brief_config() -> None:
     """If last iteration is incomplete and a different config is provided, its brief_config is updated."""
     repo = AsyncMock()

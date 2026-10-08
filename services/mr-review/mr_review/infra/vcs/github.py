@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -10,10 +11,14 @@ import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostedNote, PostResult
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
 from mr_review.infra.vcs._pagination import has_next_link, json_list, optional_int, optional_str
+from mr_review.infra.vcs._posting import failure_from, match_review_comments
 from mr_review.infra.vcs._tree import files_under
+
+logger = logging.getLogger(__name__)
 
 
 def _split_repo_path(repo_path: str) -> tuple[str, str]:
@@ -25,6 +30,8 @@ def _split_repo_path(repo_path: str) -> tuple[str, str]:
 
 
 _GITHUB_API = "https://api.github.com"
+# Comments of one review are listed 100 per page; a post never sends anywhere near 3000.
+_MAX_REVIEW_COMMENT_PAGES = 30
 _PUBLIC_GITHUB_HOSTS = frozenset({"github.com", "www.github.com", "api.github.com"})
 
 # Search qualifiers per MR state. The pulls API cannot tell merged from closed,
@@ -295,34 +302,97 @@ class GitHubProvider:
         head_sha = str(data.get("head", {}).get("sha", ""))
         return {"head_sha": head_sha}
 
-    async def post_inline_comment(
+    async def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None:
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """All comments as one review (``event: COMMENT``), so they appear at once.
+
+        GitHub rejects the whole review with 422 when one position is invalid, without saying which;
+        the comments then go one by one, so the bad one fails alone and the rest still land.
+        """
+        if not comments:
+            return
         owner, repo = _split_repo_path(repo_path)
         commit_id = diff_refs.get("head_sha", "")
-        await self._post(
-            f"/repos/{owner}/{repo}/pulls/{mr_iid}/comments",
-            {
-                "body": body,
-                "commit_id": commit_id,
-                "path": file,
-                "line": line,
-                "side": "RIGHT",
-            },
-        )
+        count = len(comments)
+        payload: dict[str, Any] = {
+            "commit_id": commit_id,
+            "event": "COMMENT",
+            # GitHub requires a body on a COMMENT review.
+            "body": f"{count} inline comment{'' if count == 1 else 's'}",
+            "comments": [_review_comment(comment) for comment in comments],
+        }
+        try:
+            review: dict[str, Any] = await self._post(f"/repos/{owner}/{repo}/pulls/{mr_iid}/reviews", payload)
+        except httpx.HTTPError as exc:
+            async for result in self._after_rejected_review(exc, owner, repo, mr_iid, commit_id, comments):
+                yield result
+            return
+        for note in await self._review_notes(owner, repo, mr_iid, review, comments):
+            yield note
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
+    async def _after_rejected_review(
+        self,
+        exc: httpx.HTTPError,
+        owner: str,
+        repo: str,
+        mr_iid: int,
+        commit_id: str,
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """A 422 refused the review as a whole and created nothing: post one by one to find the bad
+        comment. Anything else fails every comment, as ambiguous when the review may exist anyway."""
+        one_by_one = _is_unprocessable(exc)
+        for comment in comments:
+            if one_by_one:
+                yield await self._post_review_comment(owner, repo, mr_iid, commit_id, comment)
+            else:
+                yield failure_from(exc)
+
+    async def _post_review_comment(
+        self, owner: str, repo: str, mr_iid: int, commit_id: str, comment: InlineComment
+    ) -> PostResult:
+        try:
+            data: dict[str, Any] = await self._post(
+                f"/repos/{owner}/{repo}/pulls/{mr_iid}/comments",
+                {"commit_id": commit_id, **_review_comment(comment)},
+            )
+        except httpx.HTTPError as exc:
+            # GitHub answers a line it cannot comment on with 422 ("must be part of the diff").
+            return failure_from(exc, position_rejected=_is_unprocessable(exc))
+        return PostedNote(note_id=str(data["id"]), url=optional_str(data.get("html_url")))
+
+    async def _review_notes(
+        self, owner: str, repo: str, mr_iid: int, review: dict[str, Any], comments: Sequence[InlineComment]
+    ) -> list[PostedNote]:
+        """The id and link of every comment the review created; the review's own where they can't be listed."""
+        review_note = PostedNote(note_id=str(review["id"]), url=optional_str(review.get("html_url")))
+        created: list[dict[str, Any]] = []
+        try:
+            for page in range(1, _MAX_REVIEW_COMMENT_PAGES + 1):
+                items: list[dict[str, Any]] = await self._get(
+                    f"/repos/{owner}/{repo}/pulls/{mr_iid}/reviews/{review['id']}/comments",
+                    params={"per_page": 100, "page": page},
+                )
+                created.extend(items)
+                if len(items) < 100:
+                    break
+        except httpx.HTTPError:
+            # The review is posted; only the links to its single comments are missing.
+            logger.warning("Could not list the comments of GitHub review %s", review["id"], exc_info=True)
+        return match_review_comments(comments, created, review_note)
+
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
         owner, repo = _split_repo_path(repo_path)
-        await self._post(
-            f"/repos/{owner}/{repo}/issues/{mr_iid}/comments",
-            {"body": body},
-        )
+        try:
+            data: dict[str, Any] = await self._post(f"/repos/{owner}/{repo}/issues/{mr_iid}/comments", {"body": body})
+        except httpx.HTTPError as exc:
+            return failure_from(exc)
+        return PostedNote(note_id=str(data["id"]), url=optional_str(data.get("html_url")))
 
     async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
         owner, repo = _split_repo_path(repo_path)
@@ -379,6 +449,15 @@ class GitHubProvider:
                 }
             )
         return result
+
+
+def _is_unprocessable(exc: httpx.HTTPError) -> bool:
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == httpx.codes.UNPROCESSABLE_ENTITY
+
+
+def _review_comment(comment: InlineComment) -> dict[str, Any]:
+    """A comment on a line of the new file; RIGHT is the side of added and unchanged lines alike."""
+    return {"path": comment.anchor.path, "line": comment.anchor.new_line, "side": "RIGHT", "body": comment.body}
 
 
 def _item_to_repo(item: dict[str, Any]) -> Repo:

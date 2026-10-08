@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 import yaml
-from mr_review.core.reviews.entities import DEFAULT_PROMPT_BUDGET_CHARS, IterationStage
+from mr_review.core.reviews.entities import DEFAULT_PROMPT_BUDGET_CHARS, CommentPost, IterationStage
 from mr_review.infra.repositories.review import FileReviewRepository
 
 from tests.factories.entities import make_comment, make_iteration
@@ -132,3 +133,50 @@ async def test__review_repo__brief_field_no_longer_valid__defaults_and_the_revie
     assert loaded is not None
     brief = loaded.iterations[0].brief_config
     assert (brief.preset, brief.max_comments, brief.custom_instructions) == ("thorough", None, "Keep")
+
+
+async def test__review_repo__post_record__round_trips(review_repo: FileReviewRepository) -> None:
+    review = await review_repo.create(host_id=uuid4(), repo_path="ns/repo", mr_iid=1)
+    posted_at = datetime(2026, 3, 4, 5, 6, tzinfo=timezone.utc)
+    record = CommentPost(outcome="general_note", at=posted_at, note_id="17", url="https://h/n17", reason="why")
+    comment = make_comment(body="One").model_copy(update={"post": record})
+    await review_repo.update(review.model_copy(update={"iterations": [make_iteration(comments=[comment])]}))
+
+    loaded = await review_repo.get_by_id(review.id)
+
+    assert loaded is not None
+    assert loaded.iterations[0].comments[0].post == record
+
+
+async def test__review_repo__file_without_post_records__loads_as_never_posted(
+    data_dir: Path, review_repo: FileReviewRepository
+) -> None:
+    """Files written before posts were recorded have no "post" key on their comments."""
+    review_id = await _stored_review_id(review_repo)
+
+    def edit(iteration: dict[str, Any]) -> None:
+        for comment in iteration["comments"]:
+            comment.pop("post", None)
+
+    _edit_first_iteration(data_dir, review_id, edit)
+
+    loaded = await review_repo.get_by_id(review_id)
+
+    assert loaded is not None
+    assert [c.post for c in loaded.iterations[0].comments] == [None, None]
+
+
+async def test__review_repo__unreadable_post_record__drops_the_record_not_the_comment(
+    data_dir: Path, review_repo: FileReviewRepository
+) -> None:
+    review_id = await _stored_review_id(review_repo)
+
+    def edit(iteration: dict[str, Any]) -> None:
+        iteration["comments"][0]["post"] = {"outcome": "teleported"}
+
+    _edit_first_iteration(data_dir, review_id, edit)
+
+    loaded = await review_repo.get_by_id(review_id)
+
+    assert loaded is not None
+    assert [(c.body, c.post) for c in loaded.iterations[0].comments] == [("One", None), ("Two", None)]

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -9,6 +11,7 @@ import httpx
 
 from mr_review.core.mrs.entities import MR, DiffFile, InboxMR, MRStateFilter, PersonalMRScope, Repo
 from mr_review.core.pagination import DEFAULT_MRS_PER_PAGE, DEFAULT_REPOS_PER_PAGE, Page
+from mr_review.core.vcs.entities import InlineComment, PostedNote, PostFailure, PostResult
 from mr_review.infra.vcs._diff_parser import parse_datetime as _parse_datetime
 from mr_review.infra.vcs._diff_parser import parse_full_diff as _parse_full_diff
 from mr_review.infra.vcs._diff_parser import parse_patch_to_hunks as _parse_patch_to_hunks
@@ -18,6 +21,12 @@ from mr_review.infra.vcs._pagination import (
     optional_int,
     optional_str,
 )
+from mr_review.infra.vcs._posting import (
+    describe_http_error,
+    describe_status_error,
+    failure_from,
+    match_review_comments,
+)
 from mr_review.infra.vcs._tree import files_under
 
 # Gitea's own default and ceiling for tree pages; the cap keeps a giant monorepo from paging forever.
@@ -25,6 +34,46 @@ _TREE_PAGE_SIZE = 1000
 GITEA_MAX_TREE_PAGES = 100
 
 logger = logging.getLogger(__name__)
+
+# Statuses that refuse a review without submitting it (validation); after a 5xx the post first
+# checks whether the review was submitted anyway.
+_REFUSED_REVIEW_STATUSES = frozenset({httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY})
+_REVIEW_PAGE_SIZE = 50
+_MAX_REVIEW_PAGES = 20
+_PENDING_REVIEW_REASON = (
+    "you have a pending review on this pull request in Gitea; submit or discard it there first, "
+    "posting would publish it along with these comments"
+)
+_LEFT_PENDING_REASON = (
+    "Gitea refused the review and left part of it pending, which could not be cleared; discard your "
+    "pending review on the pull request in Gitea, then retry"
+)
+
+
+class _UnattributableError(Exception):
+    """The token's user is unknown, so a review cannot be told apart from somebody else's."""
+
+
+@dataclass
+class _ReviewTarget:
+    owner: str
+    repo: str
+    mr_iid: int
+    commit_id: str
+    login: str | None
+    # Reviews that existed when the post started, and the ones it created itself.
+    known_ids: set[object] = field(default_factory=set)
+    has_pending_review: bool = False
+
+    @property
+    def reviews_path(self) -> str:
+        return f"/repos/{self.owner}/{self.repo}/pulls/{self.mr_iid}/reviews"
+
+    def is_own_pending(self, review: dict[str, Any]) -> bool:
+        """Gitea lists a pending review only to its author (and admins); without a login any counts."""
+        author = (review.get("user") or {}).get("login")
+        return review.get("state") == "PENDING" and (self.login is None or author == self.login)
+
 
 # The pulls API filters by open/closed only; merged vs. closed is told apart per item.
 _UPSTREAM_STATE: dict[MRStateFilter, str] = {
@@ -63,6 +112,7 @@ class GiteaProvider:
         # Resolved once per provider (the provider lives as long as the host's URL/token don't change).
         self._user_id: int | None = None
         self._user_lock = asyncio.Lock()
+        self._login: str | None = None
 
     async def _get_response(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self._base_url}/api/v1{path}"
@@ -226,39 +276,186 @@ class GiteaProvider:
         head_sha = str(data.get("head", {}).get("sha", ""))
         return {"head_sha": head_sha}
 
-    async def post_inline_comment(
+    async def post_inline_comments(
         self,
         repo_path: str,
         mr_iid: int,
         diff_refs: dict[str, str],
-        file: str,
-        line: int,
-        body: str,
-    ) -> None:
-        owner, repo = _split_repo_path(repo_path)
-        commit_id = diff_refs.get("head_sha", "")
-        await self._post(
-            f"/repos/{owner}/{repo}/pulls/{mr_iid}/reviews",
-            {
-                "commit_id": commit_id,
-                "body": "",
-                "event": "COMMENT",
-                "comments": [
-                    {
-                        "path": file,
-                        "new_position": line,
-                        "body": body,
-                    }
-                ],
-            },
-        )
+        comments: Sequence[InlineComment],
+    ) -> AsyncIterator[PostResult]:
+        """All comments as one review (``event: COMMENT``), so they appear at once.
 
-    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> None:
+        Gitea adds the comments to the user's pending review one by one and submits it at the end.
+        A comment that fails stops the request and leaves the earlier ones pending, where the next
+        submission would publish them; Gitea can also fail after it submitted the review. So after a
+        refused review the post first works out whether the review went out, clears whatever was
+        left pending, and only then posts the comments one per review to find the refused one.
+        """
+        if not comments:
+            return
         owner, repo = _split_repo_path(repo_path)
-        await self._post(
-            f"/repos/{owner}/{repo}/issues/{mr_iid}/comments",
-            {"body": body},
+        try:
+            target = await self._review_target(owner, repo, mr_iid, diff_refs.get("head_sha", ""))
+        except httpx.HTTPError as exc:
+            reason = f"could not check for a pending review of yours: {describe_http_error(exc)}"
+            for _ in comments:
+                yield PostFailure(reason=reason)
+            return
+        if target.has_pending_review:
+            # Posting would publish the user's own pending review along with these comments.
+            for _ in comments:
+                yield PostFailure(reason=_PENDING_REVIEW_REASON, kind="blocked")
+            return
+        for result in await self._post_as_review(target, comments):
+            yield result
+
+    async def _review_target(self, owner: str, repo: str, mr_iid: int, commit_id: str) -> _ReviewTarget:
+        target = _ReviewTarget(
+            owner=owner, repo=repo, mr_iid=mr_iid, commit_id=commit_id, login=await self._current_login()
         )
+        reviews = await self._list_reviews(target)
+        target.known_ids.update(review.get("id") for review in reviews)
+        target.has_pending_review = any(target.is_own_pending(review) for review in reviews)
+        return target
+
+    async def _post_as_review(self, target: _ReviewTarget, comments: Sequence[InlineComment]) -> list[PostResult]:
+        try:
+            review: dict[str, Any] = await self._post(
+                target.reviews_path,
+                {
+                    "commit_id": target.commit_id,
+                    "body": "",
+                    "event": "COMMENT",
+                    # new_position is the line in the new file (an unchanged line too); old_position
+                    # would win over it, so it is left out.
+                    "comments": [
+                        {"path": c.anchor.path, "new_position": c.anchor.new_line, "body": c.body} for c in comments
+                    ],
+                },
+            )
+        except httpx.HTTPError as exc:
+            return await self._after_failed_review(exc, target, comments)
+        target.known_ids.add(review.get("id"))
+        return list(await self._review_notes(target, review, comments))
+
+    async def _after_failed_review(
+        self, exc: httpx.HTTPError, target: _ReviewTarget, comments: Sequence[InlineComment]
+    ) -> list[PostResult]:
+        """What a review Gitea did not confirm amounts to, and the comments posted one by one if safe."""
+        if not isinstance(exc, httpx.HTTPStatusError):
+            # A timeout or a dropped connection: Gitea may still be adding the comments.
+            return [failure_from(exc) for _ in comments]
+        status = exc.response.status_code
+        if status < httpx.codes.INTERNAL_SERVER_ERROR and status not in _REFUSED_REVIEW_STATUSES:
+            return [failure_from(exc) for _ in comments]
+        if status >= httpx.codes.INTERNAL_SERVER_ERROR:
+            settled = await self._submitted_anyway(exc, target, comments)
+            if settled is not None:
+                return settled
+        return await self._post_one_by_one(exc, target, comments)
+
+    async def _submitted_anyway(
+        self, exc: httpx.HTTPStatusError, target: _ReviewTarget, comments: Sequence[InlineComment]
+    ) -> list[PostResult] | None:
+        """After a 5xx Gitea is done with the request, but may have submitted the review before failing.
+
+        The comments of that review when it did, ambiguous failures when that cannot be told, and
+        ``None`` when nothing went out.
+        """
+        try:
+            submitted = await self._new_submitted_review(target)
+        except (httpx.HTTPError, _UnattributableError):
+            return [failure_from(exc) for _ in comments]
+        if submitted is None:
+            return None
+        target.known_ids.add(submitted.get("id"))
+        return list(await self._review_notes(target, submitted, comments))
+
+    async def _post_one_by_one(
+        self, exc: httpx.HTTPStatusError, target: _ReviewTarget, comments: Sequence[InlineComment]
+    ) -> list[PostResult]:
+        """Nothing went out: clear what the request left pending, then find the comment Gitea refused."""
+        if not await self._discard_pending_review(target):
+            return [PostFailure(reason=_LEFT_PENDING_REASON, kind="blocked") for _ in comments]
+        if len(comments) > 1:
+            return [result for comment in comments for result in await self._post_as_review(target, [comment])]
+        if exc.response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR:
+            reason = f"Gitea could not add it to its line ({describe_status_error(exc)}); nothing was posted"
+            return [PostFailure(reason=reason, kind="position_rejected")]
+        return [failure_from(exc)]
+
+    async def _new_submitted_review(self, target: _ReviewTarget) -> dict[str, Any] | None:
+        """A review by the token's user, at this commit, that this post created; ``None`` if there is none."""
+        if target.login is None:
+            raise _UnattributableError
+        for review in await self._list_reviews(target):
+            if (
+                review.get("id") not in target.known_ids
+                and review.get("state") != "PENDING"
+                and (review.get("user") or {}).get("login") == target.login
+                and (not target.commit_id or review.get("commit_id") == target.commit_id)
+            ):
+                return review
+        return None
+
+    async def _list_reviews(self, target: _ReviewTarget) -> list[dict[str, Any]]:
+        reviews: list[dict[str, Any]] = []
+        for page in range(1, _MAX_REVIEW_PAGES + 1):
+            batch: list[dict[str, Any]] = await self._get(
+                target.reviews_path, params={"page": page, "limit": _REVIEW_PAGE_SIZE}
+            )
+            reviews.extend(batch)
+            if len(batch) < _REVIEW_PAGE_SIZE:
+                break
+        return reviews
+
+    async def _review_notes(
+        self, target: _ReviewTarget, review: dict[str, Any], comments: Sequence[InlineComment]
+    ) -> list[PostedNote]:
+        """The id and link of every comment the review created; the review's own where they can't be listed."""
+        review_note = PostedNote(note_id=str(review["id"]), url=optional_str(review.get("html_url")))
+        try:
+            created: list[dict[str, Any]] = await self._get(f"{target.reviews_path}/{review['id']}/comments")
+        except httpx.HTTPError:
+            # The review is posted; only the links to its single comments are missing.
+            logger.warning("Could not list the comments of Gitea review %s", review["id"], exc_info=True)
+            created = []
+        return match_review_comments(comments, created, review_note)
+
+    async def _discard_pending_review(self, target: _ReviewTarget) -> bool:
+        """Delete what a refused review left pending; ``False`` when that could not be done safely."""
+        if target.login is None:
+            # Without knowing whose review it is, an admin's token could delete someone else's.
+            return False
+        try:
+            pending = next((r for r in await self._list_reviews(target) if target.is_own_pending(r)), None)
+            if pending is not None:
+                url = f"{self._base_url}/api/v1{target.reviews_path}/{pending['id']}"
+                response = await self._client.delete(url, headers=self._headers)
+                response.raise_for_status()
+        except httpx.HTTPError:
+            logger.warning("Could not clear the pending Gitea review on %s", target.reviews_path, exc_info=True)
+            return False
+        return True
+
+    async def _current_login(self) -> str | None:
+        """The token user's login; ``None`` when the token may not read it (no ``read:user`` scope)."""
+        if self._login is None:
+            try:
+                data: dict[str, Any] = await self._get("/user")
+            except httpx.HTTPError:
+                logger.warning("Could not read the Gitea user of this token", exc_info=True)
+                return None
+            self._login = str(data.get("login", ""))
+        return self._login
+
+    async def post_general_note(self, repo_path: str, mr_iid: int, body: str) -> PostResult:
+        owner, repo = _split_repo_path(repo_path)
+        try:
+            data: dict[str, Any] = await self._post(f"/repos/{owner}/{repo}/issues/{mr_iid}/comments", {"body": body})
+        except httpx.HTTPError as exc:
+            return failure_from(exc)
+        return PostedNote(note_id=str(data["id"]), url=optional_str(data.get("html_url")))
 
     async def get_file(self, repo_path: str, file_path: str, ref: str = "HEAD") -> str | None:
         owner, repo = _split_repo_path(repo_path)

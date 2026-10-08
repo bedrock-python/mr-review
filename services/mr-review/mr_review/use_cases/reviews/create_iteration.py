@@ -20,8 +20,9 @@ class CreateIterationUseCase:
         if review is None:
             raise ValueError(f"Review {review_id} not found")
 
-        # If the last iteration is not completed, reuse it instead of creating a new one
-        if review.iterations and review.iterations[-1].completed_at is None:
+        # Reuse the last iteration while it has not reached Post; one that was posted, even only in
+        # part, keeps its comments as they went to the MR.
+        if review.iterations and not review.iterations[-1].reached_post:
             last = review.iterations[-1]
             if brief_config is not None and last.brief_config != brief_config:
                 updated_last = last.model_copy(update={"brief_config": brief_config})

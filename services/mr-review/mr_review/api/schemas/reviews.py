@@ -7,9 +7,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from mr_review.core.ai.entities import DispatchOptions, ReasoningEffort
-from mr_review.core.reviews.entities import BriefConfig, IterationStage
+from mr_review.core.reviews.entities import BriefConfig, IterationStage, PostOutcome
 from mr_review.core.reviews.sources import ReviewSource
+from mr_review.core.vcs.entities import PostFailureKind
 from mr_review.use_cases.reviews.dto import CommentPatchDTO
+from mr_review.use_cases.reviews.post_body import SeverityLabel
 
 
 class CreateReviewRequest(BaseModel):
@@ -32,6 +34,18 @@ class CreateIterationRequest(BaseModel):
     brief_config: BriefConfig | None = None
 
 
+class CommentPostResponse(BaseModel):
+    """What happened the last time the comment was sent to the MR."""
+
+    outcome: PostOutcome
+    at: datetime
+    note_id: str | None = None
+    url: str | None = None
+    reason: str | None = None
+    # failed only: position_rejected, rejected, ambiguous (may be on the MR after all) or blocked.
+    failure_kind: PostFailureKind | None = None
+
+
 class CommentResponse(BaseModel):
     id: UUID
     file: str | None = None
@@ -40,6 +54,7 @@ class CommentResponse(BaseModel):
     body: str
     status: Literal["kept", "dismissed"] = "kept"
     resolved: bool = False
+    post: CommentPostResponse | None = None
 
 
 class IterationResponse(BaseModel):
@@ -262,11 +277,36 @@ class ExcludedFilesResponse(BaseModel):
 class PostReviewRequest(BaseModel):
     diff_refs: dict[str, str] = Field(default_factory=dict)
     iteration_id: UUID | None = None
+    # Post a comment whose line cannot be anchored as a general note instead of failing it.
     fallback_to_general_note: bool = True
+    # How the severity heads each posted comment: "**Major** · …", "[major] …", or not at all.
+    severity_label: SeverityLabel = "bold"
+    # Post every kept comment again, even those already on the MR; required once the iteration is
+    # completed (the endpoint answers 409 otherwise).
+    force: bool = False
+    # Also send again the comments whose last attempt was ambiguous (the host did not answer
+    # definitively, so they may be on the MR already).
+    resend_ambiguous: bool = False
+
+
+class CommentPostResultResponse(BaseModel):
+    comment_id: UUID
+    post: CommentPostResponse
 
 
 class PostReviewResponse(BaseModel):
+    # Comments this call put on the MR (inline or as general notes) and the ones it could not.
     posted: int
+    failed: int
+    # Kept comments already on the MR from an earlier post, not sent again.
+    skipped: int
+    # Kept comments whose last attempt was ambiguous, not sent again without resend_ambiguous.
+    held_back: int = 0
+    # Every kept comment is on the MR and the iteration is completed.
+    completed: bool
+    # One entry per comment this call sent, in the order they went out.
+    results: list[CommentPostResultResponse] = Field(default_factory=list)
+    review: ReviewResponse
 
 
 class ImportResponseRequest(BaseModel):

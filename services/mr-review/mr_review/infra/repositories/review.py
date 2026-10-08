@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from mr_review.core.reviews.entities import (
     BriefConfig,
     Comment,
+    CommentPost,
     Iteration,
     IterationStage,
     Review,
@@ -46,11 +47,24 @@ def _comment_from_dict(data: object) -> Comment | None:
     fields["severity"] = normalize_severity(fields.get("severity")) or DEFAULT_SEVERITY
     if fields.get("status") not in _COMMENT_STATUSES:
         fields.pop("status", None)
+    post = fields.get("post")
+    if post is not None and not _is_valid_post(post):
+        # Losing the record of an earlier post is better than losing the comment.
+        _log.warning("Dropping an unreadable post record of stored comment %r", fields.get("id"))
+        fields.pop("post")
     try:
         return Comment.model_validate(fields)
     except ValidationError:
         _log.warning("Skipping an unreadable stored comment %r", fields.get("id"))
         return None
+
+
+def _is_valid_post(data: object) -> bool:
+    try:
+        CommentPost.model_validate(data)
+    except ValidationError:
+        return False
+    return True
 
 
 def _comment_to_dict(comment: Comment) -> dict[str, object]:

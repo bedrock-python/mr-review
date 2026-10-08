@@ -11,6 +11,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from mr_review.api.schemas.reviews import (
     CommentParseErrorResponse,
+    CommentPostResponse,
+    CommentPostResultResponse,
     CommentResponse,
     CreateCodeReviewRequest,
     CreateCommentRequest,
@@ -34,7 +36,7 @@ from mr_review.api.schemas.reviews import (
     ReviewResponse,
     UpdateReviewRequest,
 )
-from mr_review.core.reviews.entities import Comment, Iteration, Review
+from mr_review.core.reviews.entities import Comment, CommentPost, Iteration, Review
 from mr_review.core.reviews.path_filter import ExcludedFile
 from mr_review.use_cases.reviews.ai_response_parser import ParseResult
 from mr_review.use_cases.reviews.create_code_review import CreateCodeReviewUseCase
@@ -59,7 +61,12 @@ from mr_review.use_cases.reviews.import_response import ImportResponseUseCase
 from mr_review.use_cases.reviews.iteration_comments import InvalidCommentPatchError, IterationLockedError
 from mr_review.use_cases.reviews.list_excluded_files import ListExcludedFilesUseCase
 from mr_review.use_cases.reviews.list_reviews import ListReviewsUseCase
-from mr_review.use_cases.reviews.post_review import PostNotSupportedForSourceError, PostReviewUseCase
+from mr_review.use_cases.reviews.post_review import (
+    IterationAlreadyPostedError,
+    PostInProgressError,
+    PostNotSupportedForSourceError,
+    PostReviewUseCase,
+)
 from mr_review.use_cases.reviews.prompt_assembly import AllFilesExcludedError, AssembledPrompt
 from mr_review.use_cases.reviews.reparse_iteration import ReparseIterationUseCase
 from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
@@ -71,6 +78,17 @@ _PREVIEW_CHARS = 500
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"], route_class=DishkaRoute)
 
 
+def _post_to_response(post: CommentPost) -> CommentPostResponse:
+    return CommentPostResponse(
+        outcome=post.outcome,
+        at=post.at,
+        note_id=post.note_id,
+        url=post.url,
+        reason=post.reason,
+        failure_kind=post.failure_kind,
+    )
+
+
 def _comment_to_response(c: Comment) -> CommentResponse:
     return CommentResponse(
         id=c.id,
@@ -80,6 +98,7 @@ def _comment_to_response(c: Comment) -> CommentResponse:
         body=c.body,
         status=c.status,
         resolved=c.resolved,
+        post=_post_to_response(c.post) if c.post is not None else None,
     )
 
 
@@ -180,6 +199,8 @@ async def update_review(
         )
     except InvalidCommentPatchError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except PostInProgressError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -465,14 +486,23 @@ async def post_review(
     body: PostReviewRequest,
     use_case: FromDishka[PostReviewUseCase],
 ) -> PostReviewResponse:
+    """Post the iteration's kept comments that are not on the MR yet; each outcome is stored on its comment.
+
+    409 when the iteration was already posted (unless ``force``), while another request is posting
+    it, or for a review without an MR. A comment the host refuses is reported in ``results``, not as
+    an error; 502 means the post could not start (the MR or its diff could not be read).
+    """
     try:
-        posted = await use_case.execute(
+        result = await use_case.execute(
             review_id=review_id,
             diff_refs=body.diff_refs or None,
             iteration_id=body.iteration_id,
             fallback_to_general_note=body.fallback_to_general_note,
+            force=body.force,
+            resend_ambiguous=body.resend_ambiguous,
+            severity_label=body.severity_label,
         )
-    except PostNotSupportedForSourceError as exc:
+    except (PostNotSupportedForSourceError, IterationAlreadyPostedError, PostInProgressError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -481,7 +511,17 @@ async def post_review(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to post comments: {exc}",
         ) from exc
-    return PostReviewResponse(posted=posted)
+    return PostReviewResponse(
+        posted=result.posted,
+        failed=result.failed,
+        skipped=result.skipped,
+        held_back=result.held_back,
+        completed=result.completed,
+        results=[
+            CommentPostResultResponse(comment_id=r.comment_id, post=_post_to_response(r.post)) for r in result.results
+        ],
+        review=_review_to_response(result.review),
+    )
 
 
 @router.post(
@@ -505,7 +545,7 @@ async def create_comment(
             file=body.file,
             line=body.line,
         )
-    except IterationLockedError as exc:
+    except (IterationLockedError, PostInProgressError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -525,7 +565,7 @@ async def delete_comment(
     """Remove one comment from an iteration that has not been posted yet."""
     try:
         review = await use_case.execute(review_id=review_id, iteration_id=iteration_id, comment_id=comment_id)
-    except IterationLockedError as exc:
+    except (IterationLockedError, PostInProgressError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
