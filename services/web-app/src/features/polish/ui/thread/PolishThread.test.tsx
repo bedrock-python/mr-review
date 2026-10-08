@@ -1,9 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { configure, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
+import { ASYNC_UTIL_TIMEOUT_MS, INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { PolishThread } from "./PolishThread";
 import type { Comment } from "@entities/review";
+
+// Lazy chunks and MSW round trips: see ASYNC_UTIL_TIMEOUT_MS.
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
 
 // The Markdown renderer is a lazy chunk: its first import takes seconds when suites run in
 // parallel, well past findBy's 1 s default.

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -7,17 +7,20 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { DEFAULT_BRIEF_CONFIG } from "@entities/review";
 import { ApiError } from "@shared/api";
 import { COPY_BLOCKED_MESSAGE } from "@shared/lib";
-import { INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
+import { ASYNC_UTIL_TIMEOUT_MS, INTEGRATION_TEST_TIMEOUT_MS } from "@shared/lib/test-utils";
 import { BriefStage } from "./BriefStage";
 import type * as ReviewApiModule from "@entities/review/api/reviewApi";
 import type * as ReviewPresetApiModule from "@entities/review-preset/api/reviewPresetApi";
 import type { BriefConfig, PromptPreview, Review } from "@entities/review";
 import type { ReviewPreset } from "@entities/review-preset";
 
+// Lazy chunks and MSW round trips: see ASYNC_UTIL_TIMEOUT_MS.
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+
 const REVIEW_ID = "11111111-1111-4111-8111-111111111111";
 const ITERATION_ID = "22222222-2222-4222-8222-222222222222";
 const PRESET_ID = "33333333-3333-4333-8333-333333333333";
-const SAVE_WAIT = { timeout: 3_000 };
+const SAVE_WAIT = { timeout: ASYNC_UTIL_TIMEOUT_MS };
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -197,7 +200,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("BriefStage — editing", () => {
+describe("BriefStage — editing", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it(
     "keeps a newline typed into the context file paths and saves one path per line",
     async () => {
@@ -269,7 +272,7 @@ describe("BriefStage — editing", () => {
   );
 });
 
-describe("BriefStage — prompt preview", () => {
+describe("BriefStage — prompt preview", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("names the binary files it skipped", async () => {
     api.getPromptPreview.mockResolvedValue({
       ...PREVIEW,
@@ -332,7 +335,7 @@ describe("BriefStage — prompt preview", () => {
   });
 });
 
-describe("BriefStage — copy", () => {
+describe("BriefStage — copy", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   const setClipboard = (clipboard: Partial<Clipboard> | undefined, secure: boolean): void => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
     Object.defineProperty(window, "isSecureContext", { configurable: true, value: secure });
@@ -373,7 +376,7 @@ describe("BriefStage — copy", () => {
   });
 });
 
-describe("BriefStage — dispatch", () => {
+describe("BriefStage — dispatch", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it("sums up the brief next to the way on", async () => {
     const user = userEvent.setup();
     renderStage();
@@ -418,7 +421,7 @@ describe("BriefStage — dispatch", () => {
   });
 });
 
-describe("BriefStage — saved presets", () => {
+describe("BriefStage — saved presets", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it(
     "applies a saved preset's settings and marks it selected",
     async () => {
@@ -569,7 +572,7 @@ describe("BriefStage — saved presets", () => {
   });
 });
 
-describe("BriefStage — advanced", () => {
+describe("BriefStage — advanced", { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   it(
     "escapes glob characters in a path it takes back in",
     async () => {

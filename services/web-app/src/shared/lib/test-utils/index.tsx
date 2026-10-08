@@ -10,6 +10,14 @@ import type { RenderResult } from "@testing-library/react";
  */
 export const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
 
+/**
+ * How long `findBy*` / `waitFor` wait in tests whose screen pulls a lazy chunk (a stage, the
+ * Markdown renderer) or settles through MSW and debounces. The library's 1 s default passes
+ * alone and in CI, but fails when the machine is loaded; set it per file with
+ * `configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS })`.
+ */
+export const ASYNC_UTIL_TIMEOUT_MS = 10_000;
+
 export const createTestQueryClient = (): QueryClient =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
