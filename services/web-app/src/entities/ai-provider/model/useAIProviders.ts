@@ -35,6 +35,8 @@ export const useAIProviders = (): ReturnType<
     queryKey: aiProviderKeys.lists(),
     queryFn: aiProviderApi.list,
     staleTime: 15 * 60 * 1000,
+    // Settings' list and the Dispatch stage show the error in place; no global toast.
+    meta: { silent: true },
   });
 };
 

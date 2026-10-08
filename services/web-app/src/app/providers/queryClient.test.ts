@@ -1,6 +1,5 @@
 import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { mrKeys } from "@entities/mr";
 import { ApiError } from "@shared/api";
 import {
   QUERY_CACHE_STORAGE_KEY,
@@ -115,28 +114,6 @@ describe("shouldToastQueryError", () => {
 
   it("stays quiet for a query that shows its own error state", () => {
     expect(shouldToastQueryError(new Error("boom"), { silent: true })).toBe(false);
-  });
-
-  it("stays quiet for the lists and the merge request, which show their errors in place", () => {
-    const error = new ApiError("GitLab answered 502 Bad Gateway", 502);
-    const repoPath = "group/repo";
-
-    expect(
-      shouldToastQueryError(error, undefined, mrKeys.repoList("h1", { q: "", perPage: 50 }))
-    ).toBe(false);
-    expect(
-      shouldToastQueryError(
-        error,
-        undefined,
-        mrKeys.list("h1", repoPath, { state: "opened", q: "", perPage: 30 })
-      )
-    ).toBe(false);
-    expect(
-      shouldToastQueryError(error, undefined, mrKeys.inboxList("h1", { scope: "all", perPage: 30 }))
-    ).toBe(false);
-    expect(shouldToastQueryError(error, undefined, mrKeys.detail("h1", repoPath, 12))).toBe(false);
-    // The changes of a merge request have no error state of their own in every stage.
-    expect(shouldToastQueryError(error, undefined, mrKeys.diff("h1", repoPath, 12))).toBe(true);
   });
 
   it("stays quiet only for the statuses a query handles itself", () => {

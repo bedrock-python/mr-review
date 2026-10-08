@@ -15,6 +15,8 @@ export const useHosts = (): ReturnType<
     queryKey: hostKeys.lists(),
     queryFn: hostApi.list,
     staleTime: 15 * 60 * 1000,
+    // Settings' list and the workspace show the error in place; no global toast.
+    meta: { silent: true },
   });
 };
 

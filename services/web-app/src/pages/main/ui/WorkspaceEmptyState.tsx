@@ -1,6 +1,6 @@
 import { GitPullRequest, Plus, Server } from "lucide-react";
 import { useHosts } from "@entities/host";
-import { Button, EmptyState, ICON_SIZE, Kbd } from "@shared/ui";
+import { Button, EmptyState, ICON_SIZE, Kbd, ListLoadError } from "@shared/ui";
 import { NAVIGATOR_SHORTCUT } from "@widgets/mr-header";
 
 const KEY_HINTS: readonly { keys: readonly string[]; description: string }[] = [
@@ -39,7 +39,22 @@ export const WorkspaceEmptyState = ({
   onShowNav,
   onAddHost,
 }: WorkspaceEmptyStateProps): React.ReactElement => {
-  const { data: hosts } = useHosts();
+  const { data: hosts, isError, error, refetch } = useHosts();
+
+  // Failed with nothing cached: say so, not "connect a host" or "pick a merge request".
+  if (isError && hosts === undefined) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <ListLoadError
+          error={error}
+          what="hosts"
+          onRetry={() => {
+            void refetch();
+          }}
+        />
+      </div>
+    );
+  }
 
   if (hosts?.length === 0) {
     return (
