@@ -16,11 +16,55 @@ Open an MR from the host browser. The diff viewer shows all changed files.
 
 ## BRIEF — configure the prompt
 
-Before dispatching to the AI, tune the review brief:
+Before dispatching to the AI, tune the review brief. Everything is saved as you type.
 
-- **Preset** — choose a review focus (e.g. security, performance, style)
-- **Context toggles** — include or exclude diff sections, commit messages, PR description
-- **Custom instructions** — free-text additions appended to the system prompt
+- **Review intent** — one of the four built-in presets (thorough, security, style,
+  performance) or a preset you saved. **View instructions** shows the text the preset puts at
+  the top of the prompt. **Save as preset…** stores the current intent under a name — with
+  its instructions, which you can rewrite, and optionally this brief's settings (focus areas,
+  output, context toggles, exclude patterns, the advanced options), applied whenever the
+  preset is picked. Saved presets can be edited or deleted here and under **Settings →
+  Review presets**; a brief whose preset was deleted falls back to its built-in one and says
+  so.
+- **Focus areas** — a checklist the model must go through explicitly: pick common ones
+  (error handling, concurrency, test coverage…) or add your own.
+- **Output** — the language for comment bodies (empty: the language of the code and the MR),
+  a minimum severity, and a maximum number of comments. The model is asked to respect both
+  limits, and they are enforced again when its answer is stored: lower-severity comments are
+  dropped and, past the cap, only the most severe are kept. The dispatch and import results
+  say how many were filtered out.
+- **Context** — the diff, the MR description, full file contents, tests next to the changed
+  files, code the changed files import, commit history, and project context files (one path
+  per line; empty auto-detects `CLAUDE.md`, `CONTRIBUTING.md`, `README.md` and the like).
+- **Custom instructions** — free text appended to the instructions.
+- **Advanced** — shows how many changed files are excluded even while collapsed:
+  - *Path filters* — include and exclude glob patterns over changed-file paths, as in
+    `.gitignore` (`*.snap`, `gen/`, `src/**/*.py`), on top of default excludes for
+    lockfiles, minified bundles, source maps, generated and vendored code and binary assets.
+    Each excluded file is listed with the pattern that excluded it, and **Review anyway**
+    takes one back in (it adds `!/path` to the exclude patterns). Excluded files are left
+    out of the diff and of every context lookup.
+  - *Number diff lines* (on by default) — each diff line carries its line number in the new
+    file and the model is told to anchor comments to those numbers, so far fewer comments
+    land on the wrong line.
+  - *Show the previous iteration's comments* (on by default) — from the second iteration on,
+    the comments kept last time are listed as already reported, so the model does not
+    repeat them unless they are still unresolved.
+  - *Prompt budget* — the prompt's size cap in characters (600 000 by default, sized for a
+    ~200k-token model). Instructions and the diff come first, then the MR description,
+    previous comments, project context, full files, tests, related code and commit history;
+    what does not fit is cut, with a marker in the prompt saying so.
+
+**Preview prompt** builds the exact prompt the model would get and breaks it down: the
+characters each part takes, roughly how many tokens (characters ÷ 4 — an estimate, not a
+tokenizer count), which files were cut short, left out for the budget or skipped as binary,
+and how many changed files the path filters excluded. The preview is plain text. Editing the
+brief afterwards marks it **Out of date** rather than rebuilding it on every keystroke —
+**Refresh** builds it again. **Copy** puts it on the clipboard, also on a plain-http address
+where the browser's clipboard API is unavailable.
+
+**Dispatch** saves the brief first and moves on only once it is saved; if saving fails, you
+stay on the Brief and the error says why.
 
 ## DISPATCH — run the review
 
