@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from mr_review.core.mrs.entities import Repo
+from mr_review.core.mrs.entities import DiffFile, DiffHunk, DiffLine, Repo
 from mr_review.core.pagination import Page
-from mr_review.infra.vcs.cache import CachedVCSProvider, TTLCache, VCSCache
+from mr_review.infra.vcs.cache import CachedVCSProvider, TTLCache, VCSCache, approximate_size
 
 from tests.factories.entities import make_host
 
@@ -321,3 +321,70 @@ async def test__cached_provider__invalidate_repo__also_drops_personal_inbox_page
 
     assert inner.list_my_mrs.await_count == 2
     assert inner.list_repos.await_count == 1
+
+
+async def test__ttl_cache__byte_cap__evicts_least_recently_used_until_under_budget() -> None:
+    cache = TTLCache(ttl=60, max_entries=100, max_bytes=100, sizer=lambda value: len(str(value)))
+    loaders = {key: _Loader(value=key * 40) for key in ("a", "b", "c")}
+
+    for key in ("a", "b", "c"):
+        await cache.get_or_load(key, loaders[key])
+
+    assert len(cache) == 2
+    assert cache.size_bytes == 80
+    await cache.get_or_load("a", loaders["a"])
+    assert loaders["a"].calls == 2  # "a" was the one evicted
+
+
+async def test__ttl_cache__value_bigger_than_the_budget__is_returned_but_not_stored() -> None:
+    cache = TTLCache(ttl=60, max_entries=100, max_bytes=10, sizer=lambda value: len(str(value)))
+    loader = _Loader(value="x" * 11)
+
+    assert await cache.get_or_load("big", loader) == "x" * 11
+    await cache.get_or_load("big", loader)
+
+    assert loader.calls == 2
+    assert (len(cache), cache.size_bytes) == (0, 0)
+
+
+async def test__ttl_cache__byte_accounting__follows_expiry_and_invalidation() -> None:
+    clock = _Clock()
+    cache = TTLCache(ttl=60, max_entries=100, clock=clock, max_bytes=1000, sizer=lambda value: len(str(value)))
+    await cache.get_or_load("a", _Loader(value="a" * 10))
+    await cache.get_or_load("b", _Loader(value="b" * 20))
+    assert cache.size_bytes == 30
+
+    cache.invalidate(lambda key: key == "a")
+    assert cache.size_bytes == 20
+    clock.now += 61
+    await cache.get_or_load("b", _Loader(value="b" * 5))
+    assert cache.size_bytes == 5
+
+
+async def test__cached_provider__content_store_is_capped_by_size() -> None:
+    inner = AsyncMock()
+    inner.get_file.side_effect = lambda repo_path, file_path, ref: "x" * 600
+    provider = CachedVCSProvider(inner, max_content_bytes=1500)
+
+    for name in ("a", "b", "c"):
+        await provider.get_file("g/r", name, "sha")
+    await provider.get_file("g/r", "c", "sha")
+    await provider.get_file("g/r", "a", "sha")
+
+    # Two 600-character files fit in 1500 bytes, three don't: "a" was evicted, "c" stayed.
+    assert inner.get_file.await_count == 4
+
+
+def test__approximate_size__diffs_weigh_their_lines() -> None:
+    small = DiffFile(path="a.py", additions=1, deletions=0, hunks=[])
+    line = DiffLine(type="added", new_line=1, content="x" * 10)
+    big = DiffFile(
+        path="a.py",
+        additions=1000,
+        deletions=0,
+        hunks=[DiffHunk(old_start=0, new_start=1, old_count=0, new_count=1000, lines=[line] * 1000)],
+    )
+
+    assert approximate_size(big) > 1000 * approximate_size("x" * 10) > approximate_size(small)
+    assert approximate_size([big, big]) > 2 * approximate_size(big) - 1
+    assert approximate_size(None) == 0

@@ -358,7 +358,8 @@ Every VCS call goes through one pooled HTTP client that lives as long as the pro
 keep-alive connections reused across requests and hosts; `MR_REVIEW__VCS_TIMEOUT` is its timeout.
 Read-only responses are cached in memory per host: repository list pages for 15 minutes, everything
 else — repository searches, MR pages, single MRs, diffs, files — for 5 minutes, in bounded
-least-recently-used stores.
+least-recently-used stores. Diffs, trees and file bodies are also capped by size, about 128 MB per
+host; a single response larger than that is served but not kept.
 
 Lists are sorted by activity, so a push moves an item from a later page to page 1, and pages fetched
 at different times can each miss it. A later page is therefore only cached together with the page 1

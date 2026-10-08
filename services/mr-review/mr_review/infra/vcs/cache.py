@@ -30,10 +30,44 @@ class _Miss:
 _MISS = _Miss()
 
 
+_STR_OVERHEAD = 50
+_OBJECT_OVERHEAD = 64
+_DIFF_LINE_OVERHEAD = 400
+
+
+def approximate_size(value: object) -> int:
+    """Rough in-memory footprint of a cached VCS response, in bytes.
+
+    Exact accounting is not the point; the byte cap only has to stop a few huge diffs or trees
+    from holding hundreds of megabytes. Parsed diff lines dominate, at a few hundred bytes each
+    on top of their text.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        return len(value) + _STR_OVERHEAD
+    if isinstance(value, DiffFile):
+        lines = sum(len(hunk.lines) for hunk in value.hunks)
+        text = sum(len(line.content) for hunk in value.hunks for line in hunk.lines)
+        return text + lines * _DIFF_LINE_OVERHEAD + len(value.path) + _OBJECT_OVERHEAD
+    if isinstance(value, list | tuple):
+        return sum(approximate_size(item) for item in value) + _OBJECT_OVERHEAD
+    return _OBJECT_OVERHEAD
+
+
+@dataclass
+class _Entry:
+    value: object
+    expires_at: float
+    size: int
+
+
 class TTLCache:
     """Bounded LRU cache with a per-entry TTL and single-flight loading.
 
-    * At most ``max_entries`` live entries; the least recently used one is evicted first.
+    * At most ``max_entries`` live entries — and, when ``max_bytes`` is set, at most that many
+      bytes as estimated by ``sizer``; the least recently used entries are evicted first, and a
+      value bigger than the whole budget is returned but never stored.
     * Expired entries are dropped when read, and swept at most once per ``ttl`` on writes, so
       values nobody reads again don't linger until the cap is reached.
     * Concurrent misses for one key share a single load. The load runs as its own task, so a
@@ -46,19 +80,36 @@ class TTLCache:
     Safe for concurrent use from one event loop; not thread-safe.
     """
 
-    def __init__(self, ttl: float, max_entries: int, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        ttl: float,
+        max_entries: int,
+        clock: Callable[[], float] = time.monotonic,
+        max_bytes: int | None = None,
+        sizer: Callable[[object], int] = approximate_size,
+    ) -> None:
         if max_entries < 1:
             raise ValueError("max_entries must be at least 1")
+        if max_bytes is not None and max_bytes < 1:
+            raise ValueError("max_bytes must be at least 1")
         self._ttl = ttl
         self._max_entries = max_entries
+        self._max_bytes = max_bytes
+        self._sizer = sizer
         self._clock = clock
-        self._data: OrderedDict[Hashable, tuple[object, float]] = OrderedDict()
+        self._data: OrderedDict[Hashable, _Entry] = OrderedDict()
+        self._bytes = 0
         self._inflight: dict[Hashable, asyncio.Task[object]] = {}
         self._next_sweep = clock() + ttl
         self._generation = 0
 
     def __len__(self) -> int:
         return len(self._data)
+
+    @property
+    def size_bytes(self) -> int:
+        """Estimated bytes held (0 when no byte cap is configured)."""
+        return self._bytes
 
     async def get_or_load[T](self, key: Hashable, loader: Callable[[], Awaitable[T]]) -> T:
         value = self._get(key)
@@ -78,10 +129,11 @@ class TTLCache:
         self._generation += 1
         if predicate is None:
             self._data.clear()
+            self._bytes = 0
             self._inflight.clear()
             return
         for key in [key for key in self._data if predicate(key)]:
-            del self._data[key]
+            self._drop(key)
         # Later callers must start a fresh load rather than join one that began before this call.
         for key in [key for key in self._inflight if predicate(key)]:
             del self._inflight[key]
@@ -104,34 +156,49 @@ class TTLCache:
         return self._get(key)
 
     def discard(self, key: Hashable) -> None:
-        self._data.pop(key, None)
+        if key in self._data:
+            self._drop(key)
+
+    def _drop(self, key: Hashable) -> None:
+        self._bytes -= self._data.pop(key).size
 
     def _get(self, key: Hashable) -> object:
         entry = self._data.get(key)
         if entry is None:
             return _MISS
-        value, expires_at = entry
-        if self._clock() >= expires_at:
-            del self._data[key]
+        if self._clock() >= entry.expires_at:
+            self._drop(key)
             return _MISS
         self._data.move_to_end(key)
-        return value
+        return entry.value
 
     def _set(self, key: Hashable, value: object) -> None:
         now = self._clock()
-        self._data[key] = (value, now + self._ttl)
-        self._data.move_to_end(key)
-        if now >= self._next_sweep or len(self._data) > self._max_entries:
+        self.discard(key)
+        size = self._sizer(value) if self._max_bytes is not None else 0
+        if self._max_bytes is not None and size > self._max_bytes:
+            return
+        self._data[key] = _Entry(value=value, expires_at=now + self._ttl, size=size)
+        self._bytes += size
+        if now >= self._next_sweep or self._is_over_budget():
             self._sweep_expired(now)
-        while len(self._data) > self._max_entries:
-            self._data.popitem(last=False)
+        while self._is_over_budget():
+            oldest = next(iter(self._data))
+            self._drop(oldest)
+
+    def _is_over_budget(self) -> bool:
+        if len(self._data) > self._max_entries:
+            return True
+        return self._max_bytes is not None and self._bytes > self._max_bytes
 
     def _sweep_expired(self, now: float) -> None:
-        expired = [key for key, (_, expires_at) in self._data.items() if now >= expires_at]
-        for key in expired:
-            del self._data[key]
+        for key in [key for key, entry in self._data.items() if now >= entry.expires_at]:
+            self._drop(key)
         self._next_sweep = now + self._ttl
 
+
+# Per host: diffs, trees and file bodies beyond this estimated size are evicted, oldest first.
+DEFAULT_MAX_CONTENT_BYTES = 128 * 1024 * 1024
 
 # A later page is cached only when fetched within this many seconds of the first page it follows.
 # Listings are sorted by activity, so a page fetched long after page 1 may have lost items to it.
@@ -219,12 +286,14 @@ class CachedVCSProvider:
         max_content_entries: int = 256,
         max_repo_entries: int = 256,
         clock: Callable[[], float] = time.monotonic,
+        max_content_bytes: int = DEFAULT_MAX_CONTENT_BYTES,
     ) -> None:
         self._provider = provider
         self._clock = clock
         self._repos = TTLCache(repos_ttl, max_repo_entries, clock=clock)
         self._meta = TTLCache(ttl, max_entries, clock=clock)
-        self._content = TTLCache(ttl, max_content_entries, clock=clock)
+        # Diffs, trees and files vary from bytes to tens of megabytes: cap them by size too.
+        self._content = TTLCache(ttl, max_content_entries, clock=clock, max_bytes=max_content_bytes)
         self._generations = itertools.count(1)
 
     def invalidate(self, repo_path: str | None = None) -> None:
@@ -425,8 +494,10 @@ class VCSCache:
         max_entries: int = 1024,
         max_content_entries: int = 256,
         max_repo_entries: int = 256,
+        max_content_bytes: int = DEFAULT_MAX_CONTENT_BYTES,
     ) -> None:
         self._client = client
+        self._max_content_bytes = max_content_bytes
         self._ttl = ttl
         self._repos_ttl = repos_ttl
         self._max_entries = max_entries
@@ -446,6 +517,7 @@ class VCSCache:
                 max_entries=self._max_entries,
                 max_content_entries=self._max_content_entries,
                 max_repo_entries=self._max_repo_entries,
+                max_content_bytes=self._max_content_bytes,
             )
             entry = _RegistryEntry(fingerprint=fingerprint, provider=provider)
             self._entries[host.id] = entry
