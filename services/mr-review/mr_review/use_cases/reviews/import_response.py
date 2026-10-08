@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from mr_review.core.reviews.entities import BriefConfig, Iteration, IterationStage
 from mr_review.core.reviews.repositories import ReviewRepository
+from mr_review.use_cases.reviews._answer_settlement import bounded_raw_response
 from mr_review.use_cases.reviews.ai_response_parser import ParseResult, parse_ai_response
 
 
@@ -47,7 +48,11 @@ class ImportResponseUseCase:
             idx = 0
 
         updated_iteration = review.iterations[idx].model_copy(
-            update={"stage": IterationStage.polish, "comments": result.comments, "raw_response": raw}
+            update={
+                "stage": IterationStage.polish,
+                "comments": result.comments,
+                "raw_response": bounded_raw_response(raw),
+            }
         )
         new_iterations = list(review.iterations)
         new_iterations[idx] = updated_iteration

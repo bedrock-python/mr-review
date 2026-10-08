@@ -1,19 +1,14 @@
-"""Unit tests for dispatch_review helpers (prompt builder, diff formatter, AI response parser)."""
+"""Unit tests for the prompt builder and diff formatter used by dispatch."""
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock
-from uuid import uuid4
-
 import pytest
 from mr_review.core.mrs.entities import DiffFile, DiffHunk, DiffLine
-from mr_review.core.reviews.entities import BriefConfig, BriefPreset, IterationStage, Review
-from mr_review.use_cases.reviews.dispatch_review import DispatchReviewUseCase
+from mr_review.core.reviews.entities import BriefConfig, BriefPreset
 from mr_review.use_cases.reviews.prompt_builder import build_prompt as _build_prompt
 from mr_review.use_cases.reviews.prompt_builder import format_diff as _format_diff
 
-from tests.factories.entities import make_iteration, make_review
+from tests.factories.entities import make_review
 
 pytestmark = pytest.mark.unit
 
@@ -193,83 +188,3 @@ def test__build_prompt__context_appears_before_diff() -> None:
     context_pos = prompt.index("Project readme content.")
     diff_pos = prompt.index("my_diff_marker")
     assert context_pos < diff_pos
-
-
-# ── _persist_ai_response (via DispatchReviewUseCase) ──────────────────────────
-
-
-async def test__persist_ai_response__valid_json__creates_comments_and_advances_stage() -> None:
-    """_persist_ai_response parses valid JSON and saves comments + updates stage to polish."""
-    review_repo = AsyncMock()
-    iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
-    review = make_review(iterations=[iteration])
-    review_repo.get_by_id.return_value = review
-
-    use_case = DispatchReviewUseCase(review_repo, AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock())
-
-    ai_response = json.dumps(
-        [
-            {"file": "src/foo.py", "line": 10, "severity": "minor", "body": "Consider renaming"},
-            {"file": None, "line": None, "severity": "critical", "body": "Security issue"},
-        ]
-    )
-
-    await use_case._persist_ai_response(review.id, iteration.id, ai_response)  # noqa: SLF001
-
-    review_repo.update.assert_awaited_once()
-    saved: Review = review_repo.update.call_args[0][0]
-    updated_iter = saved.iterations[0]
-    assert updated_iter.stage == IterationStage.polish
-    assert len(updated_iter.comments) == 2
-    assert updated_iter.comments[0].file == "src/foo.py"
-    assert updated_iter.comments[0].line == 10
-    assert updated_iter.comments[1].file is None
-
-
-async def test__persist_ai_response__invalid_json__creates_single_raw_comment() -> None:
-    """_persist_ai_response falls back to a single suggestion comment on invalid JSON."""
-    review_repo = AsyncMock()
-    iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
-    review = make_review(iterations=[iteration])
-    review_repo.get_by_id.return_value = review
-
-    use_case = DispatchReviewUseCase(review_repo, AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock())
-
-    await use_case._persist_ai_response(review.id, iteration.id, "not valid json at all")  # noqa: SLF001
-
-    saved: Review = review_repo.update.call_args[0][0]
-    updated_iter = saved.iterations[0]
-    assert len(updated_iter.comments) == 1
-    assert updated_iter.comments[0].severity == "suggestion"
-    assert "not valid json at all" in updated_iter.comments[0].body
-
-
-async def test__persist_ai_response__unknown_severity__normalises_to_suggestion() -> None:
-    """_persist_ai_response coerces unrecognised severity values to 'suggestion'."""
-    review_repo = AsyncMock()
-    iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
-    review = make_review(iterations=[iteration])
-    review_repo.get_by_id.return_value = review
-
-    use_case = DispatchReviewUseCase(review_repo, AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock())
-
-    ai_response = json.dumps(
-        [
-            {"file": None, "line": None, "severity": "whatever", "body": "Something"},
-        ]
-    )
-    await use_case._persist_ai_response(review.id, iteration.id, ai_response)  # noqa: SLF001
-
-    saved: Review = review_repo.update.call_args[0][0]
-    assert saved.iterations[0].comments[0].severity == "suggestion"
-
-
-async def test__persist_ai_response__review_gone__no_error_raised() -> None:
-    """_persist_ai_response is a no-op when the review no longer exists."""
-    review_repo = AsyncMock()
-    review_repo.get_by_id.return_value = None
-
-    use_case = DispatchReviewUseCase(review_repo, AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock())
-    await use_case._persist_ai_response(uuid4(), uuid4(), "[]")  # noqa: SLF001
-
-    review_repo.update.assert_not_awaited()

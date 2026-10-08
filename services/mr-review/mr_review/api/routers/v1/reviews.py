@@ -57,6 +57,8 @@ from mr_review.use_cases.reviews.update_review import UpdateReviewUseCase
 
 logger = structlog.get_logger(__name__)
 
+_PREVIEW_CHARS = 500
+
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"], route_class=DishkaRoute)
 
 
@@ -259,6 +261,7 @@ def _dispatch_event_to_sse(event: DispatchEvent) -> ServerSentEvent:
         errors=event.errors,
         json_error=event.json_error,
         truncated=event.truncated,
+        kept_previous=event.kept_previous,
     )
     return ServerSentEvent(event="done", data=done.model_dump_json())
 
@@ -282,6 +285,8 @@ async def dispatch_review(
             reasoning_effort=body.reasoning_effort,
             iteration_id=body.iteration_id,
         )
+    except IterationLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -297,6 +302,14 @@ async def dispatch_review(
     return EventSourceResponse(event_generator())
 
 
+def _preview(raw: object) -> str:
+    """The start of an item that could not be parsed, as text — however deeply it nests."""
+    try:
+        return str(raw)[:_PREVIEW_CHARS]
+    except RecursionError:
+        return f"<a {type(raw).__name__} nested too deeply to show>"
+
+
 def _parse_result_to_response(result: ParseResult, imported: int) -> ImportResponseResponse:
     return ImportResponseResponse(
         imported=imported,
@@ -304,7 +317,7 @@ def _parse_result_to_response(result: ParseResult, imported: int) -> ImportRespo
             CommentParseErrorResponse(
                 index=e.index,
                 reason=e.reason,
-                raw=str(e.raw)[:500],
+                raw=_preview(e.raw),
             )
             for e in result.errors
         ],

@@ -125,17 +125,25 @@ class DispatchCommentEvent(BaseModel):
 
 
 class DispatchDoneEvent(BaseModel):
-    """``event: done`` — sent once, after the iteration has been stored with stage ``polish``."""
+    """``event: done`` — sent once, after the iteration has been written.
+
+    ``comments`` counts what the iteration holds now. ``kept_previous`` is true when the answer
+    was not used — unreadable, cut off or empty — and the iteration kept its comments and stage.
+    """
 
     iteration_id: UUID
     comments: int
     errors: int
     json_error: str | None
     truncated: bool
+    kept_previous: bool
 
 
 class DispatchErrorEvent(BaseModel):
-    """``event: error`` — the stream ends after it; whatever arrived was still stored."""
+    """``event: error`` — the stream ends after it, without ``done``.
+
+    The iteration keeps its comments; one that had none takes the complete comments that arrived.
+    """
 
     message: str
 

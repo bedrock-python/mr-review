@@ -254,10 +254,10 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
 async def test__stream_and_save__review_gone_after_stream__raises_instead_of_done() -> None:
     """When the review is gone after streaming nothing is written and the stream ends in an error, not done."""
     review_repo = AsyncMock()
-    iteration = make_iteration(stage=IterationStage.dispatch, comments=[])
+    iteration = make_iteration(stage=IterationStage.brief, comments=[])
     review = make_review(iterations=[iteration])
-    # _persist_ai_response calls get_by_id once; returning None makes it a no-op.
-    review_repo.get_by_id.return_value = None
+    # The first read marks the iteration as dispatching; by the time the answer is stored it is gone.
+    review_repo.get_by_id.side_effect = [review, None]
 
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=[])
 
@@ -276,8 +276,8 @@ async def test__stream_and_save__review_gone_after_stream__raises_instead_of_don
     events: list[DispatchEvent] = []
     stream = use_case._stream_and_save(review.id, iteration.id, "prompt", ai_provider)  # noqa: SLF001
 
-    with pytest.raises(ValueError, match="deleted while the answer was streaming"):
+    with pytest.raises(ValueError, match="not found"):
         await _drain(stream, events)
 
     assert [type(e) for e in events] == [DispatchChunk]
-    review_repo.update.assert_not_awaited()
+    review_repo.update.assert_awaited_once()

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -57,7 +57,13 @@ class _Model:
 
 
 class _BranchDiffVCS:
+    def __init__(self, on_fetch: Callable[[], Awaitable[None]] | None) -> None:
+        self._on_fetch = on_fetch
+
     async def get_branch_diff(self, repo_path: str, base_ref: str, head_ref: str) -> list[DiffFile]:
+        # Fetching the diff is where a dispatch spends its time before the model is called.
+        if self._on_fetch is not None:
+            await self._on_fetch()
         return []
 
 
@@ -74,7 +80,8 @@ class _FakeDispatchProvider(Provider):
 
     def __init__(self) -> None:
         super().__init__()
-        self.model = _Model([])
+        self.model: Callable[..., Awaitable[AsyncIterator[str]]] = _Model([])
+        self.on_fetch_diff: Callable[[], Awaitable[None]] | None = None
 
     @provide(override=True)
     def get_dispatch_review_use_case(self, review_repo: FileReviewRepository) -> DispatchReviewUseCase:
@@ -82,7 +89,7 @@ class _FakeDispatchProvider(Provider):
             review_repo=review_repo,
             host_repo=_Found(make_host()),  # type: ignore[arg-type]
             ai_provider_repo=_Found(make_ai_provider()),  # type: ignore[arg-type]
-            vcs_factory=lambda _host: _BranchDiffVCS(),  # type: ignore[arg-type,return-value]
+            vcs_factory=lambda _host: _BranchDiffVCS(self.on_fetch_diff),  # type: ignore[arg-type,return-value]
             ai_dispatcher_factory=self.model,
         )
 
@@ -175,6 +182,7 @@ async def test__dispatch__well_formed_answer__chunk_comment_and_done_events_in_o
         "errors": 0,
         "json_error": None,
         "truncated": False,
+        "kept_previous": False,
     }
 
 
@@ -234,9 +242,8 @@ async def test__dispatch__provider_fails__error_event_without_done_and_comments_
     assert [c.body for c in stored.iterations[0].comments] == ["Old"]
 
 
-async def test__dispatch__client_disconnects_mid_stream__partial_answer_still_stored(harness: _Harness) -> None:
-    review, _ = await _seed(harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish)
-    harness.dispatch.model = _Model(['[{"body": "Arrived before the disconnect"}', ", "], hang=True)
+async def _dispatch_until_disconnect(harness: _Harness, review_id: UUID) -> list[bytes]:
+    """Run a dispatch over raw ASGI and disconnect the client once the first comment was sent."""
     comment_sent = asyncio.Event()
     sent: list[bytes] = []
     request_body = json.dumps({"ai_provider_id": str(uuid4())}).encode()
@@ -256,7 +263,7 @@ async def test__dispatch__client_disconnects_mid_stream__partial_answer_still_st
         if b"event: comment" in body:
             comment_sent.set()
 
-    path = f"/api/v1/reviews/{review.id}/dispatch"
+    path = f"/api/v1/reviews/{review_id}/dispatch"
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
@@ -271,14 +278,206 @@ async def test__dispatch__client_disconnects_mid_stream__partial_answer_still_st
         "client": ("127.0.0.1", 50000),
         "server": ("test", 80),
     }
-
     await asyncio.wait_for(harness.app(scope, receive, send), timeout=10)
+    return sent
+
+
+_OLD_ANSWER = '[{"file": "a.py", "body": "Old"}]'
+
+
+async def test__dispatch__client_disconnects_mid_stream__partial_answer_stored_on_an_empty_iteration(
+    harness: _Harness,
+) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.model = _Model(['[{"body": "Arrived before the disconnect"}', ", "], hang=True)
+
+    sent = await _dispatch_until_disconnect(harness, review.id)
 
     assert not any(b"event: done" in body for body in sent)
     stored = await harness.reviews.get_by_id(review.id)
     assert stored is not None
+    assert stored.iterations[0].stage == IterationStage.polish
     assert [c.body for c in stored.iterations[0].comments] == ["Arrived before the disconnect"]
     assert stored.iterations[0].raw_response == '[{"body": "Arrived before the disconnect"}, '
+
+
+async def test__dispatch__client_disconnects_mid_stream__previous_comments_and_their_answer_kept(
+    harness: _Harness,
+) -> None:
+    review, _ = await _seed(
+        harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish, raw_response=_OLD_ANSWER
+    )
+    harness.dispatch.model = _Model(['[{"body": "Arrived before the disconnect"}', ", "], hang=True)
+
+    await _dispatch_until_disconnect(harness, review.id)
+
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].stage == IterationStage.polish
+    assert [c.body for c in stored.iterations[0].comments] == ["Old"]
+    assert stored.iterations[0].raw_response == _OLD_ANSWER
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [[], ["\n\n   "], ["<think>\nStill weighing [a] against {b} when the tokens ran out"], ["Sorry, I can't help."]],
+    ids=["empty", "whitespace", "reasoning_cut_off", "prose"],
+)
+async def test__dispatch__unusable_answer__previous_comments_and_their_answer_kept(
+    harness: _Harness, chunks: list[str]
+) -> None:
+    previous = [make_comment(body="Old one"), make_comment(body="Old two")]
+    review, iteration = await _seed(
+        harness.reviews, comments=previous, stage=IterationStage.polish, raw_response=_OLD_ANSWER
+    )
+    harness.dispatch.model = _Model(chunks)
+
+    events = await _dispatch(harness, review.id)
+
+    name, done = events[-1]
+    assert name == "done"
+    assert done["iteration_id"] == str(iteration.id)
+    assert (done["comments"], done["kept_previous"]) == (2, True)
+    assert done["json_error"]
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].stage == IterationStage.polish
+    assert [c.body for c in stored.iterations[0].comments] == ["Old one", "Old two"]
+    assert stored.iterations[0].raw_response == _OLD_ANSWER
+
+
+async def test__dispatch__empty_answer_on_an_empty_iteration__nothing_saved_and_back_to_brief(
+    harness: _Harness,
+) -> None:
+    review, _ = await _seed(harness.reviews)
+    harness.dispatch.model = _Model(["  \n"])
+
+    events = await _dispatch(harness, review.id)
+
+    done = events[-1][1]
+    assert (done["comments"], done["kept_previous"], done["json_error"]) == (0, True, "The response is empty")
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].stage == IterationStage.brief
+    assert stored.iterations[0].comments == []
+    assert stored.iterations[0].raw_response is None
+
+
+async def test__dispatch__truncated_answer__previous_comments_kept(harness: _Harness) -> None:
+    review, _ = await _seed(
+        harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish, raw_response=_OLD_ANSWER
+    )
+    harness.dispatch.model = _Model(['[{"body": "New one"}, {"body": "Cut o'])
+
+    events = await _dispatch(harness, review.id)
+
+    done = events[-1][1]
+    assert (done["comments"], done["truncated"], done["kept_previous"]) == (1, True, True)
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert [c.body for c in stored.iterations[0].comments] == ["Old"]
+    assert stored.iterations[0].raw_response == _OLD_ANSWER
+
+
+async def test__dispatch__fails_after_a_partial_answer__previous_comments_and_their_answer_kept(
+    harness: _Harness,
+) -> None:
+    previous = [make_comment(body=f"Old{i}") for i in range(10)]
+    review, _ = await _seed(harness.reviews, comments=previous, stage=IterationStage.polish, raw_response=_OLD_ANSWER)
+    harness.dispatch.model = _Model(
+        ['[{"body": "New partial"}, {"body": "cut'], error=RuntimeError("upstream 529 overloaded")
+    )
+
+    events = await _dispatch(harness, review.id)
+
+    assert events[-1] == ("error", {"message": "upstream 529 overloaded"})
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert stored.iterations[0].stage == IterationStage.polish
+    assert [c.body for c in stored.iterations[0].comments] == [f"Old{i}" for i in range(10)]
+    assert stored.iterations[0].raw_response == _OLD_ANSWER
+
+
+async def test__dispatch__provider_cannot_be_started__iteration_left_as_it_was(harness: _Harness) -> None:
+    previous_provider = uuid4()
+    review, _ = await _seed(harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish)
+    seeded = await harness.reviews.get_by_id(review.id)
+    assert seeded is not None
+    iteration = seeded.iterations[0].model_copy(update={"ai_provider_id": previous_provider, "model": "old-model"})
+    await harness.reviews.update(seeded.model_copy(update={"iterations": [iteration]}))
+
+    async def failing_factory(*_args: object) -> AsyncIterator[str]:
+        raise RuntimeError("bad provider config")
+
+    harness.dispatch.model = failing_factory
+
+    events = await _dispatch(harness, review.id)
+
+    assert events == [("error", {"message": "bad provider config"})]
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    after = stored.iterations[0]
+    assert (after.stage, after.ai_provider_id, after.model) == (IterationStage.polish, previous_provider, "old-model")
+    assert [c.body for c in after.comments] == ["Old"]
+
+
+async def test__dispatch__review_edited_while_context_is_collected__edit_survives(harness: _Harness) -> None:
+    review, _ = await _seed(harness.reviews, comments=[make_comment(body="Old")], stage=IterationStage.polish)
+
+    async def edit_meanwhile() -> None:
+        current = await harness.reviews.get_by_id(review.id)
+        assert current is not None
+        edited = current.iterations[0].comments[0].model_copy(update={"body": "Edited while dispatching"})
+        iteration = current.iterations[0].model_copy(update={"comments": [edited]})
+        await harness.reviews.update(current.model_copy(update={"iterations": [iteration]}))
+
+    harness.dispatch.on_fetch_diff = edit_meanwhile
+    harness.dispatch.model = _Model([], error=RuntimeError("provider down"))
+
+    await _dispatch(harness, review.id)
+
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert [c.body for c in stored.iterations[0].comments] == ["Edited while dispatching"]
+
+
+async def test__dispatch__posted_iteration__409(harness: _Harness) -> None:
+    review, iteration = await _seed(harness.reviews, stage=IterationStage.post)
+
+    response = await harness.client.post(
+        f"/api/v1/reviews/{review.id}/dispatch",
+        json={"ai_provider_id": str(uuid4()), "iteration_id": str(iteration.id)},
+    )
+
+    assert response.status_code == 409
+
+
+async def test__dispatch__huge_answer__stored_raw_answer_capped(harness: _Harness) -> None:
+    review, iteration = await _seed(harness.reviews)
+    answer = '[{"file": "a.py", "body": "Kept"}]' + "\n" + "x" * 2_000_000
+    harness.dispatch.model = _Model([answer])
+
+    await _dispatch(harness, review.id)
+    raw = await harness.client.get(f"/api/v1/reviews/{review.id}/iterations/{iteration.id}/raw-response")
+
+    assert len(raw.text) < 600_000
+    assert raw.text.startswith('[{"file": "a.py", "body": "Kept"}]')
+    assert "characters omitted" in raw.text
+    assert raw.text.endswith("x" * 1000)
+
+
+async def test__reparse__answer_still_unusable__existing_comments_kept(harness: _Harness) -> None:
+    review, iteration = await _seed(
+        harness.reviews, comments=[make_comment(body="Triaged")], stage=IterationStage.polish, raw_response="Sorry."
+    )
+
+    response = await harness.client.post(f"/api/v1/reviews/{review.id}/iterations/{iteration.id}/reparse")
+
+    assert response.status_code == 200
+    assert (response.json()["imported"], bool(response.json()["json_error"])) == (0, True)
+    stored = await harness.reviews.get_by_id(review.id)
+    assert stored is not None
+    assert [c.body for c in stored.iterations[0].comments] == ["Triaged"]
 
 
 async def test__reparse__stored_answer__comments_replaced(harness: _Harness) -> None:

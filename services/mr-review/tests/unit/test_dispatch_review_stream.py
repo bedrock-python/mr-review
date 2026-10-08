@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import anyio
 import pytest
@@ -17,10 +17,15 @@ from mr_review.use_cases.reviews.dispatch_review import (
     DispatchEvent,
     DispatchReviewUseCase,
 )
+from mr_review.use_cases.reviews.iteration_comments import IterationLockedError
 
 from tests.factories.entities import make_ai_provider, make_comment, make_host, make_iteration, make_review
 
 pytestmark = pytest.mark.unit
+
+_OLD_PROVIDER = UUID("00000000-0000-0000-0000-0000000000aa")
+_OLD_ANSWER = '[{"body": "Old"}]'
+_PROVIDER = make_ai_provider()
 
 
 class _Model:
@@ -64,25 +69,17 @@ def _repo_holding(review: Review) -> AsyncMock:
     return repo
 
 
-def _saved_iteration(repo: AsyncMock) -> Iteration:
+def _stored(repo: AsyncMock) -> Iteration:
     saved: Review = repo.update.call_args[0][0]
     return saved.iterations[-1]
 
 
-def _use_case(repo: AsyncMock, model: _Model) -> DispatchReviewUseCase:
-    return DispatchReviewUseCase(repo, AsyncMock(), AsyncMock(), MagicMock(), model)
+def _use_case(repo: AsyncMock, model: object) -> DispatchReviewUseCase:
+    return DispatchReviewUseCase(repo, AsyncMock(), AsyncMock(), MagicMock(), model)  # type: ignore[arg-type]
 
 
-def _stream(
-    use_case: DispatchReviewUseCase, review: Review, previous: Iteration | None = None
-) -> AsyncIterator[DispatchEvent]:
-    return use_case._stream_and_save(  # noqa: SLF001
-        review.id,
-        review.iterations[-1].id,
-        "prompt",
-        make_ai_provider(),
-        restore_on_failure=previous,
-    )
+def _stream(use_case: DispatchReviewUseCase, iteration: Iteration) -> AsyncIterator[DispatchEvent]:
+    return use_case._stream_and_save(uuid4(), iteration.id, "prompt", _PROVIDER, model="new-model")  # noqa: SLF001
 
 
 async def _drain(stream: AsyncIterator[DispatchEvent], into: list[DispatchEvent] | None = None) -> None:
@@ -91,30 +88,43 @@ async def _drain(stream: AsyncIterator[DispatchEvent], into: list[DispatchEvent]
             into.append(event)
 
 
-def _redispatched() -> tuple[Iteration, Review]:
-    """An iteration that had comments in ``polish`` and has just been switched to ``dispatch``."""
-    previous = make_iteration(
+def _empty_iteration() -> Iteration:
+    return make_iteration(stage=IterationStage.brief, comments=[])
+
+
+def _triaged_iteration() -> Iteration:
+    """An iteration whose comments came from an earlier answer and may have been triaged since."""
+    return make_iteration(
         stage=IterationStage.polish,
-        comments=[make_comment(body="Old comment")],
-        ai_provider_id=uuid4(),
+        comments=[make_comment(body="Old one"), make_comment(body="Old two")],
+        ai_provider_id=_OLD_PROVIDER,
         model="old-model",
+    ).model_copy(update={"raw_response": _OLD_ANSWER})
+
+
+def _assert_left_as_it_was(iteration: Iteration) -> None:
+    assert [c.body for c in iteration.comments] == ["Old one", "Old two"]
+    assert (iteration.stage, iteration.ai_provider_id, iteration.model) == (
+        IterationStage.polish,
+        _OLD_PROVIDER,
+        "old-model",
     )
-    dispatching = previous.model_copy(
-        update={"stage": IterationStage.dispatch, "ai_provider_id": uuid4(), "model": "new-model"}
-    )
-    return previous, make_review(iterations=[dispatching])
+    assert iteration.raw_response == _OLD_ANSWER
 
 
 async def test__stream_and_save__events__chunks_previews_and_done_after_persistence() -> None:
-    review = make_review(iterations=[make_iteration(stage=IterationStage.dispatch)])
-    repo = _repo_holding(review)
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     model = _Model(['[{"file": "a.py", "line": 3, "body": "One"}', ', {"body": "Tw', 'o"}]'])
     events: list[DispatchEvent] = []
 
-    async for event in _stream(_use_case(repo, model), review):
+    async for event in _stream(_use_case(repo, model), iteration):
         if isinstance(event, DispatchCompleted):
             # The iteration must already be stored when done is announced.
-            assert _saved_iteration(repo).stage == IterationStage.polish
+            assert _stored(repo).stage == IterationStage.polish
+        elif not events:
+            # Before the first chunk the iteration was marked as dispatching.
+            assert _stored(repo).stage == IterationStage.dispatch
         events.append(event)
 
     assert [type(e).__name__ for e in events] == [
@@ -127,137 +137,181 @@ async def test__stream_and_save__events__chunks_previews_and_done_after_persiste
     ]
     previews = [e for e in events if isinstance(e, DispatchCommentPreview)]
     assert [(p.index, p.comment.body) for p in previews] == [(0, "One"), (1, "Two")]
+    assert events[-1] == DispatchCompleted(
+        iteration_id=iteration.id, comments=2, errors=0, json_error=None, truncated=False, kept_previous=False
+    )
+    stored = _stored(repo)
+    assert [c.body for c in stored.comments] == ["One", "Two"]
+    assert (stored.ai_provider_id, stored.model) == (_PROVIDER.id, "new-model")
+    assert stored.raw_response == "".join(model.chunks)
+
+
+async def test__stream_and_save__complete_answer__replaces_previous_comments() -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+
+    events = [e async for e in _stream(_use_case(repo, _Model(['[{"body": "New"}]'])), iteration)]
+
+    assert isinstance(events[-1], DispatchCompleted)
+    assert (events[-1].comments, events[-1].kept_previous) == (1, False)
+    assert [c.body for c in _stored(repo).comments] == ["New"]
+
+
+async def test__stream_and_save__no_findings__replaces_previous_comments_with_none() -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+
+    events = [e async for e in _stream(_use_case(repo, _Model(["[]"])), iteration)]
+
+    assert isinstance(events[-1], DispatchCompleted)
+    assert (events[-1].comments, events[-1].kept_previous, events[-1].json_error) == (0, False, None)
+    assert _stored(repo).comments == []
+    assert _stored(repo).stage == IterationStage.polish
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [[], ["  \n"], ["LGTM, nothing to add."], ["<think>\nran out of tokens [here]"], ['[{"body": "A"}, {"body": "B']],
+    ids=["empty", "blank", "prose", "reasoning_cut_off", "truncated"],
+)
+async def test__stream_and_save__unusable_answer__previous_comments_stage_and_answer_kept(chunks: list[str]) -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+
+    events = [e async for e in _stream(_use_case(repo, _Model(chunks)), iteration)]
+
     done = events[-1]
     assert isinstance(done, DispatchCompleted)
-    assert (done.comments, done.errors, done.json_error, done.truncated) == (2, 0, None, False)
-    saved = _saved_iteration(repo)
-    assert [c.body for c in saved.comments] == ["One", "Two"]
-    assert saved.raw_response == "".join(model.chunks)
+    assert (done.comments, done.kept_previous) == (2, True)
+    assert done.json_error is not None or done.truncated
+    _assert_left_as_it_was(_stored(repo))
 
 
-async def test__stream_and_save__unparseable_answer__one_general_comment_and_json_error() -> None:
-    review = make_review(iterations=[make_iteration(stage=IterationStage.dispatch)])
-    repo = _repo_holding(review)
+async def test__stream_and_save__unparseable_answer_on_an_empty_iteration__one_general_comment() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
 
-    events = [e async for e in _stream(_use_case(repo, _Model(["LGTM, ", "nothing to add."])), review)]
+    events = [e async for e in _stream(_use_case(repo, _Model(["LGTM, ", "nothing to add."])), iteration)]
 
     done = events[-1]
     assert isinstance(done, DispatchCompleted)
-    assert done.comments == 1
+    assert (done.comments, done.kept_previous) == (1, False)
     assert done.json_error is not None
-    assert [c.body for c in _saved_iteration(repo).comments] == ["LGTM, nothing to add."]
+    assert [c.body for c in _stored(repo).comments] == ["LGTM, nothing to add."]
+    assert _stored(repo).raw_response == "LGTM, nothing to add."
 
 
-async def test__stream_and_save__empty_answer__no_empty_body_comment() -> None:
-    review = make_review(iterations=[make_iteration(stage=IterationStage.dispatch)])
-    repo = _repo_holding(review)
+async def test__stream_and_save__truncated_answer_on_an_empty_iteration__complete_comments_stored() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
 
-    events = [e async for e in _stream(_use_case(repo, _Model([])), review)]
-
-    done = events[-1]
-    assert isinstance(done, DispatchCompleted)
-    assert (done.comments, done.json_error) == (0, "The response is empty")
-    assert _saved_iteration(repo).comments == []
-
-
-async def test__stream_and_save__truncated_answer__done_reports_truncation() -> None:
-    review = make_review(iterations=[make_iteration(stage=IterationStage.dispatch)])
-    repo = _repo_holding(review)
-    model = _Model(['[{"body": "One"}, {"body": "Two"}, {"body": "Thr'])
-
-    events = [e async for e in _stream(_use_case(repo, model), review)]
+    events = [e async for e in _stream(_use_case(repo, _Model(['[{"body": "One"}, {"body": "Tw'])), iteration)]
 
     done = events[-1]
     assert isinstance(done, DispatchCompleted)
-    assert (done.comments, done.json_error, done.truncated) == (2, None, True)
+    assert (done.comments, done.truncated, done.kept_previous) == (1, True, False)
+    assert [c.body for c in _stored(repo).comments] == ["One"]
 
 
-async def test__stream_and_save__provider_fails_before_output__comments_and_stage_untouched() -> None:
-    previous, review = _redispatched()
-    repo = _repo_holding(review)
-    model = _Model([], error=RuntimeError("401 Unauthorized"))
+async def test__stream_and_save__empty_answer_on_an_empty_iteration__nothing_saved_and_back_to_brief() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+
+    events = [e async for e in _stream(_use_case(repo, _Model([])), iteration)]
+
+    done = events[-1]
+    assert isinstance(done, DispatchCompleted)
+    assert (done.comments, done.kept_previous, done.json_error) == (0, True, "The response is empty")
+    stored = _stored(repo)
+    assert (stored.stage, stored.comments, stored.raw_response) == (IterationStage.brief, [], None)
+
+
+async def test__stream_and_save__provider_fails_before_output__iteration_left_as_it_was() -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     events: list[DispatchEvent] = []
 
     with pytest.raises(RuntimeError, match="401"):
-        await _drain(_stream(_use_case(repo, model), review, previous), events)
+        await _drain(_stream(_use_case(repo, _Model([], error=RuntimeError("401 Unauthorized"))), iteration), events)
 
     assert events == []
-    saved = _saved_iteration(repo)
-    assert [c.body for c in saved.comments] == ["Old comment"]
-    assert (saved.stage, saved.ai_provider_id, saved.model) == (
-        IterationStage.polish,
-        previous.ai_provider_id,
-        "old-model",
-    )
-    assert saved.raw_response is None
+    _assert_left_as_it_was(_stored(repo))
 
 
-async def test__stream_and_save__fails_mid_answer__complete_comments_salvaged() -> None:
-    previous, review = _redispatched()
-    repo = _repo_holding(review)
+async def test__stream_and_save__provider_cannot_be_started__iteration_left_as_it_was() -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+
+    async def failing_factory(*_args: object) -> AsyncIterator[str]:
+        raise RuntimeError("bad provider config")
+
+    with pytest.raises(RuntimeError, match="bad provider config"):
+        await _drain(_stream(_use_case(repo, failing_factory), iteration))
+
+    _assert_left_as_it_was(_stored(repo))
+
+
+async def test__stream_and_save__fails_mid_answer__previous_comments_kept() -> None:
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
+    model = _Model(['[{"body": "New partial"}, {"body": "Cut o'], error=RuntimeError("overloaded"))
+
+    with pytest.raises(RuntimeError):
+        await _drain(_stream(_use_case(repo, model), iteration))
+
+    _assert_left_as_it_was(_stored(repo))
+
+
+async def test__stream_and_save__fails_mid_answer_on_an_empty_iteration__complete_comments_salvaged() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     model = _Model(['[{"body": "Kept"}, {"body": "Cut o'], error=RuntimeError("overloaded"))
 
     with pytest.raises(RuntimeError):
-        _ = [e async for e in _stream(_use_case(repo, model), review, previous)]
+        await _drain(_stream(_use_case(repo, model), iteration))
 
-    saved = _saved_iteration(repo)
-    assert [c.body for c in saved.comments] == ["Kept"]
-    assert saved.stage == IterationStage.polish
-    assert saved.raw_response == "".join(model.chunks)
+    stored = _stored(repo)
+    assert [c.body for c in stored.comments] == ["Kept"]
+    assert stored.stage == IterationStage.polish
+    assert stored.raw_response == "".join(model.chunks)
 
 
-async def test__stream_and_save__fails_mid_answer_without_a_complete_comment__old_comments_and_raw_kept() -> None:
-    previous, review = _redispatched()
-    repo = _repo_holding(review)
+async def test__stream_and_save__fails_before_a_complete_comment_on_an_empty_iteration__back_to_brief() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     model = _Model(['[{"body": "Cut o'], error=RuntimeError("context length exceeded"))
 
     with pytest.raises(RuntimeError):
-        _ = [e async for e in _stream(_use_case(repo, model), review, previous)]
+        await _drain(_stream(_use_case(repo, model), iteration))
 
-    saved = _saved_iteration(repo)
-    assert [c.body for c in saved.comments] == ["Old comment"]
-    assert saved.stage == IterationStage.polish
-    assert saved.raw_response == '[{"body": "Cut o'
-    assert all(c.body.strip() for c in saved.comments)
+    stored = _stored(repo)
+    assert (stored.stage, stored.comments, stored.raw_response) == (IterationStage.brief, [], None)
 
 
-async def test__stream_and_save__new_iteration_fails_before_output__stays_in_dispatch_without_comments() -> None:
-    review = make_review(iterations=[make_iteration(stage=IterationStage.dispatch)])
-    repo = _repo_holding(review)
-
-    with pytest.raises(RuntimeError):
-        _ = [e async for e in _stream(_use_case(repo, _Model([], error=RuntimeError("boom"))), review)]
-
-    saved = _saved_iteration(repo)
-    assert saved.stage == IterationStage.dispatch
-    assert saved.comments == []
-
-
-async def test__stream_and_save__consumer_closes_early__partial_answer_stored_and_upstream_closed() -> None:
-    previous, review = _redispatched()
-    repo = _repo_holding(review)
+async def test__stream_and_save__consumer_closes_early__settled_and_upstream_closed() -> None:
+    iteration = _empty_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     model = _Model(['[{"body": "Arrived"}', ", "], hang=True)
-    stream = _stream(_use_case(repo, model), review, previous)
-    assert isinstance(stream, AsyncIterator)
+    stream = _stream(_use_case(repo, model), iteration)
 
     first = await anext(stream)
     await stream.aclose()  # type: ignore[attr-defined]
 
     assert isinstance(first, DispatchChunk)
     assert model.closed
-    assert [c.body for c in _saved_iteration(repo).comments] == ["Arrived"]
+    assert [c.body for c in _stored(repo).comments] == ["Arrived"]
 
 
-async def test__stream_and_save__cancelled_like_a_client_disconnect__persistence_still_completes() -> None:
+async def test__stream_and_save__cancelled_like_a_client_disconnect__settlement_still_written() -> None:
     # sse-starlette cancels the response task group when the client goes away; anyio keeps
-    # cancelling every await inside it, so only a shielded save gets the answer to disk.
-    previous, review = _redispatched()
-    repo = _repo_holding(review)
+    # cancelling every await inside it, so only a shielded write reaches the store.
+    iteration = _triaged_iteration()
+    repo = _repo_holding(make_review(iterations=[iteration]))
     model = _Model(['[{"body": "Before the disconnect"}'], hang=True)
     first_event = anyio.Event()
 
     async def consume() -> None:
-        async for _ in _stream(_use_case(repo, model), review, previous):
+        async for _ in _stream(_use_case(repo, model), iteration):
             first_event.set()
 
     async with anyio.create_task_group() as task_group:
@@ -265,10 +319,31 @@ async def test__stream_and_save__cancelled_like_a_client_disconnect__persistence
         await first_event.wait()
         task_group.cancel_scope.cancel()
 
-    saved = _saved_iteration(repo)
-    assert [c.body for c in saved.comments] == ["Before the disconnect"]
-    assert saved.raw_response == '[{"body": "Before the disconnect"}'
+    _assert_left_as_it_was(_stored(repo))
     assert model.closed
+
+
+async def test__stream_and_save__new_iteration_after_a_posted_one__created_when_the_stream_starts() -> None:
+    posted = make_iteration(stage=IterationStage.post, comments=[make_comment()])
+    repo = _repo_holding(make_review(iterations=[posted]))
+    use_case = _use_case(repo, _Model(['[{"body": "Fresh"}]']))
+
+    events = [e async for e in use_case._stream_and_save(uuid4(), None, "prompt", make_ai_provider())]  # noqa: SLF001
+
+    saved: Review = repo.update.call_args[0][0]
+    assert [it.stage for it in saved.iterations] == [IterationStage.post, IterationStage.polish]
+    assert saved.iterations[1].number == 2
+    assert isinstance(events[-1], DispatchCompleted)
+    assert events[-1].iteration_id == saved.iterations[1].id
+
+
+async def test__stream_and_save__iteration_left_in_dispatch_by_a_crash__returns_to_polish_when_unused() -> None:
+    stuck = _triaged_iteration().model_copy(update={"stage": IterationStage.dispatch})
+    repo = _repo_holding(make_review(iterations=[stuck]))
+
+    await _drain(_stream(_use_case(repo, _Model(["not json"])), stuck))
+
+    assert _stored(repo).stage == IterationStage.polish
 
 
 # ── execute ───────────────────────────────────────────────────────────────────
@@ -288,15 +363,29 @@ def _dispatchable(review: Review) -> tuple[DispatchReviewUseCase, AsyncMock, Asy
     return use_case, review_repo, vcs
 
 
-async def test__execute__redispatch__existing_comments_kept_until_the_answer_is_stored() -> None:
+async def test__execute__nothing_written_until_the_stream_starts() -> None:
     iteration = make_iteration(stage=IterationStage.polish, comments=[make_comment(body="Keep me")])
     use_case, review_repo, _ = _dispatchable(make_review(iterations=[iteration]))
 
-    await use_case.execute(uuid4(), uuid4(), iteration_id=iteration.id)
+    stream = await use_case.execute(uuid4(), uuid4(), iteration_id=iteration.id)
 
-    marked = _saved_iteration(review_repo)
+    review_repo.update.assert_not_awaited()
+    first = await anext(stream)
+    assert isinstance(first, DispatchChunk)
+    marked = _stored(review_repo)
     assert marked.stage == IterationStage.dispatch
     assert [c.body for c in marked.comments] == ["Keep me"]
+
+
+async def test__execute__posted_iteration__locked_before_any_work() -> None:
+    iteration = make_iteration(stage=IterationStage.post)
+    use_case, review_repo, vcs = _dispatchable(make_review(iterations=[iteration]))
+
+    with pytest.raises(IterationLockedError):
+        await use_case.execute(uuid4(), uuid4(), iteration_id=iteration.id)
+
+    vcs.get_mr.assert_not_awaited()
+    review_repo.update.assert_not_awaited()
 
 
 async def test__execute__vcs_failure__review_left_untouched() -> None:
