@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from mr_review.core.ai.entities import AIStreamItem, DispatchOptions
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.mrs.entities import MR
 from mr_review.core.reviews.entities import IterationStage, Review
@@ -50,8 +51,8 @@ async def _async_iter(items: list[str]) -> AsyncIterator[str]:
 
 
 _AIDispatcherFactory = Callable[
-    [AIProvider, str, str | None, float | None, int | None, str | None],
-    Awaitable[AsyncIterator[str]],
+    [AIProvider, str, DispatchOptions],
+    Awaitable[AsyncIterator[AIStreamItem]],
 ]
 
 
@@ -73,10 +74,7 @@ def _make_use_case(
     async def _default_dispatcher(
         ai_provider: AIProvider,
         prompt: str,
-        model: str | None,
-        temperature: float | None,
-        reasoning_budget: int | None,
-        reasoning_effort: str | None,
+        options: DispatchOptions,
     ) -> AsyncIterator[str]:
         return _async_iter([json.dumps([])])
 
@@ -158,10 +156,7 @@ async def test__execute__happy_path__creates_iteration_with_dispatch_stage() -> 
     async def _factory(
         prov: object,
         prompt: str,
-        model: object,
-        temperature: object,
-        reasoning_budget: object,
-        reasoning_effort: object,
+        options: DispatchOptions,
     ) -> AsyncIterator[str]:
         return _async_iter(dispatched_chunks)
 
@@ -190,17 +185,14 @@ async def test__stream_and_save__streams_chunks_and_persists() -> None:
     ai_provider = make_ai_provider(type="claude", api_key="sk-test", models=["claude-haiku-4-5"])
     ai_response = json.dumps([{"file": None, "line": None, "severity": "minor", "body": "Looks good"}])
 
-    received: list[tuple[object, str, object, object, object, object]] = []
+    received: list[tuple[object, str, DispatchOptions]] = []
 
     async def _factory(
         prov: object,
         prompt: str,
-        model: object,
-        temperature: object,
-        reasoning_budget: object,
-        reasoning_effort: object,
+        options: DispatchOptions,
     ) -> AsyncIterator[str]:
-        received.append((prov, prompt, model, temperature, reasoning_budget, reasoning_effort))
+        received.append((prov, prompt, options))
         return _async_iter([ai_response[:10], ai_response[10:]])
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
@@ -231,12 +223,9 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
     async def _factory(
         prov: object,
         prompt: str,
-        model: object,
-        temperature: object,
-        reasoning_budget: object,
-        reasoning_effort: object,
+        options: DispatchOptions,
     ) -> AsyncIterator[str]:
-        received_model.append(model)
+        received_model.append(options.model)
         return _async_iter([json.dumps([])])
 
     use_case, _ = _make_use_case(review_repo, AsyncMock(), AsyncMock(), ai_dispatcher_factory=_factory)
@@ -244,7 +233,7 @@ async def test__stream_and_save__model_override__passes_to_factory() -> None:
     _ = [  # noqa: SLF001
         c
         async for c in use_case._stream_and_save(
-            review.id, iteration.id, "prompt", ai_provider, model="claude-opus-4-7"
+            review.id, iteration.id, "prompt", ai_provider, options=DispatchOptions(model="claude-opus-4-7")
         )
     ]
 
@@ -264,10 +253,7 @@ async def test__stream_and_save__review_gone_after_stream__raises_instead_of_don
     async def _factory(
         prov: object,
         prompt: str,
-        model: object,
-        temperature: object,
-        reasoning_budget: object,
-        reasoning_effort: object,
+        options: DispatchOptions,
     ) -> AsyncIterator[str]:
         return _async_iter([json.dumps([])])
 

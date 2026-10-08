@@ -14,20 +14,22 @@ Fill in:
 - **Name** — a label for this provider (e.g. "Claude Sonnet")
 - **Type** — `Claude`, `OpenAI` or `OpenAI-compat`
 - **API Key** — your provider's API key
-- **Base URL** — shown for the OpenAI types; leave blank for the backend's own default
+- **Base URL** — leave blank for the backend's own default; for Claude, set it only to go
+  through a gateway such as LiteLLM
+- **Models** — **Fetch models from API** lists what the endpoint offers with the key you just
+  typed; add the ones you want. The first is the default — **Make default** changes it.
 
 Examples:
 
 | Provider | Type | Base URL |
 |----------|------|----------|
-| Anthropic Claude | `Claude` | — (ignored) |
+| Anthropic Claude | `Claude` | — |
 | OpenAI | `OpenAI` | — |
 | Ollama (local) | `OpenAI-compat` | `http://localhost:11434/v1` |
 | Groq | `OpenAI-compat` | `https://api.groq.com/openai/v1` |
 
-Save it, then open the provider you just created and pick its **Models** — the list is
-fetched from the endpoint itself. See [AI providers](../features/ai-providers.md) for the
-full field list.
+See [AI providers](../features/ai-providers.md) for the full field list and what each model
+accepts in a dispatch.
 
 ## 2. Add a VCS host
 

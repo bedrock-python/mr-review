@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { useNav } from "@app/navigation";
-import { useAIProviders } from "@entities/ai-provider";
+import { useAIProviders, useModelCapabilities } from "@entities/ai-provider";
 import type { AIProvider } from "@entities/ai-provider";
 import {
   useReview,
@@ -17,34 +17,29 @@ import {
   getReviewBriefConfig,
 } from "@entities/review";
 import type { DispatchResult, ImportResponseResult, Review } from "@entities/review";
-import { readStorageItem, writeStorageItem } from "@shared/lib";
 import { Skeleton } from "@shared/ui";
 import { useStageBarStore } from "@widgets/stage-bar";
 
 import { createDispatchSession } from "../model/dispatchSession";
+import {
+  buildDispatchRequest,
+  loadProviderSettings,
+  pickInitialProviderId,
+  saveLastProviderId,
+  saveProviderSettings,
+} from "../model/dispatchSettings";
 import { waitForSavedRun } from "../model/waitForSavedRun";
 import { DispatchOutcome } from "./DispatchOutcome";
 import { DispatchStreamPanel } from "./DispatchStreamPanel";
+import { GenerationSettings } from "./GenerationSettings";
 import { ImportReport } from "./ImportReport";
+import { ModelPicker } from "./ModelPicker";
 
+import type { ProviderDispatchSettings } from "../model/dispatchSettings";
 import type { DispatchRunInfo, DispatchRunStatus } from "./DispatchStreamPanel";
 
 type Mode = "auto" | "manual";
 type DispatchStatus = "idle" | DispatchRunStatus;
-
-type ReasoningMode = "budget" | "effort";
-type ReasoningEffort = "low" | "medium" | "high";
-
-type ModelSettings = {
-  temperature: number | null;
-  reasoningBudget: number | null;
-  reasoningEffort: ReasoningEffort | null;
-  reasoningMode: ReasoningMode;
-};
-
-const LAST_PROVIDER_KEY = "mr-review:dispatch:last-provider";
-const LAST_MODEL_KEY = "mr-review:dispatch:last-model";
-const LAST_SETTINGS_KEY = "mr-review:dispatch:last-settings";
 
 /* ── Provider metadata ──────────────────────────────────────── */
 const PROVIDER_COLOR: Record<AIProvider["type"], string> = {
@@ -60,7 +55,7 @@ const PROVIDER_LABEL: Record<AIProvider["type"], string> = {
 };
 
 const PROVIDER_DESC: Record<AIProvider["type"], string> = {
-  claude: "Claude models with extended thinking support",
+  claude: "Claude models with adaptive thinking",
   openai: "GPT-4, o1, o3 and other OpenAI models",
   openai_compat: "Local or third-party OpenAI-compatible endpoint",
 };
@@ -682,37 +677,6 @@ const ManualDispatch = ({
 };
 
 /* ── AutoDispatch ───────────────────────────────────────────── */
-const DEFAULT_MODEL_SETTINGS: ModelSettings = {
-  temperature: null,
-  reasoningBudget: null,
-  reasoningEffort: null,
-  reasoningMode: "budget",
-};
-
-// The provider of the last run while it still exists, else the first one.
-const pickInitialProviderId = (providers: AIProvider[]): string => {
-  const saved = readStorageItem(LAST_PROVIDER_KEY);
-  if (saved && providers.some((p) => p.id === saved)) return saved;
-  return providers[0]?.id ?? "";
-};
-
-// The model of the last run when this provider offers it, else its first model.
-const pickModelFor = (provider: AIProvider | undefined): string => {
-  const saved = readStorageItem(LAST_MODEL_KEY);
-  if (saved && provider?.models.includes(saved)) return saved;
-  return provider?.models[0] ?? "";
-};
-
-const readSavedSettings = (): ModelSettings => {
-  const saved = readStorageItem(LAST_SETTINGS_KEY);
-  if (!saved) return DEFAULT_MODEL_SETTINGS;
-  try {
-    return JSON.parse(saved) as ModelSettings;
-  } catch {
-    return DEFAULT_MODEL_SETTINGS;
-  }
-};
-
 const ProvidersSkeleton = (): React.ReactElement => (
   <div role="status" aria-label="Loading AI providers">
     <Skeleton style={{ width: 72, height: 11, marginBottom: 12 }} />
@@ -752,10 +716,10 @@ const AutoDispatch = ({
   const [selectedProviderId, setSelectedProviderId] = useState<string>(() =>
     pickInitialProviderId(providers)
   );
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    pickModelFor(providers.find((p) => p.id === selectedProviderId))
+  // The model and generation settings last used with the selected provider.
+  const [settings, setSettings] = useState<ProviderDispatchSettings>(() =>
+    loadProviderSettings(providers.find((p) => p.id === selectedProviderId))
   );
-  const [settings, setSettings] = useState<ModelSettings>(readSavedSettings);
 
   // Streamed output lives in this store, not in state: tokens must not re-render
   // this component, only the panel parts subscribed to the store.
@@ -764,26 +728,20 @@ const AutoDispatch = ({
   const [run, setRun] = useState<DispatchRunInfo | null>(null);
   const [result, setResult] = useState<DispatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [modelSearch, setModelSearch] = useState("");
-  const [isModelDropOpen, setIsModelDropOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const runIdRef = useRef(0);
-  const modelInputRef = useRef<HTMLInputElement>(null);
-  const modelDropRef = useRef<HTMLDivElement>(null);
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId) ?? providers[0];
   const availableModels = selectedProvider?.models ?? [];
-  const isReasoningOn = settings.reasoningBudget !== null || settings.reasoningEffort !== null;
+  const selectedModel = settings.model;
+  const { data: capabilities } = useModelCapabilities(selectedProviderId, selectedModel);
 
   useEffect(() => {
-    if (selectedProviderId) writeStorageItem(LAST_PROVIDER_KEY, selectedProviderId);
+    if (selectedProviderId) saveLastProviderId(selectedProviderId);
   }, [selectedProviderId]);
   useEffect(() => {
-    if (selectedModel) writeStorageItem(LAST_MODEL_KEY, selectedModel);
-  }, [selectedModel]);
-  useEffect(() => {
-    writeStorageItem(LAST_SETTINGS_KEY, JSON.stringify(settings));
-  }, [settings]);
+    if (selectedProviderId) saveProviderSettings(selectedProviderId, settings);
+  }, [selectedProviderId, settings]);
 
   // Leaving the screen ends the run: release the connection instead of streaming
   // into a component that is gone.
@@ -804,29 +762,14 @@ const AutoDispatch = ({
     [onRunningChange]
   );
 
-  useEffect(() => {
-    if (!isModelDropOpen) return;
-    const handleClickOutside = (e: MouseEvent): void => {
-      if (
-        modelDropRef.current &&
-        !modelDropRef.current.contains(e.target as Node) &&
-        modelInputRef.current &&
-        !modelInputRef.current.contains(e.target as Node)
-      ) {
-        setIsModelDropOpen(false);
-        setModelSearch("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isModelDropOpen]);
-
   const handleProviderChange = (id: string): void => {
     setSelectedProviderId(id);
-    setSelectedModel(pickModelFor(providers.find((x) => x.id === id)));
+    setSettings(loadProviderSettings(providers.find((x) => x.id === id)));
   };
+
+  const handleSettingsChange = useCallback((patch: Partial<ProviderDispatchSettings>): void => {
+    setSettings((current) => ({ ...current, ...patch }));
+  }, []);
 
   const handleDispatch = useCallback(async (): Promise<void> => {
     if (!selectedProviderId) return;
@@ -851,13 +794,8 @@ const AutoDispatch = ({
     try {
       for await (const event of reviewApi.dispatchStream(
         activeReviewId,
-        selectedProviderId,
-        ctrl.signal,
-        selectedModel || undefined,
-        settings.temperature,
-        settings.reasoningBudget,
-        settings.reasoningEffort,
-        activeIterationId
+        buildDispatchRequest(selectedProviderId, settings, capabilities, activeIterationId),
+        ctrl.signal
       )) {
         if (event.type === "chunk") session.appendText(event.text);
         else if (event.type === "comment") session.addComment(event.comment);
@@ -915,6 +853,7 @@ const AutoDispatch = ({
     selectedProviderId,
     selectedModel,
     settings,
+    capabilities,
     session,
     qc,
     onDone,
@@ -1071,204 +1010,32 @@ const AutoDispatch = ({
         </div>
       </div>
 
-      {/* ── Section 2: Model select ── */}
-      {availableModels.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--fg-3)",
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-              marginBottom: 10,
-            }}
-          >
-            Model
-          </div>
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderRadius: 8,
-                border: `1.5px solid ${isModelDropOpen ? providerColor : "var(--border)"}`,
-                background: "var(--bg-1)",
-                padding: "0 10px",
-                transition: "border-color 0.1s",
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                style={{ flexShrink: 0, color: "var(--fg-3)" }}
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                ref={modelInputRef}
-                type="text"
-                disabled={isStreaming}
-                placeholder={selectedModel || "Search model…"}
-                value={modelSearch}
-                onChange={(e) => {
-                  setModelSearch(e.target.value);
-                  setIsModelDropOpen(true);
-                }}
-                onFocus={() => {
-                  setIsModelDropOpen(true);
-                }}
-                style={{
-                  flex: 1,
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  fontSize: 13,
-                  fontFamily: "var(--font-mono)",
-                  color: modelSearch ? "var(--fg-0)" : "var(--fg-2)",
-                  padding: "9px 0",
-                  cursor: isStreaming ? "not-allowed" : "text",
-                }}
-              />
-              {selectedModel && !modelSearch && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: "var(--fg-3)",
-                    flexShrink: 0,
-                    fontFamily: "var(--font-mono)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    maxWidth: 220,
-                  }}
-                >
-                  {selectedModel}
-                </span>
-              )}
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                style={{
-                  flexShrink: 0,
-                  color: "var(--fg-3)",
-                  transform: isModelDropOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.15s",
-                }}
-                aria-hidden="true"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </div>
-
-            {isModelDropOpen && (
-              <div
-                ref={modelDropRef}
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 4px)",
-                  left: 0,
-                  right: 0,
-                  zIndex: 100,
-                  borderRadius: 8,
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-1)",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                  maxHeight: 240,
-                  overflowY: "auto",
-                }}
-              >
-                {availableModels
-                  .filter((m) => m.toLowerCase().includes(modelSearch.toLowerCase()))
-                  .map((m) => {
-                    const isSelected = m === selectedModel;
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setSelectedModel(m);
-                          setIsModelDropOpen(false);
-                          setModelSearch("");
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          width: "100%",
-                          padding: "8px 12px",
-                          background: isSelected
-                            ? `color-mix(in oklch, ${providerColor} 10%, var(--bg-0))`
-                            : "transparent",
-                          border: "none",
-                          cursor: "pointer",
-                          textAlign: "left",
-                        }}
-                      >
-                        {isSelected ? (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke={providerColor}
-                            strokeWidth="3"
-                            style={{ flexShrink: 0 }}
-                            aria-hidden="true"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : (
-                          <span style={{ width: 12, flexShrink: 0 }} />
-                        )}
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontFamily: "var(--font-mono)",
-                            color: isSelected ? "var(--fg-0)" : "var(--fg-1)",
-                            fontWeight: isSelected ? 600 : 400,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {m}
-                        </span>
-                      </button>
-                    );
-                  })}
-                {availableModels.filter((m) => m.toLowerCase().includes(modelSearch.toLowerCase()))
-                  .length === 0 && (
-                  <div
-                    style={{
-                      padding: "12px",
-                      fontSize: 12,
-                      color: "var(--fg-3)",
-                      textAlign: "center",
-                    }}
-                  >
-                    No models match "{modelSearch}"
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      {/* ── Section 2: Model — the provider's list or any typed id ── */}
+      <div style={{ marginBottom: 20 }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--fg-3)",
+            textTransform: "uppercase",
+            letterSpacing: "0.07em",
+            marginBottom: 10,
+          }}
+        >
+          Model
         </div>
-      )}
+        <ModelPicker
+          models={availableModels}
+          value={selectedModel}
+          onChange={(model) => {
+            handleSettingsChange({ model });
+          }}
+          isDisabled={isStreaming}
+          accentColor={providerColor}
+        />
+      </div>
 
-      {/* ── Section 3: Settings (always visible) ── */}
+      {/* ── Section 3: Generation settings, as far as the model accepts them ── */}
       <div style={{ marginBottom: 24 }}>
         <div
           style={{
@@ -1282,238 +1049,13 @@ const AutoDispatch = ({
         >
           Generation settings
         </div>
-        <div
-          style={{
-            borderRadius: 10,
-            border: "1px solid var(--border)",
-            background: "var(--bg-1)",
-            padding: "16px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 18,
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-1)" }}>
-                  Temperature
-                </span>
-                <span style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 8 }}>
-                  Controls randomness of output
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: settings.temperature !== null ? "var(--fg-0)" : "var(--fg-3)",
-                    minWidth: 32,
-                    textAlign: "right",
-                  }}
-                >
-                  {settings.temperature ?? "0.7"}
-                </span>
-                {settings.temperature !== null && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSettings((s) => ({ ...s, temperature: null }));
-                    }}
-                    style={{
-                      fontSize: 10,
-                      color: "var(--fg-3)",
-                      background: "none",
-                      border: "1px solid var(--border)",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                    }}
-                    title="Reset"
-                  >
-                    reset
-                  </button>
-                )}
-              </div>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.05"
-              value={settings.temperature ?? 0.7}
-              onChange={(e) => {
-                setSettings((s) => ({ ...s, temperature: parseFloat(e.target.value) }));
-              }}
-              style={{ width: "100%", accentColor: providerColor, height: 4 }}
-            />
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 10,
-                color: "var(--fg-3)",
-              }}
-            >
-              <span>0 — Deterministic</span>
-              <span>0.7 — Default</span>
-              <span>2 — Creative</span>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Header row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-1)" }}>Reasoning</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSettings((s) => {
-                    if (isReasoningOn) {
-                      return { ...s, reasoningBudget: null, reasoningEffort: null };
-                    }
-                    return s.reasoningMode === "effort"
-                      ? { ...s, reasoningEffort: "medium" }
-                      : { ...s, reasoningBudget: 8000 };
-                  });
-                }}
-                style={{
-                  fontSize: 11,
-                  padding: "3px 10px",
-                  borderRadius: 999,
-                  border: `1px solid ${isReasoningOn ? "var(--c-critical)" : "var(--border)"}`,
-                  background: isReasoningOn
-                    ? "color-mix(in oklch, var(--c-critical) 12%, var(--bg-2))"
-                    : "var(--bg-2)",
-                  color: isReasoningOn ? "var(--c-critical)" : "var(--fg-2)",
-                  cursor: "pointer",
-                  fontWeight: 500,
-                }}
-              >
-                {isReasoningOn ? "On" : "Off"}
-              </button>
-            </div>
-
-            {isReasoningOn && (
-              <>
-                {/* Mode tabs: Budget / Effort */}
-                <div style={{ display: "flex", gap: 4 }}>
-                  {(["budget", "effort"] as ReasoningMode[]).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        setSettings((s) => {
-                          if (m === "budget") {
-                            return {
-                              ...s,
-                              reasoningMode: "budget",
-                              reasoningBudget: s.reasoningBudget ?? 8000,
-                              reasoningEffort: null,
-                            };
-                          }
-                          return {
-                            ...s,
-                            reasoningMode: "effort",
-                            reasoningEffort: s.reasoningEffort ?? "medium",
-                            reasoningBudget: null,
-                          };
-                        });
-                      }}
-                      style={{
-                        fontSize: 11,
-                        padding: "3px 10px",
-                        borderRadius: 6,
-                        border: `1px solid ${settings.reasoningMode === m ? "var(--c-critical)" : "var(--border)"}`,
-                        background:
-                          settings.reasoningMode === m
-                            ? "color-mix(in oklch, var(--c-critical) 10%, var(--bg-0))"
-                            : "var(--bg-2)",
-                        color: settings.reasoningMode === m ? "var(--c-critical)" : "var(--fg-2)",
-                        cursor: "pointer",
-                        fontWeight: settings.reasoningMode === m ? 600 : 400,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Budget slider */}
-                {settings.reasoningMode === "budget" && settings.reasoningBudget !== null && (
-                  <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <input
-                        type="range"
-                        min="1000"
-                        max="32000"
-                        step="1000"
-                        value={settings.reasoningBudget}
-                        onChange={(e) => {
-                          setSettings((s) => ({ ...s, reasoningBudget: parseInt(e.target.value) }));
-                        }}
-                        style={{ flex: 1, accentColor: "var(--c-critical)", height: 4 }}
-                      />
-                      <span
-                        className="mono"
-                        style={{ fontSize: 12, color: "var(--fg-1)", flexShrink: 0 }}
-                      >
-                        {settings.reasoningBudget.toLocaleString()} tok
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 10,
-                        color: "var(--fg-3)",
-                      }}
-                    >
-                      <span>1k — Fast</span>
-                      <span>32k — Deep</span>
-                    </div>
-                  </>
-                )}
-
-                {/* Effort buttons */}
-                {settings.reasoningMode === "effort" && (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {(["low", "medium", "high"] as ReasoningEffort[]).map((lvl) => (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() => {
-                          setSettings((s) => ({ ...s, reasoningEffort: lvl }));
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "6px 0",
-                          borderRadius: 6,
-                          border: `1px solid ${settings.reasoningEffort === lvl ? "var(--c-critical)" : "var(--border)"}`,
-                          background:
-                            settings.reasoningEffort === lvl
-                              ? "color-mix(in oklch, var(--c-critical) 10%, var(--bg-0))"
-                              : "var(--bg-2)",
-                          color:
-                            settings.reasoningEffort === lvl ? "var(--c-critical)" : "var(--fg-2)",
-                          fontSize: 12,
-                          fontWeight: settings.reasoningEffort === lvl ? 600 : 400,
-                          cursor: "pointer",
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {lvl}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <GenerationSettings
+          settings={settings}
+          capabilities={capabilities}
+          onChange={handleSettingsChange}
+          accentColor={providerColor}
+          isDisabled={isStreaming}
+        />
       </div>
 
       {/* ── Section 4: Dispatch button ── */}

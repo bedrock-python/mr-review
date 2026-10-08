@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from uuid import UUID, uuid4
 
 import anyio
 
+from mr_review.core.ai.entities import AIStreamEnd, AIStreamItem, DispatchOptions
 from mr_review.core.ai.protocols import AIDispatcherFactory
 from mr_review.core.ai_providers.entities import AIProvider
 from mr_review.core.ai_providers.repositories import AIProviderRepository
@@ -42,6 +43,12 @@ from mr_review.use_cases.reviews.prompt_builder import build_prompt, format_diff
 from mr_review.use_cases.reviews.source_resolver import resolve_source
 
 _log = logging.getLogger(__name__)
+
+_DEFAULT_OPTIONS = DispatchOptions()
+
+
+class DispatchModelMissingError(ValueError):
+    """The dispatch names no model and the provider has none configured to fall back on."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +97,7 @@ async def _noop_commit_history() -> dict[str, list[dict[str, str]]]:
     return {}
 
 
-async def _close_stream(stream: AsyncIterator[str]) -> None:
+async def _close_stream(stream: AsyncIterator[object]) -> None:
     """Release the provider's connection and concurrency slot when the stream is abandoned early."""
     if not isinstance(stream, AsyncGenerator):
         return
@@ -186,15 +193,13 @@ class DispatchReviewUseCase:
         self,
         review_id: UUID,
         ai_provider_id: UUID,
-        model: str | None = None,
-        temperature: float | None = None,
-        reasoning_budget: int | None = None,
-        reasoning_effort: str | None = None,
+        options: DispatchOptions = _DEFAULT_OPTIONS,
         iteration_id: UUID | None = None,
     ) -> AsyncIterator[DispatchEvent]:
         """Build the prompt and return the event stream; the review is first written when it starts.
 
-        Raises ``ValueError`` for an unknown review, host, provider or iteration and
+        Raises ``ValueError`` for an unknown review, host, provider or iteration,
+        ``DispatchModelMissingError`` when no model is named and the provider has none, and
         ``IterationLockedError`` for an iteration that was already posted.
         """
         review = await self._review_repo.get_by_id(review_id)
@@ -208,6 +213,7 @@ class DispatchReviewUseCase:
         ai_provider = await self._ai_provider_repo.get_by_id(ai_provider_id)
         if ai_provider is None:
             raise ValueError(f"AI provider {ai_provider_id} not found")
+        options = self._with_model(options, ai_provider)
 
         # Checked now so a bad request fails before the slow context collection; the iteration
         # itself is resolved again against a fresh read when the stream starts.
@@ -266,11 +272,19 @@ class DispatchReviewUseCase:
             iteration_id=target.id if target is not None else None,
             prompt=prompt,
             ai_provider=ai_provider,
-            model=model,
-            temperature=temperature,
-            reasoning_budget=reasoning_budget,
-            reasoning_effort=reasoning_effort,
+            options=options,
         )
+
+    @staticmethod
+    def _with_model(options: DispatchOptions, ai_provider: AIProvider) -> DispatchOptions:
+        """``options`` naming the model to call: the requested one, else the provider's first."""
+        model = options.model or (ai_provider.models[0] if ai_provider.models else None)
+        if not model:
+            raise DispatchModelMissingError(
+                f"AI provider '{ai_provider.name}' has no models configured — choose a model for the dispatch "
+                "or add one to the provider in Settings"
+            )
+        return replace(options, model=model)
 
     async def _stream_and_save(
         self,
@@ -278,10 +292,7 @@ class DispatchReviewUseCase:
         iteration_id: UUID | None,
         prompt: str,
         ai_provider: AIProvider,
-        model: str | None = None,
-        temperature: float | None = None,
-        reasoning_budget: int | None = None,
-        reasoning_effort: str | None = None,
+        options: DispatchOptions = _DEFAULT_OPTIONS,
     ) -> AsyncGenerator[DispatchEvent, None]:
         """Relay the model's answer, preview comments as they complete, then store the result.
 
@@ -293,7 +304,11 @@ class DispatchReviewUseCase:
         """
         started: list[_Started] = []
         begin = partial(
-            _begin_dispatch, iteration_id=iteration_id, ai_provider_id=ai_provider.id, model=model, started=started
+            _begin_dispatch,
+            iteration_id=iteration_id,
+            ai_provider_id=ai_provider.id,
+            model=options.model,
+            started=started,
         )
         with anyio.CancelScope(shield=True):
             await apply_review_change(self._review_repo, review_id, begin)
@@ -302,12 +317,15 @@ class DispatchReviewUseCase:
         parts: list[str] = []
         preview = StreamingCommentParser()
         emitted = 0
-        stream: AsyncIterator[str] | None = None
+        stream: AsyncIterator[AIStreamItem] | None = None
+        # The provider's own word that it stopped at the output limit, on top of what the parser sees.
+        provider_truncated = False
         try:
-            stream = await self._ai_dispatcher_factory(
-                ai_provider, prompt, model, temperature, reasoning_budget, reasoning_effort
-            )
+            stream = await self._ai_dispatcher_factory(ai_provider, prompt, options)
             async for chunk in stream:
+                if isinstance(chunk, AIStreamEnd):
+                    provider_truncated = chunk.truncated
+                    continue
                 if not chunk:
                     continue
                 parts.append(chunk)
@@ -323,15 +341,23 @@ class DispatchReviewUseCase:
             raise
 
         with anyio.CancelScope(shield=True):
-            completed = await self._settle_answer(review_id, target, "".join(parts), finished=True)
+            completed = await self._settle_answer(
+                review_id, target, "".join(parts), finished=True, provider_truncated=provider_truncated
+            )
         yield completed
 
-    async def _settle_answer(self, review_id: UUID, target: _Started, raw: str, *, finished: bool) -> DispatchCompleted:
+    async def _settle_answer(
+        self, review_id: UUID, target: _Started, raw: str, *, finished: bool, provider_truncated: bool = False
+    ) -> DispatchCompleted:
         """Parse ``raw`` and write what it may change, against a fresh read of the review.
 
+        ``provider_truncated`` is the provider reporting that it stopped at its output limit: the
+        answer counts as cut off even when its text happens to parse, and is settled as such.
         Raises ``ValueError`` when the review or the iteration was deleted meanwhile.
         """
         result = await asyncio.to_thread(parse_ai_response, raw)
+        if provider_truncated and not result.truncated:
+            result = replace(result, truncated=True)
         settled: list[SettledAnswer] = []
         change = partial(_settle, started=target, raw=raw, result=result, finished=finished, settled=settled)
         await apply_review_change(self._review_repo, review_id, change)

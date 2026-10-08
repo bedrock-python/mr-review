@@ -88,8 +88,11 @@ The pipeline is the iteration's `stage`, and it only moves forward:
   five at a time, and marks the iteration completed.
 
 The model is asked for a bare JSON array of `{file, line, severity, body}` objects,
-severity being one of `critical`, `major`, `minor`, `suggestion`. The parser does not rely
-on that: it drops `<think>` reasoning blocks, finds the JSON inside markdown fences or
+severity being one of `critical`, `major`, `minor`, `suggestion` — or, with structured output
+on, is constrained to the object `{"comments": [...]}` holding them, through Claude's
+`output_config.format` or OpenAI's strict `response_format: json_schema`. An endpoint that
+rejects structured output fails the dispatch with a hint to turn it off; it is not retried
+without. The parser does not rely on any of that: it drops `<think>` reasoning blocks, finds the JSON inside markdown fences or
 prose, accepts a wrapper object (`{"comments": [...]}`, also `review`, `issues`,
 `findings`, `items` — every such key is read), a single comment object or one object per
 line, merges comments split across several fences or arrays, repairs trailing commas,
@@ -115,10 +118,14 @@ The dispatch stream sends these SSE events, every `data` line being single-line 
 | `error` | `{message}` — the stream ends here and no `done` follows |
 
 `: ping` comment lines may appear in between. `comments` counts what the iteration holds
-now. `truncated` is `true` when the answer stops inside the JSON it consists of or inside a
-reasoning block — the model most likely hit its output limit. `kept_previous` is `true` when
-the answer was not used (rule 14): the comments counted are the ones the iteration already
-had, and the answer exists only in the streamed `chunk` text.
+now. `truncated` is `true` when the provider reports that it stopped at the output limit or the
+context window (Claude `max_tokens` / `model_context_window_exceeded`, OpenAI
+`finish_reason: length`), or when the answer stops inside the JSON it consists of or inside a
+reasoning block. `kept_previous` is `true` when the answer was not used (rule 14): the comments
+counted are the ones the iteration already had, and the answer exists only in the streamed
+`chunk` text. A refusal — Claude's `stop_reason: refusal`, OpenAI's `refusal` under structured
+output, or an endpoint's content filter — ends the stream with `error` instead, saying so, and
+is settled like any other failed run.
 
 ## Wiring
 
@@ -283,16 +290,42 @@ than two path segments.
 |---|---|---|
 | `type` | — | `claude` uses the Anthropic Messages API; `openai` and `openai_compat` both use the OpenAI chat-completions client |
 | `api_key` | — | Stored in the data directory |
-| `base_url` | `""` | Ignored by `claude`. Empty means the OpenAI default; set it for Ollama (`http://host.docker.internal:11434/v1`), Groq, LM Studio, a gateway |
-| `models` | `[]` | The first entry is the model used when a dispatch names none. With an empty list the fallback is `claude-opus-4-5` or `gpt-4o` |
+| `base_url` | `""` | Empty means the backend's default endpoint. For `claude`, a gateway in front of Anthropic (LiteLLM, a proxy); for the OpenAI types, Ollama (`http://host.docker.internal:11434/v1`), Groq, LM Studio, a gateway |
+| `models` | `[]` | The first entry is the model used when a dispatch names none. There is no built-in fallback: with an empty list such a dispatch answers 422 |
 | `ssl_verify` | `true` | `false` disables verification entirely — for a corporate CA, install it in the system trust store instead, which is what the client already reads |
-| `timeout` | `60` | Seconds, for the whole streamed response |
+| `timeout` | `60` | Seconds the client waits on the endpoint — to connect, and between pieces of the streamed answer |
 | `max_concurrent` | unset | Per-provider in-flight dispatch cap; unset falls back to `MR_REVIEW__AI_THROTTLE__DEFAULT_MAX_CONCURRENT` |
 
-`GET /api/v1/ai-providers/{id}/models` asks the endpoint itself for its model list.
-Per-dispatch, the request may also carry `temperature`, `reasoning_budget` (extended
-thinking on Claude, which ignores `temperature`) and `reasoning_effort` (`low`, `medium`,
-`high`, OpenAI reasoning models only).
+`GET /api/v1/ai-providers/{id}/models` asks the endpoint itself for its model list with the
+saved settings; `POST /api/v1/ai-providers/preview/models` does the same with settings that are
+not saved yet (`provider_id` fills in what is left out, a blank `api_key` keeps the saved key —
+for the saved base URL and type only; a changed endpoint without a key answers 422) —
+it is what the settings form's "Fetch models" calls. An endpoint that rejects the key answers
+401, one that times out 504, anything else upstream 502, each with the endpoint's message.
+
+A dispatch may also carry, all optional: `model`, `temperature` (0–2), `reasoning_effort`
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`), `reasoning_budget` (thinking
+tokens), `max_output_tokens` (256–128 000, thinking included), `structured_output` (`null`:
+off for unknown OpenAI ids and whenever `base_url` is not the vendor's own API, otherwise
+on for `claude` and `openai` models that support it, off for `openai_compat`) and
+`system_prompt` (replaces the built-in one). Before the call each setting is fitted to the
+model, because a rejected parameter fails the whole request with a 400:
+
+* current Claude models (Opus 4.6+, Sonnet 4.6+, Fable, Mythos, and any Claude id the table
+  does not know) get adaptive thinking with `output_config.effort`; only the models before 4.6
+  get a `budget_tokens` thinking budget, kept at least 4 096 tokens below `max_tokens`;
+* an effort level the model lacks becomes the nearest one below it; a budget becomes an effort
+  on effort-only models and the other way round;
+* `temperature` goes only to models that take it (none from Opus 4.7 / Sonnet 5 on, no OpenAI
+  reasoning model), only while reasoning is off, capped at 1 on Claude;
+* the output limit is capped at the model's maximum; unset, Claude gets 32 000 tokens (64 000
+  at `xhigh`/`max`, budget + 16 000 with a budget), the OpenAI types the endpoint's default. It
+  is sent as `max_tokens` to Claude and to `openai_compat`, as `max_completion_tokens` to OpenAI.
+
+`GET /api/v1/ai-providers/{id}/capabilities?model=…` returns what a model accepts — thinking
+(`always`, `optional`, `none`), reasoning modes, effort levels, whether it takes a temperature,
+its output cap, structured output support and default — decided from the id, without calling
+the provider. The full table is in [AI providers](features/ai-providers.md#dispatch-settings).
 
 ### HTTP API
 
@@ -314,6 +347,11 @@ Prefix `/api/v1` unless shown otherwise. There is no trailing-slash redirect.
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}` | GET | One merge request |
 | `/api/v1/hosts/{id}/repos/{repo_path}/mrs/{iid}/diff` | GET | Its parsed diff |
 | `/api/v1/hosts/{id}/inbox` | GET | One page of open MRs — `scope` (`all` by default, `authored`, `assigned`, `review_requested`), `page`, `per_page` (default 30) |
+| `/api/v1/ai-providers` | GET, POST | List, create |
+| `/api/v1/ai-providers/{id}` | PATCH, DELETE | Update, delete |
+| `/api/v1/ai-providers/{id}/models` | GET | The endpoint's model list, with the saved settings |
+| `/api/v1/ai-providers/preview/models` | POST | The same with unsaved settings — the settings form's "Fetch models" |
+| `/api/v1/ai-providers/{id}/capabilities` | GET | What `model` (default: the provider's first) accepts in a dispatch |
 | `/api/v1/reviews` | GET, POST | List, create from an MR |
 | `/api/v1/reviews/code` | POST | Create from a `base_ref`/`head_ref` diff |
 | `/api/v1/reviews/{id}` | GET, PATCH, DELETE | Read, edit brief and comments, delete |
@@ -630,12 +668,14 @@ dispatch before its stream starts — so a host problem never surfaces as a bare
 | 401 | `VCS authentication failed — check your token` — the host rejected the token |
 | 403 | `VCS access denied — insufficient permissions`, or `Host token cannot access repository` when adding one by URL — the token is valid but not entitled |
 | 404 | A host, review, iteration or comment id that does not exist, or `Not found on the VCS host: <path>` — no such repository, merge request or ref there |
+| 401 | `Claude rejected the API key (401): …` — listing or previewing an AI provider's models with a key the endpoint refuses |
 | 409 | Posting a review whose source is a branch diff, or dispatching, re-parsing, adding or deleting comments on an iteration that was posted |
-| 422 | A blank comment body, a `line` below 1, or a `line` without a `file` |
+| 422 | A blank comment body, a `line` below 1, or a `line` without a `file`; a dispatch setting out of range; a dispatch with no `model` to a provider with no models; previewing models at a changed endpoint without the key |
 | 429 | `VCS rate limit reached — try again shortly` — the host is throttling the token: a 429, or GitHub's 403 for a spent quota or a secondary rate limit. GitHub's issue search allows 30 requests a minute. `Retry-After` carries the host's wait when it gave one |
 | 502 | `VCS returned <status>`, `VCS request failed (<status>)` or `Failed to post comments` — the host answered, badly |
 | 502 | `VCS host unreachable (<error>)` — no answer at all: DNS, refused connection, TLS |
 | 504 | `VCS host timed out (<error>)` — the host took longer than `MR_REVIEW__VCS_TIMEOUT` |
+| 502, 504 | `Could not reach …`, `… answered <status>: …`, `… did not answer in time` — an AI provider's endpoint failing while its models are listed |
 
 Two failures do not surface as a status code:
 

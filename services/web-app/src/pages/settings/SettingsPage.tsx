@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +19,13 @@ import {
   CreateAIProviderSchema,
   UpdateAIProviderSchema,
 } from "@entities/ai-provider";
-import type { AIProvider, CreateAIProvider, UpdateAIProvider } from "@entities/ai-provider";
+import type {
+  AIProvider,
+  AIProviderType,
+  CreateAIProvider,
+  PreviewModelsRequest,
+  UpdateAIProvider,
+} from "@entities/ai-provider";
 import {
   useHosts,
   useCreateHost,
@@ -34,6 +40,8 @@ import {
 import type { Host, UpdateHost, HostColorId } from "@entities/host";
 
 import { ExportImportSection } from "@features/export-import";
+
+import { ModelListEditor } from "./ModelListEditor";
 
 const UpdateHostFormSchema = UpdateHostSchema.extend({ colorId: z.string() });
 type UpdateHostFormValues = z.infer<typeof UpdateHostFormSchema>;
@@ -765,9 +773,73 @@ const AddHostForm = (): React.ReactElement => {
 };
 
 /* ── AIProviderRow ────────────────────────────────────────────────────── */
-type FetchModelsState = "idle" | "loading" | "error";
-
 const MODEL_PREVIEW_LIMIT = 5;
+
+const BASE_URL_PLACEHOLDER: Record<AIProviderType, string> = {
+  claude: "https://api.anthropic.com",
+  openai: "https://api.openai.com/v1",
+  openai_compat: "http://localhost:11434/v1",
+};
+
+const BASE_URL_HINT: Record<AIProviderType, string> = {
+  claude: "Leave blank for Anthropic; set it to go through a gateway such as LiteLLM or a proxy.",
+  openai: "Leave blank for the default endpoint.",
+  openai_compat: "Leave blank for the default endpoint.",
+};
+
+const MODELS_HINT = "The first model is used when a dispatch names none.";
+
+const ANTHROPIC_HOST = "api.anthropic.com";
+
+const normalizeEndpoint = (url: string): string => url.trim().replace(/\/+$/, "");
+
+const hostOf = (url: string): string | null => {
+  try {
+    return new URL(url.includes("://") ? url : `https://${url}`).hostname;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * A Claude provider with a base URL sends every request there instead of to Anthropic. Before
+ * base URLs were honoured for Claude, the add form could keep one from another provider type.
+ */
+const claudeBaseUrlWarning = (type: AIProviderType, baseUrl: string): string | null => {
+  const url = baseUrl.trim();
+  if (type !== "claude" || !url || hostOf(url) === ANTHROPIC_HOST) return null;
+  return `Requests go to ${url} instead of Anthropic. Clear Base URL unless this is a gateway such as LiteLLM.`;
+};
+
+type BaseUrlWarningProps = { message: string | null };
+
+const BaseUrlWarning = ({ message }: BaseUrlWarningProps): React.ReactElement | null =>
+  message ? (
+    <div role="note" style={{ fontSize: 11, color: "var(--c-warn, #e6a817)", marginTop: 4 }}>
+      ⚠ {message}
+    </div>
+  ) : null;
+
+type ProviderFormValues = {
+  api_key?: string | undefined;
+  base_url?: string | undefined;
+  ssl_verify?: boolean | undefined;
+  timeout?: number | undefined;
+};
+
+// The form's connection settings as they are now, saved or not, for listing the endpoint's models.
+const toPreviewRequest = (
+  values: ProviderFormValues,
+  extra: Pick<PreviewModelsRequest, "provider_id" | "type">
+): PreviewModelsRequest => ({
+  ...extra,
+  ...(values.api_key ? { api_key: values.api_key } : {}),
+  base_url: values.base_url ?? "",
+  ...(values.ssl_verify === undefined ? {} : { ssl_verify: values.ssl_verify }),
+  ...(values.timeout !== undefined && Number.isFinite(values.timeout)
+    ? { timeout: values.timeout }
+    : {}),
+});
 
 type ModelChipsProps = { models: string[] };
 
@@ -859,10 +931,6 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
   const updateProvider = useUpdateAIProvider();
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [newModel, setNewModel] = useState("");
-  const [fetchState, setFetchState] = useState<FetchModelsState>("idle");
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const newModelRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<UpdateAIProvider>({
     resolver: zodResolver(UpdateAIProviderSchema),
@@ -878,6 +946,13 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
 
   const watchedModels: string[] =
     useWatch({ control: form.control, name: "models" }) ?? provider.models;
+  const watchedBaseUrl = useWatch({ control: form.control, name: "base_url" }) ?? provider.base_url;
+  const watchedApiKey = useWatch({ control: form.control, name: "api_key" }) ?? "";
+  // The saved key only goes to the saved endpoint; the server refuses otherwise.
+  const fetchBlockedReason =
+    !watchedApiKey && normalizeEndpoint(watchedBaseUrl) !== normalizeEndpoint(provider.base_url)
+      ? "Enter the API key to fetch models from a changed base URL"
+      : null;
 
   const typeLabel: Record<AIProvider["type"], string> = {
     claude: "Claude",
@@ -905,38 +980,11 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
     setEditing(true);
   };
 
-  const handleAddModel = (): void => {
-    const trimmed = newModel.trim();
-    if (!trimmed) return;
-    const current = form.getValues("models") ?? [];
-    if (!current.includes(trimmed)) {
-      form.setValue("models", [...current, trimmed]);
-    }
-    setNewModel("");
-    newModelRef.current?.focus();
-  };
-
-  const handleRemoveModel = (m: string): void => {
-    const current = form.getValues("models") ?? [];
-    form.setValue(
-      "models",
-      current.filter((x) => x !== m)
+  // Lists with the key and URL being edited, not the saved ones: a blank key keeps the saved key.
+  const handleFetchModels = (): Promise<string[]> =>
+    aiProviderApi.previewModels(
+      toPreviewRequest(form.getValues(), { provider_id: provider.id, type: provider.type })
     );
-  };
-
-  const handleFetchModels = async (): Promise<void> => {
-    setFetchState("loading");
-    setFetchError(null);
-    try {
-      const fetched = await aiProviderApi.fetchModels(provider.id);
-      if (fetched.length === 0) throw new Error("No models returned");
-      form.setValue("models", fetched);
-      setFetchState("idle");
-    } catch (err) {
-      setFetchError((err as Error).message);
-      setFetchState("error");
-    }
-  };
 
   const handleSave = (data: UpdateAIProvider): void => {
     const payload: UpdateAIProvider = {};
@@ -1008,20 +1056,15 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
           />
         </Field>
 
-        {provider.type !== "claude" && (
-          <Field
-            label="Base URL"
-            icon={<ServerIcon />}
-            hint="Leave blank for the default endpoint."
-          >
-            <input
-              type="url"
-              {...form.register("base_url")}
-              placeholder="https://api.openai.com/v1"
-              style={inputCss}
-            />
-          </Field>
-        )}
+        <Field label="Base URL" icon={<ServerIcon />} hint={BASE_URL_HINT[provider.type]}>
+          <input
+            type="url"
+            {...form.register("base_url")}
+            placeholder={BASE_URL_PLACEHOLDER[provider.type]}
+            style={inputCss}
+          />
+          <BaseUrlWarning message={claudeBaseUrlWarning(provider.type, watchedBaseUrl)} />
+        </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Field label="Timeout (s)" error={form.formState.errors.timeout?.message}>
@@ -1056,118 +1099,17 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
         <Field
           label={`Models${watchedModels.length > 0 ? ` (${String(watchedModels.length)})` : ""}`}
           icon={<CpuIcon />}
+          hint={MODELS_HINT}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-            {watchedModels.length === 0 && (
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 6,
-                  border: "1px dashed var(--border)",
-                  fontSize: 11,
-                  color: "var(--fg-3)",
-                  fontStyle: "italic",
-                  textAlign: "center",
-                }}
-              >
-                No models added yet
-              </div>
-            )}
-            {watchedModels.map((m) => (
-              <div
-                key={m}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-0)",
-                }}
-              >
-                <span
-                  className="mono"
-                  style={{
-                    flex: 1,
-                    fontSize: 12,
-                    color: "var(--fg-1)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {m}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleRemoveModel(m);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--fg-3)",
-                    padding: "0 2px",
-                    lineHeight: 1,
-                    fontSize: 14,
-                    flexShrink: 0,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-            <input
-              ref={newModelRef}
-              type="text"
-              value={newModel}
-              onChange={(e) => {
-                setNewModel(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddModel();
-                }
-              }}
-              placeholder="Model ID (e.g. gpt-4o)"
-              style={{ ...inputCss, flex: 1 }}
-            />
-            <button
-              type="button"
-              className="btn ghost"
-              style={{ padding: "5px 10px", fontSize: 11, flexShrink: 0, gap: 4 }}
-              onClick={handleAddModel}
-              disabled={!newModel.trim()}
-            >
-              <PlusIcon />
-              Add
-            </button>
-          </div>
-
-          {provider.type !== "claude" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ padding: "5px 12px", fontSize: 11, gap: 5 }}
-                onClick={() => {
-                  void handleFetchModels();
-                }}
-                disabled={fetchState === "loading"}
-              >
-                {fetchState === "loading" ? "Fetching…" : "Fetch from API"}
-              </button>
-              {fetchState === "error" && fetchError && (
-                <span style={{ fontSize: 11, color: "var(--c-critical)" }}>{fetchError}</span>
-              )}
-            </div>
-          )}
+          <ModelListEditor
+            models={watchedModels}
+            onChange={(models) => {
+              form.setValue("models", models, { shouldDirty: true });
+            }}
+            onFetchModels={handleFetchModels}
+            fetchBlockedReason={fetchBlockedReason}
+            inputStyle={inputCss}
+          />
         </Field>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -1233,6 +1175,7 @@ const AIProviderRow = ({ provider }: AIProviderRowProps): React.ReactElement => 
           )}
         </div>
         <ModelChips models={provider.models} />
+        <BaseUrlWarning message={claudeBaseUrlWarning(provider.type, provider.base_url)} />
       </div>
 
       <div style={{ display: "flex", gap: 4, flexShrink: 0, paddingTop: 2 }}>
@@ -1293,6 +1236,12 @@ const AddAIProviderForm = (): React.ReactElement => {
   });
 
   const providerType = useWatch({ control: form.control, name: "type" });
+  const apiKey = useWatch({ control: form.control, name: "api_key" });
+  const baseUrl = useWatch({ control: form.control, name: "base_url" });
+  const models = useWatch({ control: form.control, name: "models" }) ?? [];
+
+  const handleFetchModels = (): Promise<string[]> =>
+    aiProviderApi.previewModels(toPreviewRequest(form.getValues(), { type: providerType }));
 
   const handleSubmit = (data: CreateAIProvider): void => {
     createProvider.mutate(data, {
@@ -1355,7 +1304,12 @@ const AddAIProviderForm = (): React.ReactElement => {
         </Field>
         <Field label="Type">
           <select
-            {...form.register("type")}
+            {...form.register("type", {
+              // A base URL belongs to the type it was typed for: never carry it to another.
+              onChange: () => {
+                form.setValue("base_url", "");
+              },
+            })}
             style={{ ...inputCss, cursor: "pointer", width: "auto", minWidth: 140 }}
           >
             <option value="claude">Claude</option>
@@ -1379,16 +1333,15 @@ const AddAIProviderForm = (): React.ReactElement => {
         />
       </Field>
 
-      {providerType !== "claude" && (
-        <Field label="Base URL" icon={<ServerIcon />} hint="Leave blank for the default endpoint.">
-          <input
-            type="url"
-            {...form.register("base_url")}
-            placeholder="https://api.openai.com/v1"
-            style={inputCss}
-          />
-        </Field>
-      )}
+      <Field label="Base URL" icon={<ServerIcon />} hint={BASE_URL_HINT[providerType]}>
+        <input
+          type="url"
+          {...form.register("base_url")}
+          placeholder={BASE_URL_PLACEHOLDER[providerType]}
+          style={inputCss}
+        />
+        <BaseUrlWarning message={claudeBaseUrlWarning(providerType, baseUrl ?? "")} />
+      </Field>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label="Timeout (s)" error={form.formState.errors.timeout?.message}>
@@ -1413,6 +1366,22 @@ const AddAIProviderForm = (): React.ReactElement => {
           </label>
         </Field>
       </div>
+
+      <Field
+        label={`Models${models.length > 0 ? ` (${String(models.length)})` : ""}`}
+        icon={<CpuIcon />}
+        hint={MODELS_HINT}
+      >
+        <ModelListEditor
+          models={models}
+          onChange={(next) => {
+            form.setValue("models", next, { shouldDirty: true });
+          }}
+          onFetchModels={handleFetchModels}
+          fetchBlockedReason={apiKey ? null : "Enter the API key to fetch models"}
+          inputStyle={inputCss}
+        />
+      </Field>
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button

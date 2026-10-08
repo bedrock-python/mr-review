@@ -41,6 +41,7 @@ from mr_review.use_cases.reviews.dispatch_review import (
     DispatchChunk,
     DispatchCommentPreview,
     DispatchEvent,
+    DispatchModelMissingError,
     DispatchReviewUseCase,
 )
 from mr_review.use_cases.reviews.get_iteration_raw_response import GetIterationRawResponseUseCase
@@ -279,14 +280,13 @@ async def dispatch_review(
         stream = await use_case.execute(
             review_id=review_id,
             ai_provider_id=body.ai_provider_id,
-            model=body.model,
-            temperature=body.temperature,
-            reasoning_budget=body.reasoning_budget,
-            reasoning_effort=body.reasoning_effort,
+            options=body.to_options(),
             iteration_id=body.iteration_id,
         )
     except IterationLockedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DispatchModelMissingError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

@@ -2,11 +2,30 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { aiProviderApi } from "../api/aiProviderApi";
-import type { CreateAIProvider, UpdateAIProvider } from "./aiProvider.schema";
+import type { CreateAIProvider, ModelCapabilities, UpdateAIProvider } from "./aiProvider.schema";
 
 export const aiProviderKeys = {
   all: ["ai-providers"] as const,
   lists: () => [...aiProviderKeys.all, "list"] as const,
+  capabilities: (id: string, model: string) =>
+    [...aiProviderKeys.all, "capabilities", id, model] as const,
+};
+
+// Capabilities follow from the model id alone, so they only change with a new server version.
+const CAPABILITIES_STALE_TIME_MS = 60 * 60 * 1000;
+
+/** Which dispatch settings `model` accepts on the provider; idle until both are known. */
+export const useModelCapabilities = (
+  providerId: string,
+  model: string
+): ReturnType<typeof useQuery<ModelCapabilities>> => {
+  return useQuery({
+    queryKey: aiProviderKeys.capabilities(providerId, model),
+    queryFn: () => aiProviderApi.getCapabilities(providerId, model),
+    enabled: Boolean(providerId && model),
+    staleTime: CAPABILITIES_STALE_TIME_MS,
+    retry: false,
+  });
 };
 
 export const useAIProviders = (): ReturnType<

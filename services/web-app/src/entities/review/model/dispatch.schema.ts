@@ -46,6 +46,25 @@ export const DispatchErrorPayloadSchema = z.object({
   message: z.string(),
 });
 
+/**
+ * The body of `POST /reviews/{id}/dispatch`. `null`/absent means the default: the provider's first
+ * model, the model's own sampling and reasoning, a model-sized output limit, structured output
+ * where the provider type turns it on, the built-in system prompt. The server drops or adapts
+ * whatever the model does not accept.
+ */
+export type DispatchRequest = {
+  aiProviderId: string;
+  model?: string | null;
+  temperature?: number | null;
+  /** `none`…`max`; the nearest level the model has is used. */
+  reasoningEffort?: string | null;
+  reasoningBudget?: number | null;
+  maxOutputTokens?: number | null;
+  structuredOutput?: boolean | null;
+  systemPrompt?: string | null;
+  iterationId?: string | null;
+};
+
 export type DispatchCommentPreview = z.infer<typeof DispatchCommentPreviewSchema>;
 export type DispatchResult = z.infer<typeof DispatchResultSchema>;
 

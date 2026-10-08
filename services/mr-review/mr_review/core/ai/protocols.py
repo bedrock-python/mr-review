@@ -5,11 +5,19 @@ from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from mr_review.core.ai.entities import AIStreamItem, DispatchOptions, GenerationPlan
     from mr_review.core.ai_providers.entities import AIProvider as AIProviderEntity
 
 
 class AIProvider(Protocol):
-    def dispatch(self, prompt: str) -> AsyncIterator[str]: ...
+    def dispatch(self, prompt: str, plan: GenerationPlan) -> AsyncIterator[AIStreamItem]:
+        """Stream the answer as text chunks, ending with one ``AIStreamEnd``.
+
+        Raises ``AIProviderError`` subclasses with a message fit to show the user.
+        """
+        ...
+
+    async def list_models(self) -> list[str]: ...
 
 
 class AIFenceRegistry(Protocol):
@@ -18,18 +26,11 @@ class AIFenceRegistry(Protocol):
     def acquire(self, ai_provider: AIProviderEntity) -> AbstractAsyncContextManager[None]: ...
 
 
-# Factory that builds a streaming AI dispatcher: takes provider entity + prompt + dispatch params,
-# returns an awaitable that resolves to an async iterator of text chunks.
+# Builds a streaming AI dispatcher: takes the provider entity, the prompt and the dispatch options,
+# returns an awaitable that resolves to the provider's stream — text chunks, then an ``AIStreamEnd``.
 AIDispatcherFactory = Callable[
-    [
-        "AIProviderEntity",
-        str,
-        "str | None",
-        "float | None",
-        "int | None",
-        "str | None",
-    ],
-    "Awaitable[AsyncIterator[str]]",
+    ["AIProviderEntity", str, "DispatchOptions"],
+    "Awaitable[AsyncIterator[AIStreamItem]]",
 ]
 
 # Lists available models for a given AI provider entity.

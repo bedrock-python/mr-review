@@ -66,13 +66,17 @@ const dispatchAll = async (signal?: AbortSignal): Promise<DispatchStreamEvent[]>
   const events: DispatchStreamEvent[] = [];
   for await (const event of reviewApi.dispatchStream(
     REVIEW_ID,
-    PROVIDER_ID,
-    signal,
-    "model-x",
-    0.2,
-    null,
-    "high",
-    ITERATION_ID
+    {
+      aiProviderId: PROVIDER_ID,
+      model: "model-x",
+      temperature: 0.2,
+      reasoningEffort: "high",
+      maxOutputTokens: 40_000,
+      structuredOutput: false,
+      systemPrompt: "Only security.",
+      iterationId: ITERATION_ID,
+    },
+    signal
   )) {
     events.push(event);
   }
@@ -85,7 +89,7 @@ describe("reviewApi.dispatchStream", () => {
     vi.restoreAllMocks();
   });
 
-  it("posts the dispatch request with the unchanged body", async () => {
+  it("posts the dispatch settings as the snake_case request body", async () => {
     const fetchMock = mockFetch(sseResponse(bodyInPiecesOf(FULL_STREAM, 64)));
     const controller = new AbortController();
 
@@ -103,6 +107,9 @@ describe("reviewApi.dispatchStream", () => {
       temperature: 0.2,
       reasoning_budget: null,
       reasoning_effort: "high",
+      max_output_tokens: 40_000,
+      structured_output: false,
+      system_prompt: "Only security.",
       iteration_id: ITERATION_ID,
     });
   });
@@ -231,7 +238,7 @@ describe("reviewApi.dispatchStream", () => {
     const run = async (): Promise<void> => {
       for await (const event of reviewApi.dispatchStream(
         REVIEW_ID,
-        PROVIDER_ID,
+        { aiProviderId: PROVIDER_ID },
         controller.signal
       )) {
         events.push(event);
