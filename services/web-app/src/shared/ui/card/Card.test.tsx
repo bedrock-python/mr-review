@@ -99,6 +99,20 @@ describe("SelectCardGroup", () => {
     );
   });
 
+  it("does not choose a disabled card with Space", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(<Presets onChange={handleChange} />);
+    const security = screen.getByRole("radio", { name: /Security/ });
+
+    await user.click(security);
+    security.focus();
+    await user.keyboard(" ");
+
+    expect(handleChange).not.toHaveBeenCalled();
+    expect(security).toHaveAttribute("aria-checked", "false");
+  });
+
   it("jumps to the ends with Home and End", async () => {
     const user = userEvent.setup();
     render(<Presets />);

@@ -75,6 +75,23 @@ describe("SegmentedControl", () => {
   });
 });
 
+describe("SegmentedControl, a disabled option", () => {
+  it("is not chosen by Space even when it has focus", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    render(<View onChange={handleChange} />);
+    const thread = screen.getByRole("radio", { name: "Thread" });
+
+    await user.click(thread);
+    expect(thread).toHaveFocus();
+    await user.keyboard(" ");
+
+    expect(handleChange).not.toHaveBeenCalled();
+    expect(thread).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "List 9" })).toHaveAttribute("aria-checked", "true");
+  });
+});
+
 describe("Toolbar", () => {
   it("lays out controls with spacer and divider hidden from assistive tech", () => {
     const { container } = render(

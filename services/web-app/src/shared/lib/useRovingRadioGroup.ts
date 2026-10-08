@@ -52,8 +52,14 @@ export const useRovingRadioGroup = <T extends string>({
       target = enabled[(index - 1 + enabled.length) % enabled.length];
     else if (event.key === "Home") target = enabled[0];
     else if (event.key === "End") target = enabled[enabled.length - 1];
-    else if (event.key === " ") target = from;
-    else return;
+    else if (event.key === " ") {
+      // A disabled option can still hold focus (it was clicked); Space must not choose it.
+      if (!enabled.includes(from)) {
+        event.preventDefault();
+        return;
+      }
+      target = from;
+    } else return;
     event.preventDefault();
     select(target);
   };
