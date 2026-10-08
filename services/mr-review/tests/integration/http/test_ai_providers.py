@@ -130,6 +130,41 @@ async def test__preview__blank_key__the_saved_key_is_used(harness: _Harness) -> 
     assert harness.lister.calls[0].api_key.get_secret_value() == "sk-saved"
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"base_url": "https://evil.example.com/v1"},
+        {"type": "openai"},
+        {"base_url": "https://evil.example.com/v1", "api_key": ""},
+    ],
+)
+async def test__preview__changed_endpoint_without_a_key__422_and_the_saved_key_stays(
+    harness: _Harness, changes: dict[str, str]
+) -> None:
+    """Regression: a changed base URL with no key sent the saved secret to that URL."""
+    provider = await _saved(harness)
+
+    response = await harness.client.post(
+        "/api/v1/ai-providers/preview/models", json={"provider_id": str(provider.id), **changes}
+    )
+
+    assert response.status_code == 422
+    assert "Enter the API key" in response.json()["detail"]
+    assert harness.lister.calls == []
+
+
+async def test__preview__same_endpoint_spelled_differently__saved_key_used(harness: _Harness) -> None:
+    provider = await _saved(harness)
+
+    response = await harness.client.post(
+        "/api/v1/ai-providers/preview/models",
+        json={"provider_id": str(provider.id), "type": "openai_compat", "base_url": "https://saved.example.com/v1/ "},
+    )
+
+    assert response.status_code == 200
+    assert harness.lister.calls[0].api_key.get_secret_value() == "sk-saved"
+
+
 async def test__preview__new_provider__needs_type_and_key(harness: _Harness) -> None:
     response = await harness.client.post("/api/v1/ai-providers/preview/models", json={"type": "claude"})
 
@@ -193,8 +228,18 @@ async def test__capabilities__named_model(harness: _Harness) -> None:
     assert body["max_output_tokens"] == 64_000
 
 
+async def test__capabilities__gateway_base_url__structured_output_off_by_default(harness: _Harness) -> None:
+    """Regression: a provider pointed at another endpoint got strict structured output by default."""
+    provider = await _saved(harness, type_="openai", models=["gpt-4o"], base_url="https://api.deepseek.com/v1")
+
+    response = await harness.client.get(f"/api/v1/ai-providers/{provider.id}/capabilities")
+
+    body = response.json()
+    assert (body["structured_output"], body["structured_output_default"]) == (True, False)
+
+
 async def test__capabilities__defaults_to_the_first_model(harness: _Harness) -> None:
-    provider = await _saved(harness, type_="claude", models=["claude-opus-5-5"])
+    provider = await _saved(harness, type_="claude", models=["claude-opus-5-5"], base_url="")
 
     response = await harness.client.get(f"/api/v1/ai-providers/{provider.id}/capabilities")
 
