@@ -841,9 +841,12 @@ describe("PolishStage list — long lists", { timeout: INTEGRATION_TEST_TIMEOUT_
   });
 
   it("virtualises the list past 80 comments", () => {
-    // jsdom lays nothing out; give the scroll area and the rows a height to window over.
+    // jsdom lays nothing out; give the scroll area and the rows a height to window over
+    // (the virtualizer reads the viewport from client*, the rows from offset*).
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(600);
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(800);
     renderStage(makeReview(Array.from({ length: 120 }, (_, i) => makeComment(`c${String(i)}`))));
 
     expect(cards().length).toBeGreaterThan(0);
@@ -1257,6 +1260,8 @@ describe(
     const tallLayout = (): void => {
       vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
       vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+      vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(600);
+      vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(800);
     };
     const many = (): Review =>
       makeReview(Array.from({ length: 120 }, (_, i) => makeComment(`c${String(i)}`)));
