@@ -50,31 +50,37 @@ export type VirtualLayout = { viewportHeight: number; rowHeight: number; width?:
 /**
  * jsdom has no layout: every element measures 0px, so a virtualizer would render
  * nothing useful. Gives virtual scroll containers a viewport height and every
- * other element a row height. Returns a function restoring the originals.
+ * other element a row height. The virtualizer reads the viewport from
+ * clientWidth/clientHeight and the rows from offsetWidth/offsetHeight, so both
+ * pairs are set. Returns a function restoring the originals.
  */
 export const mockVirtualLayout = ({
   viewportHeight,
   rowHeight,
   width = 360,
 }: VirtualLayout): (() => void) => {
-  const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
-  const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-    configurable: true,
-    get(this: HTMLElement): number {
-      return this.hasAttribute(VIRTUAL_SCROLL_ATTR) ? viewportHeight : rowHeight;
-    },
-  });
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-    configurable: true,
-    get(): number {
-      return width;
-    },
-  });
+  const height = function (this: HTMLElement): number {
+    return this.hasAttribute(VIRTUAL_SCROLL_ATTR) ? viewportHeight : rowHeight;
+  };
+  const sizes: Record<string, (this: HTMLElement) => number> = {
+    offsetHeight: height,
+    clientHeight: height,
+    offsetWidth: () => width,
+    clientWidth: () => width,
+  };
+  const originals = Object.keys(sizes).map(
+    (property) =>
+      [property, Object.getOwnPropertyDescriptor(HTMLElement.prototype, property)] as const
+  );
+  for (const [property, get] of Object.entries(sizes)) {
+    Object.defineProperty(HTMLElement.prototype, property, { configurable: true, get });
+  }
   return () => {
-    if (originalHeight)
-      Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalHeight);
-    if (originalWidth) Object.defineProperty(HTMLElement.prototype, "offsetWidth", originalWidth);
+    for (const [property, original] of originals) {
+      // clientWidth/clientHeight live on Element.prototype: deleting the override restores them.
+      if (original) Object.defineProperty(HTMLElement.prototype, property, original);
+      else Reflect.deleteProperty(HTMLElement.prototype, property);
+    }
   };
 };
 
