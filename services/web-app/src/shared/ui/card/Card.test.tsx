@@ -142,7 +142,7 @@ describe("SelectCardGroup", () => {
     );
 
     expect(screen.getByRole("radiogroup", { name: "Two up" }).style.gridTemplateColumns).toBe(
-      "repeat(2, minmax(0, 1fr))"
+      "repeat(2, minmax(0px, 1fr))"
     );
   });
 
