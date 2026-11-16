@@ -61,7 +61,7 @@
     "@storybook/addon-interactions": "8.6.19",
     "@storybook/blocks": "8.6.19",
     "@storybook/react": "8.6.18",
-    "@storybook/react-vite": "8.6.18",
+    "@storybook/react-vite": "8.6.19",
     "@storybook/test": "8.6.19",
     "@tailwindcss/postcss": "^4.3.5",
     "@tanstack/eslint-plugin-query": "^5.107.0",
