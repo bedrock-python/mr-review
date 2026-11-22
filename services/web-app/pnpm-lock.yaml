@@ -77,8 +77,8 @@ importers:
         specifier: ^5.3.3
         version: 5.3.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react-i18next:
-        specifier: ^17.0.15
-        version: 17.0.15(i18next@27.1.1(typescript@5.9.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)
+        specifier: ^18.0.3
+        version: 18.0.3(@types/react@19.3.0)(i18next@27.1.1(typescript@5.9.3))(react@19.3.1)(typescript@5.9.3)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.3.0)(react@19.3.1)
@@ -3574,18 +3574,16 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
-  react-i18next@17.0.15:
-    resolution: {integrity: sha512-7uYpx/oBkesLto7cOzOmfITlUBaXHCAcFahmgETMfWr8nbbWRRnVGvz8wsH/xpbNcyoH+NpCcnOQEqWPMO6/hw==}
+  react-i18next@18.0.3:
+    resolution: {integrity: sha512-S84rtVuaKuiRtoCOspbGEaDlFjka+KvK/A5YCOr4LQ41XF3iJOrJ5rqQTD/jJHFVUf6X1i4ZMN5PGGgpz8NN6g==}
+    engines: {node: '>=22'}
     peerDependencies:
-      i18next: '>= 26.2.0'
-      react: '>= 16.8.0'
-      react-dom: '*'
-      react-native: '*'
+      '@types/react': '*'
+      i18next: '>= 27.0.1'
+      react: '>= 18.0.0'
       typescript: ^5 || ^6 || ^7
     peerDependenciesMeta:
-      react-dom:
-        optional: true
-      react-native:
+      '@types/react':
         optional: true
       typescript:
         optional: true
@@ -7604,15 +7602,13 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  react-i18next@17.0.15(i18next@27.1.1(typescript@5.9.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3):
+  react-i18next@18.0.3(@types/react@19.3.0)(i18next@27.1.1(typescript@5.9.3))(react@19.3.1)(typescript@5.9.3):
     dependencies:
-      '@babel/runtime': 7.29.7
       html-parse-stringify: 4.0.1
       i18next: 27.1.1(typescript@5.9.3)
       react: 19.3.1
-      use-sync-external-store: 1.7.0(react@19.3.1)
     optionalDependencies:
-      react-dom: 19.3.1(react@19.3.1)
+      '@types/react': 19.3.0
       typescript: 5.9.3
 
   react-is@17.0.2: {}
@@ -8088,6 +8084,7 @@ snapshots:
   use-sync-external-store@1.7.0(react@19.3.1):
     dependencies:
       react: 19.3.1
+    optional: true
 
   util@0.12.5:
     dependencies:
